@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Overdrive HIIT</title>
+<meta name="description" content="Full-body HIIT interval timer with animated exercise demos.">
+<meta name="theme-color" content="#07020f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Unbounded:wght@500;700;900&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-screen="setup" data-phase="setup">
+
+<canvas id="bg" class="bg" aria-hidden="true"></canvas>
+<div class="bg-overlay" aria-hidden="true"></div>
+<canvas id="fx" class="fx" aria-hidden="true"></canvas>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4z"/><path d="M16.5 9a4.5 4.5 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></symbol>
+  <symbol id="i-voice" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="i-voice-off" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M4 3l16 18"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M19 5.5L9.5 12l9.5 6.5z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M5 5.5l9.5 6.5L5 18.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 4.8v14.4L19.5 12z"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M3 7h3.2c2 0 3.1 1 4.2 2.6l2.6 4.1c1 1.6 2.2 2.3 4.2 2.3H21M18 13l3 3-3 3M3 17h3.2c1.4 0 2.4-.5 3.1-1.4M14.4 8.4C15.2 7.5 16 7 17.2 7H21M18 4l3 3-3 3"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.5 2.5L5 13.5h6l-1 8 8.5-11h-6z"/></symbol>
+</svg>
+
+<!-- ============ SETUP ============ -->
+<main id="setup" class="screen setup">
+  <header class="topbar">
+    <div class="brand" aria-label="Overdrive HIIT">
+      <svg class="brand-bolt" aria-hidden="true"><use href="#i-bolt"/></svg>
+      <span class="brand-word">OVERDRIVE</span>
+      <span class="brand-tag">HIIT</span>
+    </div>
+    <div class="toggles">
+      <button id="sfxToggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">
+        <svg aria-hidden="true"><use href="#i-sound"/></svg>
+      </button>
+      <button id="voiceToggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Voice coach">
+        <svg aria-hidden="true"><use href="#i-voice"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="heroTitle">
+    <div class="hero-copy">
+      <p class="eyebrow">Full-body interval training</p>
+      <h1 id="heroTitle" class="mega" aria-label="Overdrive"><span class="mega-line" data-text="OVER" aria-hidden="true"><span class="mega-a">OVER</span></span><span class="mega-line" data-text="DRIVE" aria-hidden="true"><span class="mega-b">DRIVE</span></span></h1>
+      <p class="lede">Upper body, abs and legs in every session. <span class="lede-strong"><b id="heroTime">14:30</b> today.</span></p>
+    </div>
+    <div class="hero-stage">
+      <div class="hero-orbit" aria-hidden="true"></div>
+      <canvas id="heroFig" class="hero-fig" aria-hidden="true"></canvas>
+      <div class="hero-label" aria-live="polite">
+        <span class="hero-label-k">Preview</span>
+        <span id="heroName" class="hero-label-v">Push Ups</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="config">
+    <section class="panel" aria-labelledby="lvlTitle">
+      <div class="panel-head">
+        <h2 id="lvlTitle" class="panel-title">Intensity</h2>
+      </div>
+      <div class="levels" role="radiogroup" aria-labelledby="lvlTitle">
+        <button type="button" class="level" role="radio" aria-checked="true" data-level="easy" id="level-easy">
+          <span class="level-top"><span class="level-name">Easy</span><span class="level-sets">3 sets</span></span>
+          <span class="level-meta">30s exercise · 30s rest</span>
+          <span class="level-bars" aria-hidden="true"><i class="w"></i><i class="r"></i><i class="w"></i><i class="r"></i><i class="w"></i><i class="r"></i><i class="w"></i></span>
+        </button>
+        <button type="button" class="level" role="radio" aria-checked="false" data-level="medium" id="level-medium">
+          <span class="level-top"><span class="level-name">Medium</span><span class="level-sets">2 sets</span></span>
+          <span class="level-meta">30s exercise · 30s jumping jacks</span>
+          <span class="level-bars" aria-hidden="true"><i class="w"></i><i class="j"></i><i class="w"></i><i class="j"></i><i class="w"></i><i class="j"></i><i class="w"></i></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="exTitle">
+      <div class="panel-head">
+        <h2 id="exTitle" class="panel-title">Exercises</h2>
+        <div class="counter" role="group" aria-label="Number of exercises">
+          <button id="minus" class="icon-btn sm" type="button" aria-label="Fewer exercises"><svg aria-hidden="true"><use href="#i-minus"/></svg></button>
+          <output id="count" class="count" aria-live="polite">5</output>
+          <button id="plus" class="icon-btn sm" type="button" aria-label="More exercises"><svg aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <button id="shuffle" class="pill-btn" type="button"><svg aria-hidden="true"><use href="#i-shuffle"/></svg><span>Shuffle</span></button>
+        </div>
+      </div>
+      <div class="coverage" id="coverage" aria-label="Muscle groups covered">
+        <span class="cov" data-g="upper"><svg aria-hidden="true"><use href="#i-check"/></svg>Upper body</span>
+        <span class="cov" data-g="abs"><svg aria-hidden="true"><use href="#i-check"/></svg>Abs</span>
+        <span class="cov" data-g="legs"><svg aria-hidden="true"><use href="#i-check"/></svg>Legs</span>
+      </div>
+      <ul id="exGrid" class="ex-grid" aria-label="Choose exercises"></ul>
+      <p class="hint" id="hint">Tap to add or remove. They run in the numbered order.</p>
+    </section>
+
+    <section class="panel summary" aria-labelledby="sumTitle">
+      <div class="panel-head">
+        <h2 id="sumTitle" class="panel-title">Session</h2>
+        <span class="sum-level" id="sumLevel">Easy</span>
+      </div>
+      <dl class="stats">
+        <div><dt>Total</dt><dd id="sumTotal">14:30</dd></div>
+        <div><dt>Work</dt><dd id="sumWork">7:30</dd></div>
+        <div><dt>Intervals</dt><dd id="sumIntervals">15</dd></div>
+      </dl>
+      <div class="strip" id="strip" aria-hidden="true"></div>
+      <div class="strip-legend" aria-hidden="true">
+        <span><i class="k-work"></i>Exercise</span>
+        <span id="legendRecover"><i class="k-rest"></i>Rest</span>
+        <span><i class="k-prep"></i>Get ready</span>
+      </div>
+    </section>
+
+    <div class="dock">
+      <button id="start" class="start" type="button">
+        <span class="start-label">Start workout</span>
+        <span class="start-time" id="startTime">14:30</span>
+      </button>
+      <p id="startError" class="start-error" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</main>
+
+<!-- ============ WORKOUT ============ -->
+<section id="workout" class="screen workout" hidden aria-label="Workout in progress">
+  <header class="w-top">
+    <button id="quit" class="icon-btn" type="button" aria-label="End workout"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
+    <div class="w-meta">
+      <span id="wSet">Set 1/3</span>
+      <span class="w-sep" aria-hidden="true"></span>
+      <span id="wEx">Exercise 1/5</span>
+    </div>
+    <button id="wSound" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects"><svg aria-hidden="true"><use href="#i-sound"/></svg></button>
+  </header>
+
+  <div class="w-body">
+    <div class="w-head">
+      <span class="chip" id="phaseChip">Get ready</span>
+      <h2 class="w-name" id="wName" aria-live="polite">Push Ups</h2>
+    </div>
+    <div class="w-stage" id="stage">
+      <canvas id="ring" class="ring" aria-hidden="true"></canvas>
+      <canvas id="fig" class="fig" aria-hidden="true"></canvas>
+    </div>
+    <div class="w-readout">
+      <div class="digits" id="digits" role="timer" aria-label="Seconds left"><span class="d" id="d0">1</span><span class="d" id="d1">0</span></div>
+      <p class="w-line" id="wLine">First up · Push Ups</p>
+    </div>
+  </div>
+
+  <footer class="w-bottom">
+    <div class="progress">
+      <div class="segs" id="segs" aria-hidden="true"></div>
+      <div class="progress-meta"><span id="elapsed">0:00</span><span id="remaining">14:30 left</span></div>
+    </div>
+    <div class="controls">
+      <button id="prev" class="ctl" type="button" aria-label="Previous interval"><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
+      <button id="pause" class="ctl ctl-main" type="button" aria-label="Pause"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
+      <button id="skip" class="ctl" type="button" aria-label="Next interval"><svg aria-hidden="true"><use href="#i-next"/></svg></button>
+    </div>
+  </footer>
+
+  <div class="flash" id="flash" aria-hidden="true"><span class="flash-text" id="flashText" data-text="GO">GO</span><span class="flash-sub" id="flashSub"></span></div>
+
+  <div class="veil" id="pausedVeil" hidden>
+    <div class="veil-card">
+      <p class="veil-title" data-text="PAUSED">PAUSED</p>
+      <div class="veil-actions">
+        <button id="resume" class="start small" type="button"><span class="start-label">Resume</span></button>
+        <button id="endFromPause" class="ghost-btn" type="button">End workout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="veil" id="quitDialog" hidden role="dialog" aria-modal="true" aria-labelledby="quitTitle">
+    <div class="veil-card">
+      <p class="veil-title sm" id="quitTitle">End this workout?</p>
+      <p class="veil-text">You will go back to the setup screen. This session won't count as completed.</p>
+      <div class="veil-actions">
+        <button id="quitNo" class="start small" type="button"><span class="start-label">Keep going</span></button>
+        <button id="quitYes" class="ghost-btn danger" type="button">End workout</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DONE ============ -->
+<section id="done" class="screen done" hidden aria-labelledby="doneTitle">
+  <div class="done-inner">
+    <canvas id="doneFig" class="done-fig" aria-hidden="true"></canvas>
+    <p class="eyebrow">Session complete</p>
+    <h2 id="doneTitle" class="mega done-mega" aria-label="Crushed it"><span class="mega-line" data-text="CRUSHED" aria-hidden="true"><span class="mega-a">CRUSHED</span></span><span class="mega-line" data-text="IT" aria-hidden="true"><span class="mega-b">IT</span></span></h2>
+    <dl class="stats done-stats">
+      <div><dt>Time</dt><dd id="dTime">14:30</dd></div>
+      <div><dt>Sets</dt><dd id="dSets">3</dd></div>
+      <div><dt>Intervals</dt><dd id="dIntervals">15</dd></div>
+      <div><dt>Workouts</dt><dd id="dCount">1</dd></div>
+    </dl>
+    <ul class="done-list" id="doneList"></ul>
+    <div class="done-actions">
+      <button id="again" class="start" type="button"><span class="start-label">Go again</span></button>
+      <button id="newWorkout" class="ghost-btn" type="button">New workout</button>
+    </div>
+  </div>
+</section>
+
+<script src="js/workout.js"></script>
+<script src="js/bg.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/figure.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
