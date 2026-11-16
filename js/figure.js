@@ -193,7 +193,7 @@
         var s = SIDES[i][0], sg = SIDES[i][1], R = [0, 0, sg];
         legIK(J, s, [0.355, B.ankleH, 0.075 * sg], [0.25, 1, 0.12 * sg]);
         var wrist = addS(addS(J.head, R, 0.088), u3, -0.012);
-        armIK(J, s, wrist, add(add(mul(R, 0.55), mul(u2, -1)), mul(J.F, 0.55)), add(u3, mul(R, -0.4)));
+        armIK(J, s, wrist, add(add(mul(R, 1), mul(u2, -0.35)), mul(J.F, 0.2)), add(u3, mul(R, -0.4)));
       }
       return J;
     }
@@ -227,7 +227,7 @@
       torso(J, [0, 0.066, 0], dir(178), dir(167), dir(150), Z, Z, 0);
       for (var i = 0; i < 2; i++) {
         var s = SIDES[i][0], sg = SIDES[i][1];
-        var th = 8.5 + 6.5 * w * sg;
+        var th = 9 + 8 * w * sg;
         legFK(J, s, dir(th + 1.5, -0.03 * sg), dir(th - 1.5, -0.015 * sg), dir(th + 30));
         armIK(J, s, [-0.03, 0.032, 0.165 * sg], [-0.3, 1, 0.6 * sg], [1, -0.2, 0]);
       }
@@ -378,8 +378,9 @@
     }
   };
 
-  function getEx(id) { return EX.hasOwnProperty(id) ? EX[id] : EX.rest; }
-  function exId(ex) { for (var k in EX) if (EX[k] === ex) return k; return 'rest'; }
+  for (var exk in EX) if (EX.hasOwnProperty(exk)) EX[exk].id = exk;
+  function getEx(id) { return (typeof id === 'string' && EX.hasOwnProperty(id)) ? EX[id] : EX.rest; }
+  function exId(ex) { return (ex && ex.id) || 'rest'; }
 
   var FALLBACK_POSE = null;
   function safePose(ex, p, t) {
@@ -709,7 +710,7 @@
   };
 
   FP._record = function (dt, reduced) {
-    if (this.low) return;
+    if (this.low || reduced) { this.hist.length = 0; return; }
     var H = this.hist, pool = this.histPool;
     while (H.length && (this.rt - H[0].t > HIST_AGE || H.length >= HIST_MAX)) pool.push(H.shift());
     var e = pool.pop() || { t: 0, P: new Float32Array(NJ * 3), sc: 1 };
@@ -759,7 +760,7 @@
     while (this.emberAcc >= 1) {
       this.emberAcc -= 1;
       var jj = ((Math.random() * 20) | 0) * 3;
-      this._spawn(P[jj], P[jj + 1], (Math.random() - 0.5) * 0.12 * sc, -sc * (0.05 + Math.random() * 0.12), 0.9 + Math.random() * 0.8, -1);
+      this._spawn(P[jj], P[jj + 1], (Math.random() - 0.5) * 0.12 * sc, -sc * (0.05 + Math.random() * 0.12), 0.5 + Math.random() * 0.6, -1);
     }
   };
 
@@ -806,17 +807,16 @@
     if (fl > 0.01 || this.ring >= 0) this._drawFlash(ctx, P, m, c1, c2, fl);
   };
 
-  var TORSO_SHADE = null;
-  (function () {
-    try {
-      var c = root.document && document.createElement('canvas'), x = c && c.getContext && c.getContext('2d');
-      if (!x) return;
-      TORSO_SHADE = x.createRadialGradient(0, 0, 0, 0, 0, 1);
-      TORSO_SHADE.addColorStop(0, 'rgba(10,3,24,0.5)');
-      TORSO_SHADE.addColorStop(0.6, 'rgba(10,3,24,0.3)');
-      TORSO_SHADE.addColorStop(1, 'rgba(10,3,24,0)');
-    } catch (e) { TORSO_SHADE = null; }
-  })();
+  // Unit radial gradient used (scaled/rotated) for the torso's volumetric shading; one per context.
+  function torsoShade(ctx) {
+    if (ctx.__hiitShade) return ctx.__hiitShade;
+    var g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, 'rgba(10,3,24,0.36)');
+    g.addColorStop(0.6, 'rgba(10,3,24,0.2)');
+    g.addColorStop(1, 'rgba(10,3,24,0)');
+    try { ctx.__hiitShade = g; } catch (e) { /* ignore */ }
+    return g;
+  }
   var HIGH_PASSES = [[0.034, 0.07], [0.017, 0.12], [0.007, 0.2]];
   var LOW_PASSES = [[0.04, 0.09], [0.016, 0.2]];
 
@@ -853,7 +853,7 @@
       ctx.translate((px + nx) / 2, (py + ny) / 2);
       ctx.rotate(Math.atan2(ay, ax));
       ctx.scale(al * 0.5 + 0.05 * sc, Math.max(halfW, 0.05 * sc));
-      ctx.fillStyle = TORSO_SHADE || 'rgba(10,3,24,0.25)';
+      ctx.fillStyle = torsoShade(ctx);
       ctx.globalAlpha = 1;
       ctx.fill();
       ctx.restore();
@@ -1082,8 +1082,8 @@
     ctx.globalCompositeOperation = 'lighter';
     // ghosts of recent poses (only the limb chains that actually moved)
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    var ages = [0.07, 0.14, 0.21];
-    var gc = mix(c1, c2, 0.5);
+    var ages = [0.06, 0.12, 0.18];
+    var gc = mix(mix(c1, c2, 0.5), WHITE, 0.45);
     for (k = 0; k < ages.length; k++) {
       var e = null;
       for (i = n - 1; i >= 0; i--) if (tnow - Hs[i].t >= ages[k]) { e = Hs[i]; break; }
@@ -1096,15 +1096,16 @@
           var dx = Q[ch[j] * 3] - P[ch[j] * 3], dy = Q[ch[j] * 3 + 1] - P[ch[j] * 3 + 1];
           mv = Math.max(mv, dx * dx + dy * dy);
         }
-        if (mv < (0.03 * sc) * (0.03 * sc)) continue;
+        if (mv < (0.04 * sc) * (0.04 * sc)) continue;
         any = true;
         ctx.moveTo(Q[ch[0] * 3], Q[ch[0] * 3 + 1]);
         for (j = 1; j < ch.length; j++) ctx.lineTo(Q[ch[j] * 3], Q[ch[j] * 3 + 1]);
       }
       if (!any) continue;
+      // thin, bright afterimage strokes (dim wide strokes read as muddy shadows)
       ctx.strokeStyle = rgba(gc);
-      ctx.globalAlpha = 0.13 * (1 - k / ages.length) * en;
-      ctx.lineWidth = 0.05 * sc * (1 - 0.2 * k);
+      ctx.globalAlpha = 0.26 * (1 - k / ages.length) * en;
+      ctx.lineWidth = Math.max(1, 0.011 * sc);
       ctx.stroke();
     }
     // light-painting ribbons behind hands / feet / head
@@ -1113,8 +1114,12 @@
       for (i = 1; i < n; i++) {
         L += Math.abs(Hs[i].P[jj] - Hs[i - 1].P[jj]) + Math.abs(Hs[i].P[jj + 1] - Hs[i - 1].P[jj + 1]);
       }
-      if (L < 0.06 * sc) continue;
-      var wmax = (TRAIL_J[k] === HEAD ? 0.03 : 0.022) * sc;
+      if (L < 0.08 * sc) continue;
+      // a trail that doubles back on itself (fast oscillation) reads as a solid bar: fade it out
+      var h0 = Hs[0].P, nx = P[jj] - h0[jj], ny = P[jj + 1] - h0[jj + 1];
+      var unfold = clamp((Math.sqrt(nx * nx + ny * ny) / L - 0.35) / 0.35, 0, 1);
+      if (unfold <= 0) continue;
+      var wmax = (TRAIL_J[k] === HEAD ? 0.03 : 0.022) * sc * clamp((L / sc - 0.06) / 0.3, 0, 1);
       var xs = [], ys = [];
       for (i = 0; i < n; i++) { xs.push(Hs[i].P[jj]); ys.push(Hs[i].P[jj + 1]); }
       xs.push(P[jj]); ys.push(P[jj + 1]);
@@ -1138,7 +1143,7 @@
       gr.addColorStop(1, rgba(mix(tc, WHITE, 0.6), 0.8));
       ctx.fillStyle = gr;
       var far = (TRAIL_J[k] === HAL || TRAIL_J[k] === TOL) ? m.farL : 0;
-      ctx.globalAlpha = clamp(Math.min(1, L / (0.25 * sc)) * en * (1 - 0.5 * far), 0, 1);
+      ctx.globalAlpha = clamp(Math.min(1, L / (0.25 * sc)) * unfold * en * (1 - 0.5 * far), 0, 1);
       ctx.fill();
     }
   };
