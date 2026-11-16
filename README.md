@@ -1,6 +1,6 @@
 # Overdrive HIIT
 
-A full-body HIIT interval timer with a neon arcade look: a WebGL warp-tunnel backdrop that changes with each phase, glowing animated exercise demos, a ring timer that sheds sparks, and synthesised sound cues with an optional voice coach.
+A full-body HIIT interval timer with a neon arcade look and a built-in personal trainer: a WebGL warp-tunnel backdrop that changes with each phase, glowing animated exercise demos, a ring timer that sheds sparks, step-by-step form guides, and synthesised sound cues with a spoken coach.
 
 No framework, no dependencies, no build step. Open `index.html` in a browser, or serve the folder:
 
@@ -27,14 +27,28 @@ npm run serve        # python3 -m http.server 8080, then open http://localhost:8
 
 ### Intensity
 
-| Level | Each exercise | Then | Sets |
-| --- | --- | --- | --- |
-| Easy | 30 s | 30 s rest | 3 |
-| Medium | 30 s | 30 s jumping jacks | 2 |
+| Level | Each exercise | Then | Sets | Between sets |
+| --- | --- | --- | --- | --- |
+| Easy | 30 s | 30 s rest | 3 | 5:00 rest |
+| Medium | 30 s | 30 s jumping jacks | 2 | 5:00 rest |
 
-Every session opens with a 10 s get-ready countdown. Easy skips the rest after the very last exercise; Medium keeps the final jumping jacks. A 5-exercise session is 14:40 on Easy and 10:10 on Medium.
+Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set break replaces the rest after the last exercise of a set, and the very last rest is dropped. On Medium every exercise is followed by jumping jacks, then the set break. A 5-exercise session is 23:40 on Easy and 15:10 on Medium.
 
-During rest the stage previews the next exercise. The last three seconds of every interval beep, and the voice coach announces each exercise, the halfway point and what's next.
+### Personal trainer
+
+- **Trainer's guide** for every exercise (tap ⓘ on a card, the preview label, or **How to** mid-workout): live animated demo, numbered steps, breathing, mistakes to avoid, and easier / harder versions. The workout timer pauses while the guide is open.
+- **On-screen coaching** rotates form cues during each exercise and walks you through the next exercise's steps while you rest.
+- **Voice coach** announces each exercise, gives a form cue at 20 s left, calls out 10 seconds, and says what's next. During the set break it checks in at 4, 3, 2 and 1 minute, 30 s and 10 s.
+- **Set break** shows a breathing pacer (4 s in, 6 s out), recovery tips, and previews the first exercise of the next set for the last 30 s.
+
+### Always-visible timing
+
+- Top bar: time elapsed, current set, time left in the session.
+- Big countdown labelled for what it counts down to: *Time left*, *Next exercise in*, *Set 2 starts in*.
+- *Next: Squats in 0:58* line during every exercise, so you always know what's coming and when.
+- **Start now** (or **Start set 2**) jumps straight to the next exercise from get-ready, rest or the set break.
+- The ring shows the current interval; the thin inner arc shows the whole session. The last three seconds of every interval beep and flash.
+- The finish screen shows total time, time spent on each exercise, and your workouts and day streak on this device.
 
 ### Controls
 
@@ -52,12 +66,13 @@ The screen is kept awake during a workout where the browser supports the Wake Lo
 ```
 index.html          markup for the three screens (setup, workout, done)
 css/style.css       all styling; phase colours are CSS custom properties
-js/workout.js       pure workout logic: catalogue, random full-body pick, timeline
+js/workout.js       pure workout logic: catalogue + trainer content, random full-body pick, timeline
 js/app.js           UI controller, timer engine, ring timer, particles
 js/figure.js        Canvas 2D neon athlete that demonstrates each exercise
 js/bg.js            WebGL backdrop shader
 js/audio.js         Web Audio sound effects and speechSynthesis voice coach
 tests/              node:test unit tests for workout.js
+dev/figure-test.html  gallery of every exercise animation for checking the figures
 scripts/build.mjs   bundles everything into one HTML file in dist/
 ```
 
@@ -66,4 +81,4 @@ npm test             # unit tests (Node 18+)
 npm run build        # dist/overdrive-hiit.html, a single self-contained file
 ```
 
-Settings (intensity, sound, voice) and the completed-workout count are kept in `localStorage` on the device.
+Settings (intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.

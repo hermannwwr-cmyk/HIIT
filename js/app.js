@@ -14,11 +14,11 @@
 
   var PHASE = {
     setup: { colors: ['#9b5cff', '#22e5ff'], energy: 0.22, chip: '', flash: '' },
-    prep: { colors: ['#9b5cff', '#ff2bd6'], energy: 0.45, chip: 'Get ready', flash: 'READY' },
+    prep: { colors: ['#b9a8ff', '#5a6bff'], energy: 0.45, chip: 'Get ready', flash: 'READY' },
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
     rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest · up next', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
-    setrest: { colors: ['#36ffc0', '#2a8bff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
+    setrest: { colors: ['#36ffc0', '#9b5cff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
     done: { colors: ['#ffd23f', '#ff2bd6'], energy: 0.55, chip: '', flash: '' }
   };
   var GROUP_COLORS = {
@@ -348,6 +348,7 @@
   }
 
   // ================================================================ RING
+  function easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
   function hexRgb(hex) {
     var n = parseInt(hex.slice(1), 16);
     return [n >> 16 & 255, n >> 8 & 255, n & 255];
@@ -422,10 +423,29 @@
       ctx.stroke();
     }
 
-    // track
+    // groove + track, so the remaining arc reads on bright frames
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = th * 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = th;
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+
+    // breathing pacer for the long set break: 4 s in, 6 s out
+    if (this.breathe != null) {
+      var bt = this.breathe % 10;
+      var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
+      var br = R * (0.42 + 0.4 * bv);
+      var bgrad = ctx.createRadialGradient(cx, cy, br * 0.2, cx, cy, br);
+      bgrad.addColorStop(0, rgba(ca, 0.02));
+      bgrad.addColorStop(0.75, rgba(ca, 0.10 + 0.08 * bv));
+      bgrad.addColorStop(1, rgba(ca, 0));
+      ctx.fillStyle = bgrad;
+      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
+      ctx.strokeStyle = rgba(ca, 0.25 + 0.35 * bv);
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.stroke();
+    }
 
     ctx.globalCompositeOperation = 'lighter';
 
@@ -539,10 +559,10 @@
       var e = 1 - Math.pow(1 - s.t, 3);
       ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.8 * s.s);
       ctx.lineWidth = th * (1 - s.t) * 1.4;
-      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.32, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.08, 0, TAU); ctx.stroke();
       ctx.strokeStyle = rgba([255, 255, 255], (1 - s.t) * 0.5 * s.s);
       ctx.lineWidth = Math.max(1, th * 0.25 * (1 - s.t));
-      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.24, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R - e * S * 0.1, 0, TAU); ctx.stroke();
     }
 
     ctx.globalCompositeOperation = 'source-over';
@@ -550,7 +570,11 @@
 
   // ================================================================ FX
   var fx = {
-    c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], w: 0, h: 0, dpr: 1, dirty: false,
+    c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], waves: [], w: 0, h: 0, dpr: 1, dirty: false,
+    wave: function (x, y, colors, strength) {
+      if (reduced) return;
+      this.waves.push({ x: x, y: y, c: hexRgb(colors[0]), c2: hexRgb(colors[1] || colors[0]), s: strength || 1, t: 0 });
+    },
     resize: function () {
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
       var w = window.innerWidth, h = window.innerHeight;
@@ -582,7 +606,7 @@
       }
     },
     draw: function (dt) {
-      if (!this.parts.length) {
+      if (!this.parts.length && !this.waves.length) {
         if (this.dirty) { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.c.width, this.c.height); this.dirty = false; }
         return;
       }
@@ -592,6 +616,22 @@
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.clearRect(0, 0, this.w, this.h);
       ctx.globalCompositeOperation = 'lighter';
+      var reach = Math.hypot(this.w, this.h) * 0.8;
+      for (var wi = this.waves.length - 1; wi >= 0; wi--) {
+        var wv = this.waves[wi];
+        wv.t += dt * 1.15;
+        if (wv.t >= 1) { this.waves.splice(wi, 1); continue; }
+        var we = 1 - Math.pow(1 - wv.t, 3), fade = 1 - wv.t;
+        ctx.strokeStyle = rgba(wv.c, fade * 0.45 * wv.s);
+        ctx.lineWidth = 46 * fade * wv.s;
+        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = rgba(wv.c2, fade * 0.6 * wv.s);
+        ctx.lineWidth = 10 * fade;
+        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach * 0.9, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,' + (fade * 0.7 * wv.s).toFixed(3) + ')';
+        ctx.lineWidth = 2.5 * fade + 0.5;
+        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach * 0.97, 0, TAU); ctx.stroke();
+      }
       for (var i = this.parts.length - 1; i >= 0; i--) {
         var p = this.parts[i];
         p.life -= dt * p.decay;
@@ -764,12 +804,15 @@
     run.lastWhole = null;
     run.coachIdx = -1;
     run.figSwapped = false;
+    run.inhale = null;
     document.body.dataset.phase = seg.type;
     var c = ph.colors;
 
     bg.setMood(c[0], c[1], ph.energy);
     bg.flashNow();
     ring.setColors(c[0], c[1]);
+    ring.a = ring.ta.slice(); ring.b = ring.tb.slice(); // snap: no muddy blend mid-flash
+    ring.breathe = seg.type === 'setrest' ? 0 : null;
     ring.energy = ph.energy;
     ring.ticks = Math.min(seg.duration, 60);
     ring.shock(1);
@@ -809,7 +852,7 @@
     } else { // setrest
       name = 'Set ' + seg.set + ' done'; label = 'Set ' + (seg.set + 1) + ' starts in';
       sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
-      $('wEx').textContent = '5 minute recovery';
+      $('wEx').textContent = 'Breathe in…';
     }
     $('wName').textContent = name;
     $('dLabel').textContent = label;
@@ -832,7 +875,13 @@
     // flash, particles, sound, voice
     flash(ph.flash, sub);
     var stage = $('stage').getBoundingClientRect();
-    fx.burst(stage.left + stage.width / 2, stage.top + stage.height / 2, c.concat(['#ffffff']), seg.type === 'work' ? 90 : 50, seg.type === 'work' ? 1 : 0.6);
+    var scx = stage.left + stage.width / 2, scy = stage.top + stage.height / 2;
+    fx.burst(scx, scy, c.concat(['#ffffff']), seg.type === 'work' ? 110 : 50, seg.type === 'work' ? 1.1 : 0.6);
+    fx.wave(scx, scy, c, seg.type === 'work' ? 1 : 0.6);
+    if (seg.type === 'setrest') fx.confetti([c[0], c[1], '#ffffff', '#c6ff1a']);
+    var wb = document.querySelector('.w-body');
+    wb.classList.remove('punch');
+    if (!reduced) { void wb.offsetWidth; wb.classList.add('punch'); }
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
     else if (seg.type === 'rest' || seg.type === 'setrest') { A.play('rest'); buzz(80); }
     else if (seg.type === 'jacks') { A.play('jacks'); buzz([60, 40, 60]); }
@@ -851,17 +900,19 @@
   }
 
   var flashTimer = 0;
-  function flash(text, sub) {
+  function flash(text, sub, count) {
     var el = $('flash'), t = $('flashText');
     if (!text) return;
     t.textContent = text;
     t.dataset.text = text;
+    t.style.setProperty('--n', Math.max(3, text.length));
     $('flashSub').textContent = sub || '';
-    el.classList.remove('show');
+    el.classList.remove('show', 'count');
     void el.offsetWidth;
     el.classList.add('show');
+    if (count) el.classList.add('count');
     clearTimeout(flashTimer);
-    flashTimer = setTimeout(function () { el.classList.remove('show'); }, 1400);
+    flashTimer = setTimeout(function () { el.classList.remove('show', 'count'); }, count ? 950 : 1400);
   }
 
   var digitsText = '';
@@ -896,6 +947,11 @@
       dg.classList.add('final');
       A.play(whole === 1 ? 'tickLast' : 'tick');
       bg.beatNow(1);
+      if (!reduced) flash(String(whole), '', true);
+      var edge = $('edge');
+      edge.classList.remove('on'); void edge.offsetWidth; edge.classList.add('on');
+      var sr = $('stage').getBoundingClientRect();
+      fx.wave(sr.left + sr.width / 2, sr.top + sr.height / 2, PHASE[seg.type].colors, 0.5);
       ring.shock(0.7);
       ring.hot = Math.max(ring.hot, 0.8);
       buzz(35);
@@ -984,6 +1040,11 @@
     }
     updateCoach(seg, t);
 
+    if (seg.type === 'setrest') {
+      ring.breathe = t - seg.start;
+      var inhale = (ring.breathe % 10) < 4;
+      if (inhale !== run.inhale) { run.inhale = inhale; $('wEx').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
+    }
     ring.progress = remaining / seg.duration;
     ring.total = t / tl.total;
     var cur = $('segs').children[idx];
@@ -1029,19 +1090,20 @@
     buzz([100, 60, 100, 60, 240]);
 
     document.body.dataset.phase = 'done';
-    bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy);
+    bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], 1);
     bg.flashNow();
     bg.setRunning(true);
+    setTimeout(function () { if (currentScreen === 'done') bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy); }, 2200);
     if (workFig) workFig.setPlaying(false);
     showScreen('done');
 
     var tl = run.tl;
     var workSec = 0;
     Object.keys(run.perEx).forEach(function (k) { workSec += run.perEx[k]; });
-    $('dTime').textContent = H.formatTime(run.active);
-    $('dWork').textContent = H.formatTime(workSec);
-    $('dCount').textContent = String(state.hist.completed);
-    $('dStreak').textContent = String(liveStreak());
+    countUp($('dTime'), run.active, true);
+    countUp($('dWork'), workSec, true);
+    countUp($('dCount'), state.hist.completed, false);
+    countUp($('dStreak'), liveStreak(), false);
     var list = $('doneList');
     list.textContent = '';
     tl.exercises.concat(tl.level.recoverType === 'jacks' ? ['jacks'] : []).forEach(function (id) {
@@ -1056,8 +1118,24 @@
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
     fx.confetti(['#ffd23f', '#ff2bd6', '#22e5ff', '#c6ff1a', '#ffffff']);
-    setTimeout(function () { var r = $('doneFig').getBoundingClientRect(); fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6', '#ffffff'], 120, 1.2); }, 200);
+    setTimeout(function () {
+      var r = $('doneFig').getBoundingClientRect();
+      fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6', '#ffffff'], 140, 1.2);
+      fx.wave(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6'], 1);
+    }, 200);
     setTimeout(function () { $('again').focus(); }, 400);
+  }
+
+  function countUp(el, target, asTime) {
+    var t0 = performance.now(), dur = reduced ? 0 : 900;
+    function step(now) {
+      var k = dur ? Math.min(1, (now - t0) / dur) : 1;
+      var v = target * (1 - Math.pow(1 - k, 3));
+      el.textContent = asTime ? H.formatTime(Math.floor(v)) : String(Math.round(v));
+      if (k < 1) requestAnimationFrame(step);
+      else el.textContent = asTime ? H.formatTime(target) : String(target);
+    }
+    requestAnimationFrame(step);
   }
 
   function endRun() {

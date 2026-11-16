@@ -172,7 +172,7 @@
     this._last = now;
     if (!this.ok || document.hidden) return;
 
-    var k = 1 - Math.exp(-dt * 2.2);
+    var k = 1 - Math.exp(-dt * 6);
     for (var i = 0; i < 3; i++) {
       this.a[i] += (this.ta[i] - this.a[i]) * k;
       this.b[i] += (this.tb[i] - this.b[i]) * k;
