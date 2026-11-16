@@ -628,6 +628,7 @@
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     var bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
     if (w === this.W && h === this.H && dpr === this.dpr && c.width === bw && c.height === bh) return;
+    this._still = false; // resized: the next tick must repaint
     if (c.width !== bw || c.height !== bh) {
       c.width = bw; c.height = bh;
       // If the canvas was sized only by its attributes, resizing the backing store would
@@ -678,13 +679,26 @@
   };
 
   FP._tick = function (dt) {
-    if (this.dead || !this.ctx) return;
+    if (this.dead || !this.ctx || this.suspended) return;
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     if (dpr !== this.dpr || (!this.ro && (this._chk = (this._chk || 0) + 1) % 30 === 0)) this._measure();
     if (!this.visible || this.W < 4 || this.H < 4) return;
+    // Battery: a stopped figure with nothing in flight only needs an occasional
+    // repaint for its breathing glow (none at all for thumbnails or reduced
+    // motion), and thumbnails run at 30 fps.
+    var settled = !this.playing && this.morphT >= 1 && this.colT >= 1 && this.flash === 0 &&
+      this.ring < 0 && !this.sparks.length && Math.abs(this.energyT - this.energy) < 0.01;
+    this._acc = (this._acc || 0) + dt;
+    if (settled) {
+      if (this.low || reducedMotion()) { if (this._still) return; }
+      else if (this._acc < 1 / 8) return;
+    } else if (this.low && this._acc < 1 / 30) return;
+    var step = Math.min(0.1, this._acc);
+    this._acc = 0;
     var t0 = now();
-    this._update(dt);
+    this._update(step);
     this._draw();
+    this._still = settled;
     var st = this._stats;
     st.frames++; st.ms += now() - t0;
   };
@@ -1225,6 +1239,8 @@
     this.colT = 0;
   };
   FP.setPlaying = function (b) { if (!this.dead) this.playing = !!b; };
+  /** Stop drawing entirely (e.g. while covered by a sheet); resumes where it was. */
+  FP.setSuspended = function (b) { if (!this.dead) { this.suspended = !!b; this._still = false; this._acc = 0; } };
   FP.setEnergy = function (x) { if (!this.dead) this.energyT = clamp(num(x, this.energyT), 0, 1); };
   FP.pulse = function () {
     if (this.dead) return;

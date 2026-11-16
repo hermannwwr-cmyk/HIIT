@@ -159,7 +159,7 @@
     <div class="w-head">
       <span class="chip" id="phaseChip">Get ready</span>
       <span class="w-ex" id="wEx">Exercise 1 of 5</span>
-      <h2 class="w-name" id="wName" aria-live="polite">Push Ups</h2>
+      <h2 class="w-name" id="wName">Push Ups</h2>
     </div>
     <div class="w-stage" id="stage">
       <canvas id="ring" class="ring" aria-hidden="true"></canvas>
@@ -174,7 +174,7 @@
           <span class="coach-k"><svg aria-hidden="true"><use href="#i-whistle"/></svg><span id="coachK">Trainer</span></span>
           <button id="howTo" class="link-btn" type="button"><svg aria-hidden="true"><use href="#i-info"/></svg><span id="howToLabel">How to</span></button>
         </div>
-        <p class="coach-v" id="coachV" aria-live="polite"></p>
+        <p class="coach-v" id="coachV"></p>
       </div>
     </div>
   </div>
@@ -190,9 +190,11 @@
     </div>
   </footer>
 
-  <div class="veil" id="pausedVeil" hidden>
+  <p class="sr-only" id="srStatus" role="status"></p>
+
+  <div class="veil" id="pausedVeil" hidden role="dialog" aria-modal="true" aria-labelledby="pausedTitle" aria-describedby="veilStatus">
     <div class="veil-card">
-      <p class="veil-title" data-text="PAUSED">PAUSED</p>
+      <p class="veil-title" id="pausedTitle" data-text="PAUSED">PAUSED</p>
       <p class="veil-status" id="veilStatus"></p>
       <div class="veil-actions">
         <button id="resume" class="start small" type="button"><span class="start-label">Resume</span></button>

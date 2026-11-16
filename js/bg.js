@@ -112,7 +112,7 @@
     this._last = performance.now();
     requestAnimationFrame(this._loop);
     var self = this;
-    window.addEventListener('resize', function () { self._resize(); });
+    window.addEventListener('resize', function () { self._sizeDirty = true; self._drewStill = false; });
   }
 
   Backdrop.prototype._init = function () {
@@ -165,12 +165,30 @@
   Backdrop.prototype.beatNow = function (amt) { this.beat = Math.max(this.beat, amt == null ? 1 : amt); };
   Backdrop.prototype.flashNow = function () { this.flash = 1; this.beat = 1; };
   Backdrop.prototype.setRunning = function (on) { this.running = on; };
+  /** Cap the frame rate (e.g. 30 on menus); 0 = every frame. */
+  Backdrop.prototype.setFrameRate = function (fps) { this.minStep = fps ? 1 / fps : 0; };
+
+  /** Nothing visible is changing: colours, energy, focus and pulses have settled. */
+  Backdrop.prototype._settled = function () {
+    var d = 0;
+    for (var i = 0; i < 3; i++) d += Math.abs(this.ta[i] - this.a[i]) + Math.abs(this.tb[i] - this.b[i]);
+    return d < 0.004 && Math.abs(this.targetEnergy - this.energy) < 0.004 && this.beat < 0.004 && this.flash < 0.004 &&
+      Math.abs(this.targetFocus[0] - this.focus[0]) + Math.abs(this.targetFocus[1] - this.focus[1]) < 0.002;
+  };
 
   Backdrop.prototype._loop = function (now) {
     requestAnimationFrame(this._loop);
     var dt = Math.min(0.1, (now - this._last) / 1000);
     this._last = now;
     if (!this.ok || document.hidden) return;
+    // Battery: paused or reduced motion shows a still frame once things settle.
+    var still = !this.running || this.reduced;
+    if (still && this._drewStill && this._settled()) return;
+    this._acc = (this._acc || 0) + dt;
+    if (!still && this.minStep && this._acc < this.minStep) return;
+    dt = Math.min(0.1, this._acc);
+    this._acc = 0;
+    if (this.reduced) { this.beat = 0; this.flash = 0; }
 
     var k = 1 - Math.exp(-dt * 6);
     for (var i = 0; i < 3; i++) {
@@ -182,13 +200,14 @@
     this.focus[1] += (this.targetFocus[1] - this.focus[1]) * k;
     this.beat *= Math.exp(-dt * 3.2);
     this.flash *= Math.exp(-dt * 2.6);
-    var motion = this.reduced ? 0.15 : 1;
-    var speed = (0.06 + 0.9 * this.energy * this.energy + 0.5 * this.beat) * (this.running ? 1 : 0.15) * motion;
+    var motion = still ? 0 : 1;
+    var speed = (0.06 + 0.9 * this.energy * this.energy + 0.5 * this.beat) * motion;
     this.travel += dt * speed;
     this.time += dt * motion;
+    this._drewStill = still;
 
-    this._adapt(dt);
-    this._resize();
+    if (!still && !this.minStep) this._adapt(dt);
+    if (this._sizeDirty) { this._sizeDirty = false; this._resize(); }
     var gl = this.gl, u = this.u;
     gl.uniform2f(u.uRes, this.canvas.width, this.canvas.height);
     gl.uniform1f(u.uTime, this.time);
@@ -209,8 +228,8 @@
     var avg = this.frameTimes.reduce(function (a, b) { return a + b; }, 0) / this.frameTimes.length;
     this.frameTimes.length = 0;
     var max = Math.min(window.devicePixelRatio || 1, 1.5) * 0.75;
-    if (avg > 1 / 45 && this.scale > 0.3) this.scale = Math.max(0.3, this.scale * 0.8);
-    else if (avg < 1 / 58 && this.scale < max) this.scale = Math.min(max, this.scale * 1.08);
+    if (avg > 1 / 45 && this.scale > 0.3) { this.scale = Math.max(0.3, this.scale * 0.8); this._sizeDirty = true; }
+    else if (avg < 1 / 58 && this.scale < max) { this.scale = Math.min(max, this.scale * 1.08); this._sizeDirty = true; }
   };
 
   window.HIITBackdrop = Backdrop;

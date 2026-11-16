@@ -77,7 +77,7 @@
   }
 
   // ---------------------------------------------------------------- figures
-  var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop };
+  var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop };
   function noop() {}
   function makeFig(canvas, opts) {
     try { return (window.HIITFigure && window.HIITFigure.create(canvas, opts)) || stubFig; } catch (e) { return stubFig; }
@@ -86,7 +86,7 @@
   // ---------------------------------------------------------------- backdrop
   var bg;
   try { bg = new window.HIITBackdrop($('bg')); } catch (e) {
-    bg = { setMood: noop, setFocus: noop, beatNow: noop, flashNow: noop, setRunning: noop };
+    bg = { setMood: noop, setFocus: noop, beatNow: noop, flashNow: noop, setRunning: noop, setFrameRate: noop };
   }
 
   function focusOn(el) {
@@ -299,6 +299,7 @@
 
     sheet.hidden = false;
     sheet.scrollTop = 0;
+    suspendBehindSheet(true);
     if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: id, primary: gc[0], secondary: gc[1], quality: 'high', energy: 0.9 });
     guide.fig.setExercise(id);
     guide.fig.setColors(gc[0], gc[1]);
@@ -306,6 +307,21 @@
     guide.fig.pulse();
     A.play('click');
     setTimeout(function () { $('csClose').focus(); }, 30);
+  }
+
+  function suspendBehindSheet(on) {
+    heroFig.setSuspended(on);
+    Object.keys(thumbs).forEach(function (k) { thumbs[k].setSuspended(on); });
+    if (workFig) workFig.setSuspended(on);
+    if (doneFig) doneFig.setSuspended(on);
+    if (currentScreen !== 'workout') bg.setRunning(!on);
+    setInert(on);
+  }
+
+  /** Make everything behind an open dialog unreachable for keyboard and screen readers. */
+  function setInert(on) {
+    var parts = currentScreen === 'workout' ? document.querySelectorAll('.w-top, .w-body, .w-bottom') : [$(currentScreen)];
+    Array.prototype.forEach.call(parts, function (el) { if (el) el.inert = !!on; });
   }
 
   function syncGuideToggle() {
@@ -319,11 +335,13 @@
     if (sheet.hidden) return;
     sheet.hidden = true;
     if (guide.fig) guide.fig.setPlaying(false);
+    suspendBehindSheet(false);
     if (guide.context === 'workout' && run && !run.finished) {
       if (guide.resume) setPlaying(true);
       else if (!run.playing) setPauseUi(true);
     }
-    if (guide.opener && document.body.contains(guide.opener)) guide.opener.focus();
+    if (guide.context === 'workout' && run && !run.finished) { if ($('pausedVeil').hidden) $('pause').focus(); }
+    else if (guide.opener && document.body.contains(guide.opener)) guide.opener.focus();
   }
 
   function fillList(el, items) {
@@ -337,6 +355,7 @@
     currentScreen = name;
     ['setup', 'workout', 'done'].forEach(function (s) { $(s).hidden = s !== name; });
     document.body.dataset.screen = name;
+    bg.setFrameRate(name === 'workout' ? 0 : 30);
     if (name === 'setup') {
       document.body.dataset.phase = 'setup';
       bg.setMood(PHASE.setup.colors[0], PHASE.setup.colors[1], PHASE.setup.energy);
@@ -369,13 +388,24 @@
     this.shocks = [];
     this.sparks = [];
     this.w = 0; this.h = 0; this.dpr = 1;
+    this.sizeDirty = true;
+    this.needs = 2;
+    var self = this;
+    if (window.ResizeObserver) new ResizeObserver(function () { self.sizeDirty = true; self.needs = 2; }).observe(canvas);
+    else window.addEventListener('resize', function () { self.sizeDirty = true; self.needs = 2; });
   }
+  /** True while anything on the ring is animating. */
+  Ring.prototype.busy = function () {
+    return this.needs > 0 || this.sparks.length > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
+  };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
-  Ring.prototype.shock = function (strength) { this.shocks.push({ t: 0, s: strength || 1 }); };
+  Ring.prototype.shock = function (strength) { this.shocks.push({ t: 0, s: strength || 1 }); this.needs = 2; };
   Ring.prototype.resize = function () {
+    if (!this.sizeDirty && this.w) return true;
+    this.sizeDirty = false;
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = this.c.clientWidth, h = this.c.clientHeight;
-    if (!w || !h) return false;
+    if (!w || !h) { this.sizeDirty = true; return false; }
     if (w !== this.w || h !== this.h || dpr !== this.dpr) {
       this.w = w; this.h = h; this.dpr = dpr;
       this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
@@ -387,6 +417,7 @@
   };
   Ring.prototype.draw = function (dt) {
     if (!this.resize()) return;
+    if (this.needs > 0) this.needs--;
     var ctx = this.ctx, w = this.w, h = this.h, dpr = this.dpr;
     var k = 1 - Math.exp(-dt * 5);
     for (var i = 0; i < 3; i++) { this.a[i] += (this.ta[i] - this.a[i]) * k; this.b[i] += (this.tb[i] - this.b[i]) * k; }
@@ -606,6 +637,8 @@
       }
     },
     draw: function (dt) {
+      if (this.parts.length > 400) this.parts.splice(0, this.parts.length - 400);
+      if (this.waves.length > 6) this.waves.splice(0, this.waves.length - 6);
       if (!this.parts.length && !this.waves.length) {
         if (this.dirty) { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.c.width, this.c.height); this.dirty = false; }
         return;
@@ -703,6 +736,7 @@
     lockScreen();
     requestAnimationFrame(function () { focusOn($('stage')); });
     update();
+    $('pause').focus({ preventScroll: true });
   }
 
   function elapsedNow() {
@@ -716,6 +750,7 @@
     run.anchor = performance.now();
     run.lastT = run.base; // jumps don't count as time trained
     run.lastWhole = null;
+    ring.needs = 2;
     update();
   }
 
@@ -750,13 +785,14 @@
       lockScreen();
       if (run.cuePending === run.segIdx) { run.cuePending = -1; cueSegment(run.tl.segments[run.segIdx]); }
       else A.play('click');
-    } else { A.stopVoice(); }
+    } else { A.stopVoice(); A.sleep(); }
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
     if (!run || !run.playing) return;
     run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
     A.stopVoice();
+    A.sleep();
     if (workFig) workFig.setPlaying(false);
     ring.paused = true;
     bg.setRunning(false);
@@ -771,6 +807,8 @@
 
   function setPauseUi(paused) {
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
+    setInert(!$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden);
+    ring.needs = 2;
     if (paused && run) {
       var seg = run.tl.segments[Math.min(run.segIdx, run.tl.segments.length - 1)];
       if (seg) {
@@ -897,6 +935,12 @@
     }
     $('wName').textContent = name;
     $('dLabel').textContent = label;
+    var mins = seg.duration >= 60 ? (seg.duration / 60) + ' minutes' : seg.duration + ' seconds';
+    $('srStatus').textContent = seg.type === 'work' ? 'Work: ' + name + ', ' + mins + '.'
+      : seg.type === 'jacks' ? 'Jumping jacks, ' + mins + '.'
+      : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + name + '.'
+      : seg.type === 'setrest' ? 'Set ' + seg.set + ' complete. Break, ' + mins + '.'
+      : 'Get ready. First up: ' + name + '.';
     $('howToLabel').textContent = seg.type === 'setrest' ? 'How to: ' + exName(guideTarget(seg)) : 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
@@ -1137,6 +1181,7 @@
     unlockScreen();
     A.play('finish');
     A.say(counted ? 'Workout complete. Great job!' : 'Session ended early.');
+    A.sleep(4000);
     buzz([100, 60, 100, 60, 240]);
     setDoneTitle(counted);
 
@@ -1204,8 +1249,10 @@
     run = null;
     unlockScreen();
     A.stopVoice();
+    A.sleep(0);
     if (workFig) workFig.setPlaying(false);
     $('pausedVeil').hidden = true;
+    setInert(false);
     $('quitDialog').hidden = true;
     $('coachSheet').hidden = true;
   }
@@ -1218,13 +1265,15 @@
     pauseQuietly();
     $('pausedVeil').hidden = true;
     $('quitDialog').hidden = false;
+    setInert(true);
     $('quitNo').focus();
   }
   function closeQuit(resume) {
     $('quitDialog').hidden = true;
+    setInert(false);
     if (resume && resumeAfterDialog) setPlaying(true);
     else if (run && !run.playing) setPauseUi(true);
-    $('quit').focus();
+    if ($('pausedVeil').hidden) $('pause').focus();
   }
 
   // ================================================================ MAIN LOOP
@@ -1235,7 +1284,7 @@
     lastFrame = now;
     if (run && !run.finished) {
       update();
-      if (currentScreen === 'workout') ring.draw(dt);
+      if (currentScreen === 'workout' && (run.playing || ring.busy())) ring.draw(dt);
     }
     fx.draw(dt);
   }
@@ -1262,6 +1311,8 @@
       b.querySelector('use').setAttribute('href', on ? t[2] : t[3]);
     });
   }
+
+  var focusByKeyboard = false;
 
   function trapTab(e, container) {
     var f = Array.prototype.filter.call(container.querySelectorAll('button'), function (b) { return !b.hidden && !b.disabled && b.offsetParent !== null; });
@@ -1349,6 +1400,12 @@
       renderSetup();
     });
 
+    // How focus last moved: Tab/arrows mean a keyboard user chose the focused button.
+    document.addEventListener('pointerdown', function () { focusByKeyboard = false; }, true);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab') focusByKeyboard = true;
+    }, true);
+
     document.addEventListener('keydown', function (e) {
       var sheetOpen = !$('coachSheet').hidden;
       if (sheetOpen) {
@@ -1360,8 +1417,12 @@
       var dialogOpen = !$('quitDialog').hidden;
       if (e.key === 'Escape') { e.preventDefault(); if (dialogOpen) closeQuit(true); else openQuit(); return; }
       if (dialogOpen) { if (e.key === 'Tab') trapTab(e, $('quitDialog')); return; }
+      var veilOpen = !$('pausedVeil').hidden;
+      if (veilOpen && e.key === 'Tab') { trapTab(e, $('pausedVeil')); return; }
       if (e.key === ' ' || e.code === 'Space') {
-        // Space is the play/pause key here, whatever button last had focus.
+        // Space is play/pause, unless a keyboard user has deliberately focused another button.
+        var ae = document.activeElement;
+        if (ae && ae.tagName === 'BUTTON' && ae !== $('pause') && focusByKeyboard) return;
         e.preventDefault(); setPlaying(!run.playing);
       } else if (e.key === 'ArrowRight') { e.preventDefault(); skip(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }

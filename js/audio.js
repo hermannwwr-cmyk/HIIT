@@ -90,6 +90,7 @@
     var c = ensure();
     if (!c || !sounds[name]) return;
     try {
+      clearTimeout(sleep.t);
       if (c.state === 'suspended') c.resume();
       sounds[name](c.currentTime + 0.01);
     } catch (e) { /* ignore */ }
@@ -124,8 +125,15 @@
 
   function stopVoice() { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
 
+  /** Let the audio hardware idle (paused / finished). play() wakes it again. */
+  function sleep(delayMs) {
+    if (!ctx) return;
+    clearTimeout(sleep.t);
+    sleep.t = setTimeout(function () { try { if (ctx.state === 'running') ctx.suspend(); } catch (e) { /* ignore */ } }, delayMs == null ? 2500 : delayMs);
+  }
+
   window.HIITAudio = {
-    unlock: unlock, play: play, say: say, stopVoice: stopVoice,
+    unlock: unlock, play: play, say: say, stopVoice: stopVoice, sleep: sleep,
     set: function (k, v) { settings[k] = !!v; if (k === 'voice' && !v) stopVoice(); },
     get: function (k) { return settings[k]; },
     voiceSupported: function () { return !!window.speechSynthesis; }
