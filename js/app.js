@@ -1,7 +1,7 @@
 /*
- * App controller: setup screen, workout engine, ring timer, particles and
- * screen transitions. Depends on workout.js (HIIT), bg.js (HIITBackdrop),
- * audio.js (HIITAudio) and figure.js (HIITFigure).
+ * App controller: setup screen, workout engine, personal-trainer coaching,
+ * ring timer, particles and screen transitions. Depends on workout.js (HIIT),
+ * bg.js (HIITBackdrop), audio.js (HIITAudio) and figure.js (HIITFigure).
  */
 (function () {
   'use strict';
@@ -16,14 +16,17 @@
     setup: { colors: ['#9b5cff', '#22e5ff'], energy: 0.22, chip: '', flash: '' },
     prep: { colors: ['#9b5cff', '#ff2bd6'], energy: 0.45, chip: 'Get ready', flash: 'READY' },
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
-    rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest', flash: 'REST' },
+    rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest · up next', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
+    setrest: { colors: ['#36ffc0', '#2a8bff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
     done: { colors: ['#ffd23f', '#ff2bd6'], energy: 0.55, chip: '', flash: '' }
   };
   var GROUP_COLORS = {
     upper: ['#ff4fd8', '#ff8a1f'],
     abs: ['#2ee6ff', '#4a6bff'],
-    legs: ['#ffb21f', '#ff4f6a']
+    legs: ['#ffb21f', '#ff4f6a'],
+    cardio: ['#c6ff1a', '#ffe14a'],
+    rest: ['#22e5ff', '#4a6bff']
   };
 
   // ---------------------------------------------------------------- storage
@@ -34,7 +37,9 @@
   function savePrefs() {
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
-        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), completed: state.completed
+        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'),
+        completed: state.hist.completed, seconds: state.hist.seconds,
+        streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
     } catch (e) { /* storage unavailable: fine */ }
   }
@@ -43,10 +48,33 @@
   var state = {
     level: H.LEVELS[prefs.level] ? prefs.level : 'easy',
     ids: H.randomPick(H.DEFAULT_COUNT),
-    completed: Number(prefs.completed) || 0
+    hist: {
+      completed: Number(prefs.completed) || 0,
+      seconds: Number(prefs.seconds) || 0,
+      streak: Number(prefs.streak) || 0,
+      lastDay: typeof prefs.lastDay === 'string' ? prefs.lastDay : ''
+    }
   };
   if (prefs.sfx === false) A.set('sfx', false);
   if (prefs.voice === false) A.set('voice', false);
+
+  function dayKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function yesterdayKey() { var d = new Date(); d.setDate(d.getDate() - 1); return dayKey(d); }
+  /** Streak only counts if the last workout was today or yesterday. */
+  function liveStreak() {
+    var h = state.hist;
+    return h.lastDay === dayKey(new Date()) || h.lastDay === yesterdayKey() ? h.streak : 0;
+  }
+  function recordWorkout(seconds) {
+    var h = state.hist, today = dayKey(new Date());
+    if (h.lastDay !== today) h.streak = h.lastDay === yesterdayKey() ? h.streak + 1 : 1;
+    h.lastDay = today;
+    h.completed += 1;
+    h.seconds += Math.round(seconds);
+    savePrefs();
+  }
 
   // ---------------------------------------------------------------- figures
   var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop };
@@ -71,16 +99,21 @@
     bg.setFocus(Math.max(-1.2, Math.min(1.2, fx)), Math.max(-1.2, Math.min(1.2, fy)));
   }
 
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; });
+  }
+
   // ================================================================ SETUP
   var thumbs = {};
   var cards = {};
   var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', energy: 0.7 });
-  var hero = { idx: 0, hover: null, timer: 0, shown: null };
+  var hero = { hover: null, shown: null };
 
   function buildGrid() {
     var grid = $('exGrid');
     H.EXERCISES.forEach(function (ex) {
       var li = document.createElement('li');
+      li.className = 'ex-item';
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ex';
@@ -99,7 +132,17 @@
       btn.addEventListener('mouseleave', function () { heroPeek(null); });
       btn.addEventListener('focus', function () { heroPeek(ex.id); });
       btn.addEventListener('blur', function () { heroPeek(null); });
+
+      var info = document.createElement('button');
+      info.type = 'button';
+      info.className = 'ex-info';
+      info.dataset.group = ex.group;
+      info.setAttribute('aria-label', 'How to do ' + ex.name);
+      info.innerHTML = '<svg aria-hidden="true"><use href="#i-info"/></svg>';
+      info.addEventListener('click', function () { openGuide(ex.id, 'setup', info); });
+
       li.appendChild(btn);
+      li.appendChild(info);
       grid.appendChild(li);
       cards[ex.id] = btn;
       var gc = GROUP_COLORS[ex.group];
@@ -120,6 +163,12 @@
     state.ids = H.resize(state.ids, n);
     A.play('click');
     renderSetup();
+  }
+
+  function renderMe() {
+    $('meCount').textContent = String(state.hist.completed);
+    $('meMinutes').textContent = String(Math.round(state.hist.seconds / 60));
+    $('meStreak').textContent = String(liveStreak());
   }
 
   function renderSetup() {
@@ -148,28 +197,26 @@
     $('plus').disabled = ids.length >= H.MAX_EXERCISES;
 
     document.querySelectorAll('.cov').forEach(function (el) {
-      var g = el.dataset.g;
-      var on = v.coverage[g];
+      var on = v.coverage[el.dataset.g];
       el.classList.toggle('on', on);
-      var wasMissing = el.classList.contains('missing');
       el.classList.toggle('missing', !on);
-      if (!on && !wasMissing) { void el.offsetWidth; }
     });
 
     var hint = $('hint');
-    if (ids.length === H.MAX_EXERCISES) { hint.textContent = 'All 7 exercises picked. Tap one to drop it.'; hint.classList.remove('warn'); }
-    else if (!v.ok) { hint.textContent = v.reason; hint.classList.add('warn'); }
-    else { hint.textContent = 'Tap to add or remove. They run in the numbered order.'; hint.classList.remove('warn'); }
+    hint.classList.toggle('warn', !v.ok);
+    if (!v.ok) hint.textContent = v.reason;
+    else if (!hint.querySelector('svg')) {
+      hint.innerHTML = 'Tap to add or remove. They run in the numbered order. Tap <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> for the trainer’s guide.';
+    }
 
-    var startBtn = $('start');
-    startBtn.disabled = !v.ok;
+    $('start').disabled = !v.ok;
     $('startError').textContent = v.ok ? '' : v.reason;
 
     var tl = H.buildTimeline(ids, state.level);
     var total = v.ok ? H.formatTime(tl.total) : '--:--';
     $('sumLevel').textContent = level.name + ' · ' + level.sets + ' sets';
     $('sumTotal').textContent = total;
-    $('sumWork').textContent = v.ok ? H.formatTime(tl.segments.filter(function (s) { return s.type === 'work'; }).length * level.work) : '--:--';
+    $('sumWork').textContent = v.ok ? H.formatTime(tl.intervals * level.work) : '--:--';
     $('sumIntervals').textContent = v.ok ? String(tl.intervals) : '--';
     $('heroTime').textContent = total;
     $('startTime').textContent = total;
@@ -184,10 +231,10 @@
         strip.appendChild(i);
       });
     }
-    var leg = $('legendRecover');
-    leg.innerHTML = level.recoverType === 'jacks' ? '<i class="k-jacks"></i>Jumping jacks' : '<i class="k-rest"></i>Rest';
+    $('legendRecover').innerHTML = level.recoverType === 'jacks' ? '<i class="k-jacks"></i>Jumping jacks' : '<i class="k-rest"></i>Rest';
 
     if (hero.shown && ids.indexOf(hero.shown) < 0 && !hero.hover) showHero(ids[0] || 'rest');
+    renderMe();
     savePrefs();
   }
 
@@ -207,7 +254,7 @@
     if (id) showHero(id);
   }
   function heroCycle() {
-    if (currentScreen !== 'setup' || hero.hover || !state.ids.length) return;
+    if (currentScreen !== 'setup' || hero.hover || !state.ids.length || !$('coachSheet').hidden) return;
     var i = state.ids.indexOf(hero.shown);
     showHero(state.ids[(i + 1) % state.ids.length]);
   }
@@ -218,6 +265,70 @@
     var g = ((x >> 8 & 255) * 0.65 + (y >> 8 & 255) * 0.35) | 0;
     var bl = ((x & 255) * 0.65 + (y & 255) * 0.35) | 0;
     return '#' + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
+  }
+
+  // ================================================================ TRAINER GUIDE
+  var guide = { id: null, context: null, opener: null, resume: false, fig: null };
+
+  function openGuide(id, context, opener) {
+    var ex = H.get(id);
+    if (!ex) return;
+    guide.id = id; guide.context = context; guide.opener = opener || null;
+    guide.resume = false;
+    if (context === 'workout' && run && run.playing) { guide.resume = true; pauseQuietly(); }
+    $('pausedVeil').hidden = true;
+
+    var gc = GROUP_COLORS[ex.group] || PHASE.work.colors;
+    var sheet = $('coachSheet');
+    sheet.style.setProperty('--gc', gc[0]);
+    sheet.style.setProperty('--gc2', gc[1]);
+    $('csGroup').textContent = (H.GROUPS[ex.group] ? H.GROUPS[ex.group].label : 'Cardio') + ' · Trainer’s guide';
+    $('csName').textContent = ex.name;
+    $('csMuscles').textContent = ex.muscles;
+    fillList($('csSteps'), ex.steps);
+    $('csBreathe').textContent = ex.breathe;
+    fillList($('csMistakes'), ex.mistakes);
+    $('csEasier').textContent = ex.easier;
+    $('csHarder').textContent = ex.harder;
+    $('csTempo').textContent = context === 'workout' ? 'Timer paused' : 'Live demo';
+
+    var toggle = $('csToggle');
+    toggle.hidden = context !== 'setup' || ex.group === 'cardio';
+    syncGuideToggle();
+    $('csDone').textContent = context === 'workout' ? 'Back to workout' : 'Close';
+
+    sheet.hidden = false;
+    sheet.scrollTop = 0;
+    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: id, primary: gc[0], secondary: gc[1], quality: 'high', energy: 0.9 });
+    guide.fig.setExercise(id);
+    guide.fig.setColors(gc[0], gc[1]);
+    guide.fig.setPlaying(true);
+    guide.fig.pulse();
+    A.play('click');
+    setTimeout(function () { $('csClose').focus(); }, 30);
+  }
+
+  function syncGuideToggle() {
+    var on = state.ids.indexOf(guide.id) >= 0;
+    $('csToggle').querySelector('.start-label').textContent = on ? 'Remove from workout' : 'Add to workout';
+    $('csToggle').classList.toggle('is-remove', on);
+  }
+
+  function closeGuide() {
+    var sheet = $('coachSheet');
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    if (guide.fig) guide.fig.setPlaying(false);
+    if (guide.context === 'workout' && run && !run.finished) {
+      if (guide.resume) setPlaying(true);
+      else if (!run.playing) setPauseUi(true);
+    }
+    if (guide.opener && document.body.contains(guide.opener)) guide.opener.focus();
+  }
+
+  function fillList(el, items) {
+    el.textContent = '';
+    (items || []).forEach(function (t) { var li = document.createElement('li'); li.textContent = t; el.appendChild(li); });
   }
 
   // ================================================================ SCREENS
@@ -232,6 +343,7 @@
       bg.setRunning(true);
       requestAnimationFrame(function () { focusOn($('heroFig')); });
       window.scrollTo(0, 0);
+      renderMe();
     }
   }
 
@@ -532,7 +644,8 @@
     run = {
       tl: tl, ids: H.sanitize(ids), level: state.level,
       base: 0, anchor: performance.now(), playing: true,
-      segIdx: -1, lastWhole: null, lastClock: -1, active: 0, finished: false
+      segIdx: -1, lastWhole: null, lastClock: -1, coachIdx: -1, figSwapped: false,
+      active: 0, perEx: {}, finished: false
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
@@ -565,12 +678,26 @@
     setPauseUi(!on);
     if (on) { A.play('click'); lockScreen(); } else { A.stopVoice(); }
   }
+  /** Stop the clock without showing the pause screen (dialogs, guide). */
+  function pauseQuietly() {
+    if (!run || !run.playing) return;
+    run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
+    A.stopVoice();
+    if (workFig) workFig.setPlaying(false);
+    ring.paused = true;
+    bg.setRunning(false);
+    syncPauseButton(true);
+  }
 
-  function setPauseUi(paused) {
-    $('pausedVeil').hidden = !paused || !$('quitDialog').hidden;
+  function syncPauseButton(paused) {
     var btn = $('pause');
     btn.setAttribute('aria-label', paused ? 'Resume' : 'Pause');
     btn.querySelector('use').setAttribute('href', paused ? '#i-play' : '#i-pause');
+  }
+
+  function setPauseUi(paused) {
+    $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
+    syncPauseButton(paused);
     if (workFig) workFig.setPlaying(!paused);
     ring.paused = paused;
     bg.setRunning(!paused);
@@ -590,11 +717,53 @@
 
   function exName(id) { var e = H.get(id); return e ? e.name : ''; }
   function spoken(id) { return exName(id).toLowerCase(); }
+  function clock(sec) { return H.formatTime(Math.ceil(Math.max(0, sec) - 1e-6)); }
 
-  function enterSegment(idx, prevIdx) {
+  /** What the trainer panel cycles through during a segment, and how fast. */
+  function coachPlan(seg) {
+    var ex = H.get(seg.exercise);
+    var nx = seg.next ? H.get(seg.next) : null;
+    function steps(e, named) { return e.steps.map(function (s, i) { return { k: 'Step ' + (i + 1) + ' of ' + e.steps.length + (named ? ' · ' + e.name : ''), v: s }; }); }
+    switch (seg.type) {
+      case 'prep':
+        return { period: 5, items: [{ k: 'First up · ' + ex.name, v: ex.steps[0] }, { k: 'First up · ' + ex.name, v: ex.cue }] };
+      case 'work':
+        return { period: 7.5, items: [{ k: 'Form', v: ex.cue }].concat(
+          ex.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
+          [{ k: 'Breathing', v: ex.breathe }]) };
+      case 'jacks':
+        return { period: 7.5, items: [{ k: 'Form', v: H.JACKS.cue }].concat(
+          H.JACKS.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
+          [{ k: 'Breathing', v: H.JACKS.breathe }]) };
+      case 'rest':
+        return { period: 7.5, items: nx ? steps(nx) : [{ k: 'Recover', v: H.REST.cue }] };
+      case 'setrest': {
+        var items = [];
+        var tips = H.SET_BREAK_TIPS;
+        var st = nx ? steps(nx, true) : [];
+        for (var i = 0; i < Math.max(tips.length, st.length); i++) {
+          if (tips[i]) items.push({ k: 'Recovery', v: tips[i] });
+          if (st[i]) items.push(st[i]);
+        }
+        return { period: 10, items: items };
+      }
+    }
+    return { period: 10, items: [] };
+  }
+
+  /** The exercise the "How to" button explains right now. */
+  function guideTarget(seg) {
+    if (seg.type === 'work' || seg.type === 'prep') return seg.exercise;
+    if (seg.type === 'jacks') return 'jacks';
+    return seg.next || run.tl.exercises[0];
+  }
+
+  function enterSegment(idx) {
     var tl = run.tl, seg = tl.segments[idx], ph = PHASE[seg.type];
     run.segIdx = idx;
     run.lastWhole = null;
+    run.coachIdx = -1;
+    run.figSwapped = false;
     document.body.dataset.phase = seg.type;
     var c = ph.colors;
 
@@ -602,44 +771,56 @@
     bg.flashNow();
     ring.setColors(c[0], c[1]);
     ring.energy = ph.energy;
-    ring.ticks = seg.duration;
+    ring.ticks = Math.min(seg.duration, 60);
     ring.shock(1);
     ring.hot = 1;
 
-    var figEx = seg.type === 'rest' ? (seg.next || 'rest') : seg.exercise;
+    var figEx = seg.type === 'rest' ? (seg.next || 'rest') : seg.type === 'setrest' ? 'rest' : seg.exercise;
     if (workFig) {
       workFig.setExercise(figEx);
       workFig.setColors(c[0], c[1]);
-      workFig.setEnergy(seg.type === 'rest' ? 0.35 : ph.energy);
+      workFig.setEnergy(seg.type === 'rest' || seg.type === 'setrest' ? 0.35 : ph.energy);
       workFig.pulse();
     }
 
-    // text
+    // header + labels
     var level = tl.level;
     var nEx = tl.exercises.length;
-    $('wSet').textContent = 'Set ' + seg.set + '/' + level.sets;
-    $('wEx').textContent = 'Exercise ' + (seg.slot + 1) + '/' + nEx;
-    $('phaseChip').textContent = seg.type === 'rest' && seg.next ? 'Rest · next up' : ph.chip;
-    var name, line, sub;
     var ex = H.get(seg.exercise);
+    var nx = seg.next ? H.get(seg.next) : null;
+    $('wSet').textContent = seg.set + '/' + level.sets;
+    $('phaseChip').textContent = ph.chip;
+    var name, label, sub;
     if (seg.type === 'prep') {
-      name = ex.name;
-      line = '<span class="up">First up</span>' + esc(ex.cue);
-      sub = 'First up · ' + ex.name;
+      name = ex.name; label = 'Starting in'; sub = 'First up · ' + ex.name;
+      $('wEx').textContent = 'Exercise 1 of ' + nEx;
     } else if (seg.type === 'work') {
-      name = ex.name;
-      line = esc(ex.cue);
+      name = ex.name; label = 'Time left';
       sub = (seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + ' · ' : '') + ex.name;
-    } else {
-      var nextEx = seg.next ? H.get(seg.next) : null;
-      name = seg.type === 'jacks' ? H.JACKS.name : (nextEx ? nextEx.name : 'Rest');
-      if (nextEx) line = '<span class="up">' + (seg.setBreak ? 'Set ' + (seg.set + 1) + ' next' : 'Up next') + '</span><b>' + esc(nextEx.name) + '</b>';
-      else line = '<span class="up">Last one</span>Finish strong. Keep those arms going.';
-      if (seg.type === 'rest') line = '<span class="up">' + (seg.setBreak ? 'Set ' + seg.set + ' done' : 'Breathe') + '</span>Shake it out. ' + (nextEx ? 'Get ready for <b>' + esc(nextEx.name) + '</b>.' : '');
-      sub = seg.setBreak ? 'Set ' + seg.set + ' complete' : (nextEx ? 'Next · ' + nextEx.name : 'Last push');
+      $('wEx').textContent = 'Exercise ' + (seg.slot + 1) + ' of ' + nEx;
+    } else if (seg.type === 'jacks') {
+      name = H.JACKS.name; label = 'Time left';
+      sub = nx ? 'Next · ' + nx.name : 'Last push';
+      $('wEx').textContent = 'Active recovery';
+    } else if (seg.type === 'rest') {
+      name = nx ? nx.name : 'Rest'; label = 'Next exercise in';
+      sub = nx ? 'Next · ' + nx.name : 'Breathe';
+      $('wEx').textContent = 'Recover';
+    } else { // setrest
+      name = 'Set ' + seg.set + ' done'; label = 'Set ' + (seg.set + 1) + ' starts in';
+      sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
+      $('wEx').textContent = '5 minute recovery';
     }
     $('wName').textContent = name;
-    $('wLine').innerHTML = line;
+    $('dLabel').textContent = label;
+    $('howToLabel').textContent = seg.type === 'setrest' ? 'How to: ' + exName(guideTarget(seg)) : 'How to';
+    $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
+
+    var skipLabel = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
+    var showStart = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
+    $('skip').classList.toggle('has-text', showStart);
+    $('skipText').textContent = skipLabel;
+    $('skip').setAttribute('aria-label', showStart ? skipLabel + ': ' + exName(seg.next || seg.exercise) : 'Next interval');
 
     // progress bar
     var bars = $('segs').children;
@@ -648,28 +829,25 @@
       bars[i].classList.toggle('now', i === idx);
     }
 
-    // flash + sound + voice
+    // flash, particles, sound, voice
     flash(ph.flash, sub);
     var stage = $('stage').getBoundingClientRect();
     fx.burst(stage.left + stage.width / 2, stage.top + stage.height / 2, c.concat(['#ffffff']), seg.type === 'work' ? 90 : 50, seg.type === 'work' ? 1 : 0.6);
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
-    else if (seg.type === 'rest') { A.play('rest'); buzz(80); }
+    else if (seg.type === 'rest' || seg.type === 'setrest') { A.play('rest'); buzz(80); }
     else if (seg.type === 'jacks') { A.play('jacks'); buzz([60, 40, 60]); }
     else A.play('click');
 
     var nextName = seg.next ? spoken(seg.next) : '';
     if (seg.type === 'prep') A.say('Get ready. First up, ' + spoken(seg.exercise) + '.');
     else if (seg.type === 'work') A.say((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!');
-    else if (seg.type === 'rest') A.say((seg.setBreak ? 'Set ' + seg.set + ' complete. ' : '') + 'Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''));
+    else if (seg.type === 'rest') A.say('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''));
     else if (seg.type === 'jacks') A.say('Jumping jacks! ' + (nextName ? 'Next up, ' + nextName + '.' : 'Last one, finish strong!'));
+    else if (seg.type === 'setrest') A.say('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.');
 
     var stageEl = $('workout');
     stageEl.classList.remove('shake');
     if (seg.type === 'work' && !reduced) { void stageEl.offsetWidth; stageEl.classList.add('shake'); }
-  }
-
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; });
   }
 
   var flashTimer = 0;
@@ -686,16 +864,29 @@
     flashTimer = setTimeout(function () { el.classList.remove('show'); }, 1400);
   }
 
-  function setDigits(n) {
-    var s = String(n);
-    var d0 = $('d0'), d1 = $('d1');
-    if (s.length === 1) { d0.hidden = true; d1.textContent = s; }
-    else { d0.hidden = false; d0.textContent = s[0]; d1.textContent = s[1]; }
-    $('digits').setAttribute('aria-label', n + ' seconds left');
+  var digitsText = '';
+  function setDigits(text, spokenLabel) {
+    var dg = $('digits');
+    if (text !== digitsText) {
+      if (text.length !== digitsText.length) {
+        dg.textContent = '';
+        for (var i = 0; i < text.length; i++) {
+          var sp = document.createElement('span');
+          sp.className = text[i] === ':' ? 'd colon' : 'd';
+          dg.appendChild(sp);
+        }
+      }
+      for (var j = 0; j < text.length; j++) dg.children[j].textContent = text[j];
+      dg.classList.toggle('long', text.length > 2);
+      digitsText = text;
+    }
+    dg.setAttribute('aria-label', spokenLabel);
   }
 
+  /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
-    setDigits(whole);
+    var long = seg.duration >= 60;
+    setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
     var dg = $('digits');
     var natural = prev != null && whole === prev - 1 && run.playing;
     if (!natural) return;
@@ -712,11 +903,65 @@
       dg.classList.add('tick');
       bg.beatNow(seg.type === 'work' ? 0.45 : 0.2);
       ring.beat = 1;
-      if (seg.type === 'work' && seg.duration >= 20 && whole === Math.floor(seg.duration / 2)) {
-        A.play('halfway');
-        A.say('Halfway');
-      }
     }
+    trainerCalls(seg, whole);
+  }
+
+  /** Spoken coaching, timed to the countdown. */
+  function trainerCalls(seg, whole) {
+    var ex = H.get(seg.exercise);
+    var nx = seg.next ? spoken(seg.next) : '';
+    if (seg.type === 'work') {
+      if (whole === 20) A.say(ex.cues[(seg.set - 1) % ex.cues.length]);
+      else if (whole === Math.floor(seg.duration / 2) && whole !== 20 && whole !== 10) A.play('halfway');
+      else if (whole === 10) A.say('Ten seconds. Keep pushing!');
+    } else if (seg.type === 'jacks') {
+      if (whole === 10) A.say(nx ? 'Ten seconds. ' + nx + ' next.' : 'Ten seconds. Finish strong!');
+    } else if (seg.type === 'rest') {
+      if (whole === 10) A.say('Ten seconds. Get ready for ' + nx + '.');
+    } else if (seg.type === 'setrest') {
+      if (whole === 240 || whole === 180 || whole === 120) A.say((whole / 60) + ' minutes left in your break.');
+      else if (whole === 60) A.say('One minute. Set ' + (seg.set + 1) + ' is coming up.');
+      else if (whole === 30) A.say('Thirty seconds. First up, ' + nx + '. Get in position.');
+      else if (whole === 10) A.say('Ten seconds.');
+    }
+    if (seg.type === 'setrest' && whole <= 30 && !run.figSwapped && seg.next && workFig) {
+      run.figSwapped = true;
+      workFig.setExercise(seg.next);
+      workFig.pulse();
+    }
+  }
+
+  function updateCoach(seg, t) {
+    var plan = coachPlan(seg);
+    if (!plan.items.length) return;
+    var i = Math.floor(Math.max(0, t - seg.start) / plan.period) % plan.items.length;
+    if (i === run.coachIdx) return;
+    run.coachIdx = i;
+    var item = plan.items[i];
+    $('coachK').textContent = item.k;
+    var v = $('coachV');
+    v.textContent = item.v;
+    v.classList.remove('swap'); void v.offsetWidth; v.classList.add('swap');
+  }
+
+  /** The always-visible "what's next and when" line. */
+  function nextLine(idx, t) {
+    var tl = run.tl, segs = tl.segments, seg = segs[idx];
+    var nw = H.nextWorkIndex(tl, idx);
+    if (seg.type === 'prep') return '';
+    if (seg.type === 'rest') return '';
+    if (seg.type === 'setrest') return nw >= 0 ? 'First up: <b>' + esc(exName(segs[nw].exercise)) + '</b>' : '';
+    // work or jacks
+    for (var i = idx + 1; i < segs.length && (nw < 0 || i < nw); i++) {
+      if (segs[i].type === 'setrest') return 'Set break in <b>' + clock(segs[i].start - t) + '</b>';
+    }
+    if (nw >= 0) {
+      var then = segs[idx + 1] && segs[idx + 1].type === 'jacks' && seg.type === 'work' ? ' after jacks' : '';
+      return 'Next: <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>' + then;
+    }
+    if (seg.type === 'work' && segs[idx + 1] && segs[idx + 1].type === 'jacks') return 'Then <b>30s jumping jacks</b> to finish';
+    return '<b>Last interval.</b> Finish strong!';
   }
 
   function update() {
@@ -725,22 +970,30 @@
     var t = elapsedNow();
     var idx = H.segmentAt(tl, t);
     if (idx >= tl.segments.length) { finish(); return; }
-    if (idx !== run.segIdx) enterSegment(idx, run.segIdx);
+    if (idx !== run.segIdx) enterSegment(idx);
     var seg = tl.segments[idx];
     var remaining = Math.max(0, seg.end - t);
     var whole = Math.max(1, Math.ceil(remaining - 1e-6));
-    if (whole !== run.lastWhole) { var prev = run.lastWhole; run.lastWhole = whole; onSecond(seg, whole, prev); }
+    if (whole !== run.lastWhole) {
+      var prev = run.lastWhole; run.lastWhole = whole;
+      onSecond(seg, whole, prev);
+      var nl = nextLine(idx, t);
+      var wn = $('wNext');
+      wn.innerHTML = nl;
+      wn.hidden = !nl;
+    }
+    updateCoach(seg, t);
 
     ring.progress = remaining / seg.duration;
     ring.total = t / tl.total;
     var cur = $('segs').children[idx];
     if (cur) cur.style.setProperty('--p', ((t - seg.start) / seg.duration).toFixed(4));
 
-    var clock = Math.floor(t);
-    if (clock !== run.lastClock) {
-      run.lastClock = clock;
-      $('elapsed').textContent = H.formatTime(t);
-      $('remaining').textContent = H.formatTime(tl.total - t) + ' left';
+    var sec = Math.floor(t);
+    if (sec !== run.lastClock) {
+      run.lastClock = sec;
+      $('hElapsed').textContent = H.formatTime(Math.floor(t));
+      $('hLeft').textContent = clock(tl.total - t);
     }
   }
 
@@ -765,11 +1018,11 @@
     }
   }
 
+  var doneFig = null;
   function finish() {
     if (!run || run.finished) return;
     run.finished = true;
-    state.completed += 1;
-    savePrefs();
+    recordWorkout(run.active);
     unlockScreen();
     A.play('finish');
     A.say('Workout complete. Great job!');
@@ -783,17 +1036,19 @@
     showScreen('done');
 
     var tl = run.tl;
+    var workSec = 0;
+    Object.keys(run.perEx).forEach(function (k) { workSec += run.perEx[k]; });
     $('dTime').textContent = H.formatTime(run.active);
-    $('dSets').textContent = String(tl.level.sets);
-    $('dIntervals').textContent = String(tl.intervals);
-    $('dCount').textContent = String(state.completed);
+    $('dWork').textContent = H.formatTime(workSec);
+    $('dCount').textContent = String(state.hist.completed);
+    $('dStreak').textContent = String(liveStreak());
     var list = $('doneList');
     list.textContent = '';
-    tl.exercises.forEach(function (id) {
+    tl.exercises.concat(tl.level.recoverType === 'jacks' ? ['jacks'] : []).forEach(function (id) {
       var ex = H.get(id);
       var li = document.createElement('li');
       li.dataset.group = ex.group;
-      li.textContent = ex.name + ' ×' + tl.level.sets;
+      li.innerHTML = '<span>' + esc(ex.name) + '</span><b>' + H.formatTime(run.perEx[id] || 0) + '</b>';
       list.appendChild(li);
     });
     if (!doneFig) doneFig = makeFig($('doneFig'), { exercise: 'jacks', primary: PHASE.done.colors[0], secondary: PHASE.done.colors[1], quality: 'high', energy: 1 });
@@ -804,7 +1059,6 @@
     setTimeout(function () { var r = $('doneFig').getBoundingClientRect(); fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6', '#ffffff'], 120, 1.2); }, 200);
     setTimeout(function () { $('again').focus(); }, 400);
   }
-  var doneFig = null;
 
   function endRun() {
     if (run) run.finished = true;
@@ -814,6 +1068,7 @@
     if (workFig) workFig.setPlaying(false);
     $('pausedVeil').hidden = true;
     $('quitDialog').hidden = true;
+    $('coachSheet').hidden = true;
   }
 
   // quit dialog
@@ -821,7 +1076,7 @@
   function openQuit() {
     if (!run) return;
     resumeAfterDialog = run.playing;
-    if (run.playing) { run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false; setPauseUi(true); }
+    pauseQuietly();
     $('pausedVeil').hidden = true;
     $('quitDialog').hidden = false;
     $('quitNo').focus();
@@ -829,18 +1084,25 @@
   function closeQuit(resume) {
     $('quitDialog').hidden = true;
     if (resume && resumeAfterDialog) setPlaying(true);
-    else if (run && !run.playing) $('pausedVeil').hidden = false;
+    else if (run && !run.playing) setPauseUi(true);
     $('quit').focus();
   }
 
   // ================================================================ MAIN LOOP
+  function tickActive(dt) {
+    if (!run || run.finished || !run.playing) return;
+    run.active += dt;
+    var seg = run.tl.segments[run.segIdx];
+    if (seg && (seg.type === 'work' || seg.type === 'jacks')) run.perEx[seg.exercise] = (run.perEx[seg.exercise] || 0) + dt;
+  }
+
   var lastFrame = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
     var dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     if (run && !run.finished) {
-      if (run.playing) run.active += dt;
+      tickActive(dt);
       update();
       if (currentScreen === 'workout') ring.draw(dt);
     }
@@ -852,13 +1114,14 @@
   setInterval(function () {
     var now = performance.now();
     if (document.hidden && run && !run.finished) {
-      if (run.playing) run.active += (now - lastBgTick) / 1000;
+      tickActive((now - lastBgTick) / 1000);
       update();
     }
     lastBgTick = now;
   }, 250);
   document.addEventListener('visibilitychange', function () {
     lastFrame = performance.now();
+    lastBgTick = performance.now();
     if (!document.hidden && run && !run.finished) lockScreen();
   });
 
@@ -870,6 +1133,14 @@
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
       b.querySelector('use').setAttribute('href', on ? t[2] : t[3]);
     });
+  }
+
+  function trapTab(e, container) {
+    var f = Array.prototype.filter.call(container.querySelectorAll('button'), function (b) { return !b.hidden && !b.disabled && b.offsetParent !== null; });
+    if (!f.length) return;
+    var i = f.indexOf(document.activeElement);
+    e.preventDefault();
+    f[(i + (e.shiftKey ? f.length - 1 : 1) + f.length) % f.length].focus();
   }
 
   function bind() {
@@ -899,6 +1170,7 @@
       fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ff2bd6', '#ff8a1f', '#ffffff'], 70, 0.8);
       startWorkout(state.ids);
     });
+    $('heroGuide').addEventListener('click', function (e) { openGuide(hero.shown || state.ids[0], 'setup', e.currentTarget); });
 
     $('sfxToggle').addEventListener('click', function () { A.set('sfx', !A.get('sfx')); A.unlock(); A.play('click'); syncToggles(); savePrefs(); });
     $('wSound').addEventListener('click', function () { var on = !A.get('sfx'); A.set('sfx', on); A.set('voice', on); syncToggles(); savePrefs(); });
@@ -916,6 +1188,20 @@
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });
     $('quitYes').addEventListener('click', function () { endRun(); showScreen('setup'); });
+    $('howTo').addEventListener('click', function (e) {
+      if (!run) return;
+      var seg = run.tl.segments[run.segIdx];
+      if (seg) openGuide(guideTarget(seg), 'workout', e.currentTarget);
+    });
+
+    $('csClose').addEventListener('click', closeGuide);
+    $('csDone').addEventListener('click', closeGuide);
+    $('csToggle').addEventListener('click', function () {
+      if (!guide.id) return;
+      toggleExercise(guide.id);
+      syncGuideToggle();
+    });
+    $('coachSheet').addEventListener('click', function (e) { if (e.target === e.currentTarget) closeGuide(); });
 
     $('again').addEventListener('click', function () {
       var ids = run ? run.tl.exercises.slice() : state.ids.slice();
@@ -931,18 +1217,16 @@
     });
 
     document.addEventListener('keydown', function (e) {
+      var sheetOpen = !$('coachSheet').hidden;
+      if (sheetOpen) {
+        if (e.key === 'Escape') { e.preventDefault(); closeGuide(); }
+        else if (e.key === 'Tab') trapTab(e, $('coachSheet'));
+        return;
+      }
       if (currentScreen !== 'workout' || !run) return;
       var dialogOpen = !$('quitDialog').hidden;
       if (e.key === 'Escape') { e.preventDefault(); if (dialogOpen) closeQuit(true); else openQuit(); return; }
-      if (dialogOpen) {
-        if (e.key === 'Tab') { // keep focus inside the dialog
-          var f = [$('quitNo'), $('quitYes')];
-          var i = f.indexOf(document.activeElement);
-          e.preventDefault();
-          f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
-        }
-        return;
-      }
+      if (dialogOpen) { if (e.key === 'Tab') trapTab(e, $('quitDialog')); return; }
       if (e.key === ' ' || e.code === 'Space') {
         var ae = document.activeElement;
         if (ae && ae.tagName === 'BUTTON') return; // a focused button handles Space itself
@@ -970,7 +1254,7 @@
   showScreen('setup');
   showHero(state.ids[0]);
   renderSetup();
-  hero.timer = setInterval(heroCycle, 3600);
+  setInterval(heroCycle, 3600);
 
   // Small test hook for automated checks (no effect on the app).
   window.__hiit = {
@@ -978,6 +1262,7 @@
     get run() { return run; },
     seek: function (t) { seek(t); },
     start: function () { startWorkout(state.ids); },
-    finish: function () { if (run) seek(run.tl.total); }
+    finish: function () { if (run) seek(run.tl.total); },
+    guide: function (id) { openGuide(id, run ? 'workout' : 'setup'); }
   };
 })();

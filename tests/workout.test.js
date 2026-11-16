@@ -77,7 +77,7 @@ test('resize keeps existing picks and restores coverage', () => {
   assert.ok(H.coverage(shrunk).ok, shrunk.join(','));
 });
 
-test('easy timeline: 30s work / 30s rest, 3 sets, no trailing rest', () => {
+test('easy timeline: 30s work / 30s rest, 3 sets, 5 min between sets, no trailing rest', () => {
   const ids = ['pushup', 'crunch', 'squat', 'lunge', 'twist'];
   const tl = H.buildTimeline(ids, 'easy');
   const segs = tl.segments;
@@ -87,28 +87,58 @@ test('easy timeline: 30s work / 30s rest, 3 sets, no trailing rest', () => {
   assert.ok(work.every(s => s.duration === 30));
   assert.deepEqual(work.map(s => s.exercise), [...ids, ...ids, ...ids]);
   const rest = segs.filter(s => s.type === 'rest');
-  assert.equal(rest.length, 14);
+  assert.equal(rest.length, 12); // 4 per set
   assert.ok(rest.every(s => s.duration === 30));
+  const breaks = segs.filter(s => s.type === 'setrest');
+  assert.equal(breaks.length, 2);
+  assert.ok(breaks.every(s => s.duration === 300));
   assert.equal(segs.filter(s => s.type === 'jacks').length, 0);
   assert.equal(segs[segs.length - 1].type, 'work');
-  // alternate work / rest after prep
-  for (let i = 1; i < segs.length; i++) assert.equal(segs[i].type, i % 2 ? 'work' : 'rest');
-  assert.equal(tl.total, 10 + 15 * 30 + 14 * 30);
+  // each set break sits right after the last exercise of a set
+  for (const b of breaks) {
+    const before = segs[b.index - 1], after = segs[b.index + 1];
+    assert.equal(before.type, 'work'); assert.equal(before.exercise, 'twist');
+    assert.equal(after.type, 'work'); assert.equal(after.exercise, 'pushup'); assert.equal(after.set, b.set + 1);
+  }
+  assert.equal(tl.total, 10 + 15 * 30 + 12 * 30 + 2 * 300);
+  assert.equal(H.formatTime(tl.total), '23:40');
   assert.equal(tl.intervals, 15);
 });
 
-test('medium timeline: 30s work / 30s jumping jacks, 2 sets', () => {
+test('medium timeline: 30s work / 30s jumping jacks, 2 sets, 5 min between sets', () => {
   const ids = ['pushup', 'crunch', 'squat', 'lunge', 'twist'];
   const tl = H.buildTimeline(ids, 'medium');
-  const segs = tl.segments.slice(1);
-  assert.equal(segs.length, 20);
-  for (let i = 0; i < segs.length; i++) {
-    assert.equal(segs[i].type, i % 2 ? 'jacks' : 'work');
-    assert.equal(segs[i].duration, 30);
+  const types = tl.segments.slice(1).map(s => s.type);
+  const set = ['work', 'jacks', 'work', 'jacks', 'work', 'jacks', 'work', 'jacks', 'work', 'jacks'];
+  assert.deepEqual(types, [...set, 'setrest', ...set]);
+  assert.ok(tl.segments.filter(s => s.type !== 'prep' && s.type !== 'setrest').every(s => s.duration === 30));
+  assert.equal(tl.segments.filter(s => s.type === 'rest').length, 0);
+  assert.deepEqual(tl.segments.filter(s => s.type === 'work').map(s => s.exercise), [...ids, ...ids]);
+  assert.equal(tl.total, 10 + 20 * 30 + 300);
+  assert.equal(H.formatTime(tl.total), '15:10');
+});
+
+test('set break can be turned off', () => {
+  const tl = H.buildTimeline(['pushup', 'crunch', 'squat'], 'easy', { setRest: 0 });
+  assert.equal(tl.segments.filter(s => s.type === 'setrest').length, 0);
+  assert.equal(tl.segments.filter(s => s.type === 'rest').length, 8); // 2 within + 1 between, ×3 sets, minus the last
+});
+
+test('nextWorkIndex skips recovery and set breaks', () => {
+  const tl = H.buildTimeline(['pushup', 'crunch', 'squat'], 'medium');
+  const brk = tl.segments.find(s => s.type === 'setrest');
+  const nx = H.nextWorkIndex(tl, brk.index - 1);
+  assert.equal(tl.segments[nx].exercise, 'pushup');
+  assert.equal(tl.segments[nx].set, 2);
+  assert.equal(H.nextWorkIndex(tl, tl.segments.length - 1), -1);
+});
+
+test('every exercise has trainer content', () => {
+  for (const e of [...H.EXERCISES, H.JACKS]) {
+    assert.equal(e.steps.length, 4, e.id);
+    assert.ok(e.cues.length >= 3, e.id);
+    assert.ok(e.breathe && e.easier && e.harder && e.mistakes.length, e.id);
   }
-  assert.equal(segs.filter(s => s.type === 'rest').length, 0);
-  assert.deepEqual(segs.filter(s => s.type === 'work').map(s => s.exercise), [...ids, ...ids]);
-  assert.equal(tl.total, 10 + 20 * 30);
 });
 
 test('segments are contiguous and segmentAt finds them', () => {
@@ -129,8 +159,9 @@ test('next-up pointers and set numbers', () => {
   const work = tl.segments.filter(s => s.type === 'work');
   assert.deepEqual(work.map(s => s.set), [1, 1, 1, 2, 2, 2]);
   assert.deepEqual(work.map(s => s.next), ['crunch', 'squat', 'pushup', 'crunch', 'squat', null]);
-  const breaks = tl.segments.filter(s => s.setBreak);
+  const breaks = tl.segments.filter(s => s.type === 'setrest');
   assert.equal(breaks.length, 1);
+  assert.equal(tl.segments[breaks[0].index - 1].type, 'jacks');
 });
 
 test('formatTime', () => {
