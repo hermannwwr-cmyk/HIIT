@@ -406,22 +406,27 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .ex-item { position: relative; display: flex; }
 .ex-info {
   --gc: var(--g-upper);
-  position: absolute; right: 6px; bottom: 6px;
-  width: 30px; height: 30px; border-radius: 50%;
+  --thumb: 64px; --pad: 8px;
+  position: absolute; z-index: 1;
+  left: calc(var(--pad) + var(--thumb) - 22px); top: calc(var(--pad) + var(--thumb) - 22px);
+  width: 28px; height: 28px; border-radius: 50%;
   display: grid; place-items: center;
-  border: 1px solid transparent; background: transparent;
-  color: var(--mute); font-size: 18px; cursor: pointer;
-  transition: color .2s, background .2s, border-color .2s;
+  border: 1px solid color-mix(in srgb, var(--gc) 45%, transparent);
+  background: rgba(8, 3, 20, .88);
+  color: var(--gc); font-size: 17px; cursor: pointer;
+  transition: color .2s, background .2s, border-color .2s, transform .15s;
 }
+.ex-info::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+.ex-info:active { transform: scale(.9); }
 .ex-info[data-group="abs"] { --gc: var(--g-abs); }
 .ex-info[data-group="legs"] { --gc: var(--g-legs); }
-.ex-info:hover, .ex-info:focus-visible { color: var(--gc); background: color-mix(in srgb, var(--gc) 14%, transparent); border-color: color-mix(in srgb, var(--gc) 40%, transparent); }
+.ex-info:hover, .ex-info:focus-visible { color: var(--ink); background: var(--gc); border-color: var(--gc); }
 .inline-ico { vertical-align: -3px; color: var(--dim); }
 .ex {
   --gc: var(--g-upper);
   position: relative;
-  width: 100%; padding-right: 36px !important;
-  display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 10px;
+  width: 100%;
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: start; gap: 10px;
   padding: 8px 12px 8px 8px;
   border-radius: var(--r-md);
   border: 1px solid var(--line);
@@ -439,8 +444,8 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--gc) 16%, transparent), rgba(0,0,0,.25) 70%);
 }
 .ex-thumb canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.ex-text { display: grid; gap: 5px; min-width: 0; }
-.ex-name { font: 700 13px/1.1 var(--display); letter-spacing: -.02em; overflow-wrap: anywhere; }
+.ex-text { display: grid; gap: 5px; min-width: 0; align-self: center; }
+.ex-name { font: 700 13px/1.15 var(--display); letter-spacing: -.02em; overflow-wrap: break-word; hyphens: auto; }
 .ex-group { font: 600 11px/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--gc); opacity: .85; }
 .ex-badge {
   position: absolute; top: -7px; right: -7px;
@@ -521,6 +526,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .ex-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .ex { grid-template-columns: 52px minmax(0, 1fr); gap: 8px; padding: 6px 10px 6px 6px; }
   .ex-thumb { width: 52px; height: 52px; }
+  .ex-info { --thumb: 52px; --pad: 6px; width: 26px; height: 26px; font-size: 16px; }
   .ex-name { font-size: 12.5px; }
   .ex-group { font-size: 10px; letter-spacing: .12em; }
   .counter .pill-btn span { display: none; }
@@ -528,6 +534,17 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 }
 @media (max-width: 380px) {
   .levels { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 360px) {
+  .brand { gap: 7px; font-size: 13px; letter-spacing: .05em; }
+  .brand-tag { padding: 4px 6px 4px 7px; letter-spacing: .16em; }
+  .toggles { gap: 6px; }
+  .topbar .icon-btn { width: 40px; height: 40px; font-size: 18px; }
+  .hero-label { max-width: 100%; gap: 6px; padding: 6px 10px; }
+  .hero-label-v { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+  .ex-grid { grid-template-columns: minmax(0, 1fr); }
+  .start { padding: 0 18px; font-size: 15px; gap: 10px; }
+  .start-time { font-size: 15px; padding: 7px 10px; }
 }
 
 /* ---------- WORKOUT ---------- */
@@ -766,6 +783,8 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .veil-title.sm { font-size: clamp(26px, 7vw, 40px); animation: none; text-wrap: balance; }
 @keyframes breathe { 50% { opacity: .65; } }
 .veil-text { margin: 0; color: var(--dim); max-width: 34ch; }
+.veil-status { margin: -6px 0 0; font: 600 15px/1.3 var(--ui); letter-spacing: .06em; color: var(--text); font-variant-numeric: tabular-nums; }
+.done-note { margin: 0; max-width: 46ch; color: var(--dim); font-size: 14px; }
 .veil-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 
 /* landscape / desktop: stage left, readout right */

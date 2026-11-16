@@ -1,4 +1,4 @@
-// Run with: node --test tests/
+// Run with: npm test   (or: node --test tests/*.test.js)
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const H = require('../js/workout.js');
@@ -65,6 +65,17 @@ test('validate rejects workouts that miss a muscle group', () => {
   assert.match(H.validate(['pushup', 'squat']).reason, /at least 3/);
   assert.equal(H.validate(['pushup', 'twist', 'lunge']).ok, true);
   assert.equal(H.validate(['pushup', 'twist', 'lunge', 'bogus', 'twist']).ok, true);
+});
+
+test('growing the count keeps groups spread out and the existing order', () => {
+  for (let s = 1; s <= 200; s++) {
+    const r = seeded(s);
+    const start = H.randomPick(3, r);
+    const grown = H.resize(start, 5, r);
+    assert.deepEqual(grown.filter(id => start.includes(id)), start);
+    const best = Math.min(...[0, 1, 2].map(() => H.adjacencyScore(H.arrange(grown, r), true)));
+    assert.ok(H.adjacencyScore(grown, true) <= best + 1, grown.join(','));
+  }
 });
 
 test('resize keeps existing picks and restores coverage', () => {

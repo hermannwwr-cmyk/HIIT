@@ -216,6 +216,18 @@
     return best || ids.slice();
   }
 
+  /** Insert `id` where it creates the fewest same-group neighbours (keeps the existing order). */
+  function insertSpread(list, id) {
+    var best = list.length, bestScore = Infinity;
+    for (var i = list.length; i >= 0; i--) {
+      var cand = list.slice(0, i).concat([id], list.slice(i));
+      var sc = adjacencyScore(cand, true);
+      if (sc < bestScore) { bestScore = sc; best = i; }
+    }
+    list.splice(best, 0, id);
+    return list;
+  }
+
   /** N random exercises that always include upper body, abs and legs. */
   function randomPick(count, rng) {
     rng = rng || Math.random;
@@ -244,7 +256,7 @@
       });
       if (!pool.length) pool = EXERCISES.filter(function (e) { return list.indexOf(e.id) < 0; });
       if (!pool.length) break;
-      list.push(pool[Math.floor(rng() * pool.length)].id);
+      insertSpread(list, pool[Math.floor(rng() * pool.length)].id);
     }
     while (list.length > n) {
       // Prefer removing from the group with the most picks, newest first.

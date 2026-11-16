@@ -121,7 +121,7 @@
       </div>
       <dl class="stats">
         <div><dt>Total</dt><dd id="sumTotal">14:30</dd></div>
-        <div><dt>Work</dt><dd id="sumWork">7:30</dd></div>
+        <div><dt>Active</dt><dd id="sumWork">7:30</dd></div>
         <div><dt>Intervals</dt><dd id="sumIntervals">15</dd></div>
       </dl>
       <div class="strip" id="strip" aria-hidden="true"></div>
@@ -193,6 +193,7 @@
   <div class="veil" id="pausedVeil" hidden>
     <div class="veil-card">
       <p class="veil-title" data-text="PAUSED">PAUSED</p>
+      <p class="veil-status" id="veilStatus"></p>
       <div class="veil-actions">
         <button id="resume" class="start small" type="button"><span class="start-label">Resume</span></button>
         <button id="endFromPause" class="ghost-btn" type="button">End workout</button>
@@ -216,14 +217,15 @@
 <section id="done" class="screen done" hidden aria-labelledby="doneTitle">
   <div class="done-inner">
     <canvas id="doneFig" class="done-fig" aria-hidden="true"></canvas>
-    <p class="eyebrow">Session complete</p>
+    <p class="eyebrow" id="doneEyebrow">Session complete</p>
     <h2 id="doneTitle" class="mega done-mega" aria-label="Crushed it"><span class="mega-line" data-text="CRUSHED" aria-hidden="true"><span class="mega-a">CRUSHED</span></span><span class="mega-line" data-text="IT" aria-hidden="true"><span class="mega-b">IT</span></span></h2>
     <dl class="stats done-stats">
       <div><dt>Total time</dt><dd id="dTime">23:40</dd></div>
-      <div><dt>Exercise time</dt><dd id="dWork">7:30</dd></div>
+      <div><dt>Active time</dt><dd id="dWork">7:30</dd></div>
       <div><dt>Workouts</dt><dd id="dCount">1</dd></div>
       <div><dt>Day streak</dt><dd id="dStreak">1</dd></div>
     </dl>
+    <p class="done-note" id="doneNote" hidden>Less than half of the exercise time was completed, so this session isn't added to your workouts or streak.</p>
     <div class="breakdown">
       <p class="breakdown-h">Time per exercise</p>
       <ul class="done-list" id="doneList"></ul>

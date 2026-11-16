@@ -46,7 +46,7 @@
 
   var prefs = loadPrefs();
   var state = {
-    level: H.LEVELS[prefs.level] ? prefs.level : 'easy',
+    level: Object.prototype.hasOwnProperty.call(H.LEVELS, prefs.level) ? prefs.level : 'easy',
     ids: H.randomPick(H.DEFAULT_COUNT),
     hist: {
       completed: Number(prefs.completed) || 0,
@@ -216,7 +216,7 @@
     var total = v.ok ? H.formatTime(tl.total) : '--:--';
     $('sumLevel').textContent = level.name + ' · ' + level.sets + ' sets';
     $('sumTotal').textContent = total;
-    $('sumWork').textContent = v.ok ? H.formatTime(tl.intervals * level.work) : '--:--';
+    $('sumWork').textContent = v.ok ? H.formatTime(tl.workSeconds) : '--:--';
     $('sumIntervals').textContent = v.ok ? String(tl.intervals) : '--';
     $('heroTime').textContent = total;
     $('startTime').textContent = total;
@@ -663,12 +663,20 @@
   var run = null;
   var wakeLock = null;
 
+  var lockPending = false;
   function lockScreen() {
+    if (wakeLock || lockPending || document.hidden) return;
     try {
       if (navigator.wakeLock && navigator.wakeLock.request) {
-        navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(noop);
+        lockPending = true;
+        navigator.wakeLock.request('screen').then(function (l) {
+          lockPending = false;
+          if (!run || run.finished) { l.release().catch(noop); return; }
+          wakeLock = l;
+          l.addEventListener('release', function () { if (wakeLock === l) wakeLock = null; });
+        }).catch(function () { lockPending = false; });
       }
-    } catch (e) { /* not allowed here */ }
+    } catch (e) { lockPending = false; }
   }
   function unlockScreen() {
     try { if (wakeLock) wakeLock.release().catch(noop); } catch (e) { /* ignore */ }
@@ -685,7 +693,7 @@
       tl: tl, ids: H.sanitize(ids), level: state.level,
       base: 0, anchor: performance.now(), playing: true,
       segIdx: -1, lastWhole: null, lastClock: -1, coachIdx: -1, figSwapped: false,
-      active: 0, perEx: {}, finished: false
+      played: tl.segments.map(function () { return 0; }), lastT: 0, cuePending: -1, finished: false
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
@@ -706,8 +714,30 @@
     if (!run) return;
     run.base = Math.max(0, Math.min(run.tl.total, t));
     run.anchor = performance.now();
+    run.lastT = run.base; // jumps don't count as time trained
     run.lastWhole = null;
     update();
+  }
+
+  /** Credit real clock time between `from` and `to` to the intervals it passed through. */
+  function creditTime(from, to) {
+    var segs = run.tl.segments;
+    for (var i = Math.max(0, H.segmentAt(run.tl, from)); i < segs.length && segs[i].start < to; i++) {
+      var o = Math.min(to, segs[i].end) - Math.max(from, segs[i].start);
+      if (o > 0) run.played[i] += o;
+    }
+  }
+  function playedStats() {
+    var segs = run.tl.segments, total = 0, active = 0, perEx = {}, planned = 0;
+    for (var i = 0; i < segs.length; i++) {
+      var p = run.played[i];
+      total += p;
+      if (segs[i].type === 'work' || segs[i].type === 'jacks') {
+        active += p; planned += segs[i].duration;
+        perEx[segs[i].exercise] = (perEx[segs[i].exercise] || 0) + p;
+      }
+    }
+    return { total: total, active: active, planned: planned, perEx: perEx };
   }
 
   function setPlaying(on) {
@@ -716,7 +746,11 @@
     run.anchor = performance.now();
     run.playing = on;
     setPauseUi(!on);
-    if (on) { A.play('click'); lockScreen(); } else { A.stopVoice(); }
+    if (on) {
+      lockScreen();
+      if (run.cuePending === run.segIdx) { run.cuePending = -1; cueSegment(run.tl.segments[run.segIdx]); }
+      else A.play('click');
+    } else { A.stopVoice(); }
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
@@ -737,6 +771,13 @@
 
   function setPauseUi(paused) {
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
+    if (paused && run) {
+      var seg = run.tl.segments[Math.min(run.segIdx, run.tl.segments.length - 1)];
+      if (seg) {
+        var what = seg.type === 'work' || seg.type === 'prep' ? exName(seg.exercise) : seg.type === 'jacks' ? H.JACKS.name : seg.type === 'setrest' ? 'Set break' : 'Rest';
+        $('veilStatus').textContent = what + ' · ' + clock(seg.end - elapsedNow()) + ' left · Set ' + seg.set + '/' + run.tl.level.sets;
+      }
+    }
     syncPauseButton(paused);
     if (workFig) workFig.setPlaying(!paused);
     ring.paused = paused;
@@ -843,7 +884,7 @@
       $('wEx').textContent = 'Exercise ' + (seg.slot + 1) + ' of ' + nEx;
     } else if (seg.type === 'jacks') {
       name = H.JACKS.name; label = 'Time left';
-      sub = nx ? 'Next · ' + nx.name : 'Last push';
+      sub = seg.setBreak ? 'Then a 5:00 break' : nx ? 'Next · ' + nx.name : 'Last push';
       $('wEx').textContent = 'Active recovery';
     } else if (seg.type === 'rest') {
       name = nx ? nx.name : 'Rest'; label = 'Next exercise in';
@@ -882,6 +923,16 @@
     var wb = document.querySelector('.w-body');
     wb.classList.remove('punch');
     if (!reduced) { void wb.offsetWidth; wb.classList.add('punch'); }
+    if (run.playing) cueSegment(seg);
+    else run.cuePending = idx; // play the cues when the user resumes
+
+    var stageEl = $('workout');
+    stageEl.classList.remove('shake');
+    if (seg.type === 'work' && !reduced) { void stageEl.offsetWidth; stageEl.classList.add('shake'); }
+  }
+
+  /** Sound, vibration and voice for the start of an interval. */
+  function cueSegment(seg) {
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
     else if (seg.type === 'rest' || seg.type === 'setrest') { A.play('rest'); buzz(80); }
     else if (seg.type === 'jacks') { A.play('jacks'); buzz([60, 40, 60]); }
@@ -891,12 +942,8 @@
     if (seg.type === 'prep') A.say('Get ready. First up, ' + spoken(seg.exercise) + '.');
     else if (seg.type === 'work') A.say((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!');
     else if (seg.type === 'rest') A.say('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''));
-    else if (seg.type === 'jacks') A.say('Jumping jacks! ' + (nextName ? 'Next up, ' + nextName + '.' : 'Last one, finish strong!'));
+    else if (seg.type === 'jacks') A.say('Jumping jacks! ' + (seg.setBreak ? 'Then a five minute break.' : nextName ? 'Next up, ' + nextName + '.' : 'Last one, finish strong!'));
     else if (seg.type === 'setrest') A.say('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.');
-
-    var stageEl = $('workout');
-    stageEl.classList.remove('shake');
-    if (seg.type === 'work' && !reduced) { void stageEl.offsetWidth; stageEl.classList.add('shake'); }
   }
 
   var flashTimer = 0;
@@ -939,7 +986,7 @@
     var long = seg.duration >= 60;
     setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
     var dg = $('digits');
-    var natural = prev != null && whole === prev - 1 && run.playing;
+    var natural = prev != null && whole < prev && prev - whole <= 2 && run.playing;
     if (!natural) return;
     dg.classList.remove('tick', 'final');
     void dg.offsetWidth;
@@ -972,7 +1019,7 @@
       else if (whole === Math.floor(seg.duration / 2) && whole !== 20 && whole !== 10) A.play('halfway');
       else if (whole === 10) A.say('Ten seconds. Keep pushing!');
     } else if (seg.type === 'jacks') {
-      if (whole === 10) A.say(nx ? 'Ten seconds. ' + nx + ' next.' : 'Ten seconds. Finish strong!');
+      if (whole === 10) A.say(seg.setBreak ? 'Ten seconds. Then your break.' : nx ? 'Ten seconds. ' + nx + ' next.' : 'Ten seconds. Finish strong!');
     } else if (seg.type === 'rest') {
       if (whole === 10) A.say('Ten seconds. Get ready for ' + nx + '.');
     } else if (seg.type === 'setrest') {
@@ -1024,6 +1071,7 @@
     if (!run || run.finished) return;
     var tl = run.tl;
     var t = elapsedNow();
+    if (t > run.lastT) { creditTime(run.lastT, t); run.lastT = t; }
     var idx = H.segmentAt(tl, t);
     if (idx >= tl.segments.length) { finish(); return; }
     if (idx !== run.segIdx) enterSegment(idx);
@@ -1083,11 +1131,14 @@
   function finish() {
     if (!run || run.finished) return;
     run.finished = true;
-    recordWorkout(run.active);
+    var st = playedStats();
+    var counted = st.active >= st.planned * 0.5;
+    if (counted) recordWorkout(st.total);
     unlockScreen();
     A.play('finish');
-    A.say('Workout complete. Great job!');
+    A.say(counted ? 'Workout complete. Great job!' : 'Session ended early.');
     buzz([100, 60, 100, 60, 240]);
+    setDoneTitle(counted);
 
     document.body.dataset.phase = 'done';
     bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], 1);
@@ -1098,10 +1149,8 @@
     showScreen('done');
 
     var tl = run.tl;
-    var workSec = 0;
-    Object.keys(run.perEx).forEach(function (k) { workSec += run.perEx[k]; });
-    countUp($('dTime'), run.active, true);
-    countUp($('dWork'), workSec, true);
+    countUp($('dTime'), st.total, true);
+    countUp($('dWork'), st.active, true);
     countUp($('dCount'), state.hist.completed, false);
     countUp($('dStreak'), liveStreak(), false);
     var list = $('doneList');
@@ -1110,7 +1159,7 @@
       var ex = H.get(id);
       var li = document.createElement('li');
       li.dataset.group = ex.group;
-      li.innerHTML = '<span>' + esc(ex.name) + '</span><b>' + H.formatTime(run.perEx[id] || 0) + '</b>';
+      li.innerHTML = '<span>' + esc(ex.name) + '</span><b>' + H.formatTime(st.perEx[id] || 0) + '</b>';
       list.appendChild(li);
     });
     if (!doneFig) doneFig = makeFig($('doneFig'), { exercise: 'jacks', primary: PHASE.done.colors[0], secondary: PHASE.done.colors[1], quality: 'high', energy: 1 });
@@ -1124,6 +1173,18 @@
       fx.wave(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6'], 1);
     }, 200);
     setTimeout(function () { $('again').focus(); }, 400);
+  }
+
+  function setDoneTitle(counted) {
+    var lines = counted ? ['CRUSHED', 'IT'] : ['ENDED', 'EARLY'];
+    var h = $('doneTitle');
+    h.setAttribute('aria-label', counted ? 'Crushed it' : 'Ended early');
+    h.querySelectorAll('.mega-line').forEach(function (el, i) {
+      el.dataset.text = lines[i];
+      el.firstElementChild.textContent = lines[i];
+    });
+    $('doneEyebrow').textContent = counted ? 'Session complete' : 'Skipped past most of the work';
+    $('doneNote').hidden = counted;
   }
 
   function countUp(el, target, asTime) {
@@ -1167,20 +1228,12 @@
   }
 
   // ================================================================ MAIN LOOP
-  function tickActive(dt) {
-    if (!run || run.finished || !run.playing) return;
-    run.active += dt;
-    var seg = run.tl.segments[run.segIdx];
-    if (seg && (seg.type === 'work' || seg.type === 'jacks')) run.perEx[seg.exercise] = (run.perEx[seg.exercise] || 0) + dt;
-  }
-
   var lastFrame = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
     var dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     if (run && !run.finished) {
-      tickActive(dt);
       update();
       if (currentScreen === 'workout') ring.draw(dt);
     }
@@ -1191,10 +1244,7 @@
   var lastBgTick = performance.now();
   setInterval(function () {
     var now = performance.now();
-    if (document.hidden && run && !run.finished) {
-      tickActive((now - lastBgTick) / 1000);
-      update();
-    }
+    if (document.hidden && run && !run.finished) update();
     lastBgTick = now;
   }, 250);
   document.addEventListener('visibilitychange', function () {
@@ -1205,8 +1255,8 @@
 
   // ================================================================ EVENTS
   function syncToggles() {
-    [['sfxToggle', 'sfx', '#i-sound', '#i-mute'], ['wSound', 'sfx', '#i-sound', '#i-mute'], ['voiceToggle', 'voice', '#i-voice', '#i-voice-off']].forEach(function (t) {
-      var on = A.get(t[1]);
+    [['sfxToggle', 'sfx', '#i-sound', '#i-mute'], ['wSound', 'any', '#i-sound', '#i-mute'], ['voiceToggle', 'voice', '#i-voice', '#i-voice-off']].forEach(function (t) {
+      var on = t[1] === 'any' ? A.get('sfx') || A.get('voice') : A.get(t[1]);
       var b = $(t[0]);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
       b.querySelector('use').setAttribute('href', on ? t[2] : t[3]);
@@ -1251,7 +1301,12 @@
     $('heroGuide').addEventListener('click', function (e) { openGuide(hero.shown || state.ids[0], 'setup', e.currentTarget); });
 
     $('sfxToggle').addEventListener('click', function () { A.set('sfx', !A.get('sfx')); A.unlock(); A.play('click'); syncToggles(); savePrefs(); });
-    $('wSound').addEventListener('click', function () { var on = !A.get('sfx'); A.set('sfx', on); A.set('voice', on); syncToggles(); savePrefs(); });
+    var beforeMute = null;
+    $('wSound').addEventListener('click', function () {
+      if (A.get('sfx') || A.get('voice')) { beforeMute = { sfx: A.get('sfx'), voice: A.get('voice') }; A.set('sfx', false); A.set('voice', false); }
+      else { var b = beforeMute || { sfx: true, voice: true }; A.set('sfx', b.sfx); A.set('voice', b.voice); A.play('click'); }
+      syncToggles(); savePrefs();
+    });
     $('voiceToggle').addEventListener('click', function () {
       var on = !A.get('voice'); A.set('voice', on); A.unlock();
       if (on) A.say('Voice coach on.');
@@ -1306,8 +1361,7 @@
       if (e.key === 'Escape') { e.preventDefault(); if (dialogOpen) closeQuit(true); else openQuit(); return; }
       if (dialogOpen) { if (e.key === 'Tab') trapTab(e, $('quitDialog')); return; }
       if (e.key === ' ' || e.code === 'Space') {
-        var ae = document.activeElement;
-        if (ae && ae.tagName === 'BUTTON') return; // a focused button handles Space itself
+        // Space is the play/pause key here, whatever button last had focus.
         e.preventDefault(); setPlaying(!run.playing);
       } else if (e.key === 'ArrowRight') { e.preventDefault(); skip(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
@@ -1339,6 +1393,7 @@
     state: state,
     get run() { return run; },
     seek: function (t) { seek(t); },
+    advance: function (sec) { if (run && !run.finished) { run.base += sec; update(); } },
     start: function () { startWorkout(state.ids); },
     finish: function () { if (run) seek(run.tl.total); },
     guide: function (id) { openGuide(id, run ? 'workout' : 'setup'); }
