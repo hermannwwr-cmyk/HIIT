@@ -579,7 +579,7 @@
 @keyframes studioSwap { from { opacity: .25; transform: translateY(4px); } }
 
 /* desktop setup: the hint clears the dock fade */
-[data-look="studio"] .config .panel:nth-of-type(2) { padding-bottom: 36px; }
+[data-look="studio"] .config .panel:nth-of-type(2) { padding-bottom: 28px; }
 
 /* finish: a coral ring sweeps closed around the athlete */
 [data-look="studio"] .done-figwrap { width: min(300px, 60vw, 30vh); aspect-ratio: 1; }
