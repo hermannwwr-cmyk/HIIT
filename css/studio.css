@@ -752,5 +752,11 @@
 /* last 10 s: the digits gain weight with the colour, so they read from across the room */
 [data-look="studio"] .workout.final10 .digits { font-weight: 400; }
 [data-look="studio"][data-scheme="dark"] .workout::after {
-  box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--c1) 85%, transparent), inset 0 0 90px color-mix(in srgb, var(--c1) 55%, transparent);
+  box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--c1) 85%, transparent), inset 0 0 70px color-mix(in srgb, var(--c1) 55%, transparent);
+}
+[data-look="studio"] .wl-box.runway .wl-sub { font: 500 13px/1 var(--ui); letter-spacing: .02em; text-transform: none; color: var(--mute); }
+[data-look="studio"] .wl-box.runway .wl-title { font-weight: 600; letter-spacing: -.03em; }
+/* dark scheme: phase wipes are built from the deep end of the colour so white text stays readable (≥ 4.5:1) */
+[data-look="studio"][data-scheme="dark"] .flash::before {
+  background: radial-gradient(circle at var(--fx, 50%) var(--fy, 50%), color-mix(in srgb, var(--c1) 66%, #000), color-mix(in srgb, var(--c1) 52%, #000) 38%, color-mix(in srgb, var(--c2) 46%, #000));
 }

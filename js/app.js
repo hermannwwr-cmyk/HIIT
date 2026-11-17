@@ -1542,13 +1542,14 @@
     if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, runway: false, go: false, flashed: false, holdSince: 0, k: -1 };
     if (w.go) return t;
     $('workout').classList.add('wu-lead');
-    if (t < rs) { leadText('Get ready', 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6))); return t; }
+    if (t < rs) { $('wlBox').classList.remove('runway'); leadText('Get ready', 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6))); return t; }
     if (!w.runway) {
       if (t - rs > 0.6 || !run.playing) w.runway = true; // jumped in, or paused: no hold
       else {
         if (!w.holdSince) w.holdSince = now;
         if (A.speaking() && now - w.holdSince < 4000) {
           run.base = rs - 0.001; run.anchor = now; // hold: let the coach finish
+          $('wlBox').classList.remove('runway');
           leadText('Get ready', 'Listen…');
           return run.base;
         }
@@ -1560,7 +1561,11 @@
     if (k !== w.k) {
       var natural = k === w.k + 1;
       w.k = k;
-      leadText('Ready', ['3', '2', '1'][k]);
+      // the runway: the tick is the big element now ("Ready" becomes the small label), pulsing on each beep
+      var box = $('wlBox');
+      box.classList.add('runway');
+      leadText(['3', '2', '1'][k], 'Ready');
+      box.classList.remove('pulse'); void box.offsetWidth; box.classList.add('pulse');
       if (run.playing && natural) {
         if (k === 0) { if (A.get('sfx')) A.play('ready'); else A.say('Ready'); }
         else if (A.get('sfx')) A.play('tickSoft');

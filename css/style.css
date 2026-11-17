@@ -1306,7 +1306,7 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 @keyframes fFinal { from { transform: scale(1.22); } }
 .workout::after {
   content: ""; position: fixed; inset: 0; z-index: 25; pointer-events: none; opacity: 0;
-  box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--c1) 70%, transparent), inset 0 0 90px color-mix(in srgb, var(--c1) 40%, transparent);
+  box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--c1) 70%, transparent), inset 0 0 70px color-mix(in srgb, var(--c1) 40%, transparent);
 }
 .workout.beat::after { animation: edgePulse .7s ease-out; }
 @keyframes edgePulse { 0% { opacity: 1; } 100% { opacity: 0; } }
@@ -1326,3 +1326,9 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 .beats { gap: 8px; margin-top: -6px; }
 .beats i { width: 9px; height: 9px; border-width: 2px; }
 .beats i:last-child { width: 12px; height: 12px; margin-top: -1.5px; }
+/* runway (ready, tick, tick, GO): the tick is the big, urgent element; "Ready" is the small label above it */
+.wl-box.runway .wl-sub { order: -1; font: 700 14px/1 var(--ui); letter-spacing: .28em; text-transform: uppercase; color: var(--c1); }
+.wl-box.runway .wl-title { font-size: clamp(48px, 16.5vw, 68px); line-height: 1; font-variant-numeric: tabular-nums; }
+.wl-box.runway.pulse .wl-title { animation: rwPulse .35s cubic-bezier(.2,.9,.3,1); }
+@keyframes rwPulse { from { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .wl-box.runway.pulse .wl-title { animation: none; } }
