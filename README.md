@@ -88,8 +88,8 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 | Action | Button | Key |
 | --- | --- | --- |
 | Pause / resume | centre button in the ring | Space |
-| Next interval | ⏭ | → |
-| Previous interval (or restart the current one) | ⏮ | ← |
+| Next interval | ⏭ or swipe left | → |
+| Previous interval (or restart the current one) | ⏮ or swipe right | ← |
 | End workout | ✕ | Esc |
 
 The screen is kept awake during a workout where the browser supports the Wake Lock API, and phones vibrate on each phase change.

@@ -102,6 +102,7 @@
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
         level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
+        swipeTip: state.swipeTip,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -115,6 +116,7 @@
     level: Object.prototype.hasOwnProperty.call(H.LEVELS, prefs.level) ? prefs.level : 'easy',
     ids: H.randomPick(H.DEFAULT_COUNT),
     warmup: prefs.warmup !== false,
+    swipeTip: !!prefs.swipeTip, // the "swipe to skip" tip has been shown once
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -1212,6 +1214,11 @@
       : 'Next interval');
 
     updateProgress(seg);
+    if (seg.type === 'work' && !state.swipeTip) {
+      state.swipeTip = true; savePrefs();
+      $('wpTip').hidden = false; $('wProg').classList.add('tipping');
+      setTimeout(function () { $('wpTip').hidden = true; $('wProg').classList.remove('tipping'); }, 6000);
+    }
 
     // phase wipe, sound, voice
     if (flashWord) flash(flashWord, sub, false, c);
@@ -1520,6 +1527,80 @@
     }
   }
 
+  // ---------------------------------------------------------------- swipe: left = next, right = back
+  /**
+   * Horizontal swipes on the workout screen: the content follows the finger a
+   * little and a "Next" / "Back" hint fills in; letting go past the threshold
+   * (or with a quick flick) does the same as the ⏭ / ⏮ buttons. Vertical moves,
+   * pinch-zoom and plain taps are left alone; nothing happens while a dialog,
+   * the paused screen or the guide is open.
+   */
+  function initSwipe() {
+    var area = $('workout'), body = document.querySelector('.w-body');
+    var hint = $('swipeHint'), hintText = $('swipeHintText'), hintIcon = hint.querySelector('use');
+    var g = null, eatClick = false;
+    function blocked(e) {
+      return !run || run.finished || currentScreen !== 'workout' ||
+        !$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden ||
+        (e.target.closest && e.target.closest('.w-top, .veil'));
+    }
+    function threshold() { return Math.min(110, Math.max(64, window.innerWidth * 0.2)); }
+    function setHint(dx) {
+      var next = dx < 0, k = Math.min(1, Math.abs(dx) / threshold());
+      hint.classList.toggle('to-next', next);
+      hint.classList.toggle('to-prev', !next);
+      hint.classList.toggle('armed', k >= 1);
+      hintText.textContent = next ? 'Next' : 'Back';
+      hintIcon.setAttribute('href', next ? '#i-next' : '#i-prev');
+      var st = $('stage').getBoundingClientRect();
+      hint.style.setProperty('--sy', Math.round(st.top + st.height * 0.42) + 'px');
+      hint.style.setProperty('--sp', k.toFixed(3));
+    }
+    function reset(animate) {
+      body.classList.remove('swiping');
+      body.classList.toggle('swipe-back', !!animate);
+      body.style.transform = '';
+      hint.style.setProperty('--sp', 0);
+      hint.classList.remove('armed');
+    }
+    area.addEventListener('pointerdown', function (e) {
+      if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
+      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0 };
+    });
+    area.addEventListener('pointermove', function (e) {
+      if (!g || e.pointerId !== g.id) return;
+      var dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (!g.on) {
+        if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } // vertical: not ours
+        if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        g.on = true;
+        try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        body.classList.remove('swipe-back');
+        body.classList.add('swiping');
+      }
+      g.dx = dx;
+      // the content follows with resistance, so it feels attached but never flies off
+      if (!reduced) body.style.transform = 'translateX(' + (Math.sign(dx) * Math.min(56, Math.abs(dx) * 0.3)).toFixed(1) + 'px)';
+      setHint(dx);
+    });
+    function end(e, cancelled) {
+      if (!g || e.pointerId !== g.id) return;
+      var s = g; g = null;
+      if (!s.on) return;
+      var dt = Math.max(1, performance.now() - s.t);
+      var go = !cancelled && (Math.abs(s.dx) >= threshold() || (Math.abs(s.dx) > 44 && Math.abs(s.dx) / dt > 0.4));
+      reset(true);
+      if (!go) return;
+      eatClick = true; // a swipe that started on a button must not also press it
+      setTimeout(function () { eatClick = false; }, 350);
+      buzz(15);
+      if (s.dx < 0) skip(); else prev();
+    }
+    area.addEventListener('pointerup', function (e) { end(e, false); });
+    area.addEventListener('pointercancel', function (e) { end(e, true); });
+    area.addEventListener('click', function (e) { if (eatClick) { e.preventDefault(); e.stopPropagation(); eatClick = false; } }, true);
+  }
+
   var doneFig = null;
   function finish() {
     if (!run || run.finished) return;
@@ -1727,6 +1808,7 @@
       state.warmup = !state.warmup; A.play('click'); renderSetup();
     });
     $('prev').addEventListener('click', prev);
+    initSwipe();
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });
     $('quitYes').addEventListener('click', function () { endRun(); showScreen('setup'); });

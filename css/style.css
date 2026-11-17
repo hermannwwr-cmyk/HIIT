@@ -1247,3 +1247,24 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
   .w-top { width: 100%; max-width: 1240px; justify-self: center; }
   .w-lower { margin-top: 10px; }
 }
+
+/* ---- swipe left / right for next / back */
+.workout { touch-action: pan-y pinch-zoom; }
+.w-body.swiping { transition: none; }
+.w-body.swipe-back { transition: transform .32s cubic-bezier(.2,.9,.3,1); }
+.swipe-hint {
+  position: fixed; top: var(--sy, 45%); z-index: 20; pointer-events: none;
+  transform: translateY(-50%) scale(calc(.85 + var(--sp, 0) * .15));
+  display: flex; align-items: center; gap: 6px;
+  height: 44px; padding: 0 16px; border-radius: 999px;
+  font: 700 14px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text); background: rgba(16, 7, 34, .9); border: 1px solid var(--line-hi);
+  opacity: var(--sp, 0); transition: opacity .2s ease, background .15s ease, color .15s ease;
+}
+.swipe-hint svg { font-size: 18px; fill: currentColor; }
+.swipe-hint.to-next { right: max(12px, env(safe-area-inset-right, 0px)); flex-direction: row-reverse; }
+.swipe-hint.to-prev { left: max(12px, env(safe-area-inset-left, 0px)); }
+.swipe-hint.armed { color: var(--ink); background: var(--c1); border-color: transparent; }
+.wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
+.wp-tip[hidden] { display: none; }
+.w-prog.tipping .wp-left { display: none; }

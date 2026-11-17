@@ -731,3 +731,8 @@
   [data-look="studio"] .coach { margin-top: 0; padding: 6px 6px 6px 14px; }
   [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 0; }
 }
+
+/* swipe hint + first-run tip (Studio) */
+[data-look="studio"] .swipe-hint { font: 600 15px/1 var(--ui); letter-spacing: 0; text-transform: none; background: var(--surface); border-color: var(--line); box-shadow: var(--shadow-1); }
+[data-look="studio"] .swipe-hint.armed { color: var(--ink); background: var(--text); }
+[data-look="studio"] .wp-tip { font-weight: 500; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }
