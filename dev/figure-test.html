@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIITFigure test bench</title>
+<style>
+  :root { --bg: #07020f; --fg: #e9e2ff; --dim: #8a7fb0; --line: #2a1b45; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  body { padding: 16px; }
+  h1 { font-size: 16px; margin: 0 0 12px; letter-spacing: .04em; }
+  h2 { font-size: 12px; margin: 22px 0 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .12em; }
+  .top { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  #main { width: 400px; height: 400px; max-width: 100%; border: 1px solid var(--line); border-radius: 12px; display: block; }
+  .controls { display: flex; flex-direction: column; gap: 10px; min-width: 260px; max-width: 520px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { background: #160b2a; color: var(--fg); border: 1px solid #3b2763; border-radius: 8px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: #7a52d6; }
+  button.on { background: #3b1d73; border-color: #a77bff; }
+  .sw { width: 14px; height: 14px; border-radius: 50%; display: inline-block; vertical-align: -2px; margin-right: 4px; }
+  #perf { font-family: ui-monospace, Menlo, monospace; color: var(--dim); white-space: pre; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 960px; }
+  .cell { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .cell canvas { width: 100%; aspect-ratio: 1 / 1; display: block; }
+  .cell span { position: absolute; left: 8px; top: 6px; font-size: 11px; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .thumb { text-align: center; font-size: 10px; color: var(--dim); }
+  .thumb canvas { width: 90px; height: 90px; display: block; border: 1px solid var(--line); border-radius: 8px; }
+  .aspect { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+  .aspect canvas { border: 1px solid var(--line); border-radius: 8px; display: block; }
+  /* contact sheet mode */
+  .sheet { display: grid; gap: 6px; }
+  .sheet .lbl { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-size: 12px; }
+  .sheet canvas { width: 210px; height: 210px; display: block; border: 1px solid #1a1030; border-radius: 6px; }
+  .sheet .colh { text-align: center; color: var(--dim); font-size: 11px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* studio schemes: graphite with a soft spotlight / warm off-white */
+  html.studio-dark { background: #0d0f13; }
+  html.studio-light { background: #f4f3ef; }
+  body.studio-dark { --bg: #0d0f13; --fg: #e6e8ec; --dim: #7d8492; --line: #22262e;
+    background: radial-gradient(120% 900px at 50% 0%, #1c2028 0%, #0d0f13 70%) no-repeat #0d0f13; }
+  body.studio-light { --bg: #f4f3ef; --fg: #1d1f24; --dim: #7a7b80; --line: #dcdad3; background: #f4f3ef; }
+  body.studio-dark button { background: #171a20; border-color: #2c313b; }
+  body.studio-dark button.on { background: #2a303b; border-color: #8a93a6; }
+  body.studio-light button { background: #ffffff; color: #1d1f24; border-color: #d6d4cc; }
+  body.studio-light button.on { background: #1d1f24; color: #f4f3ef; border-color: #1d1f24; }
+  body.studio-dark .cell, body.studio-dark .thumb canvas, body.studio-dark .aspect canvas, body.studio-dark #main, body.studio-dark .sheet canvas {
+    background: radial-gradient(70% 60% at 50% 38%, #232832 0%, #13161c 55%, #0d0f13 100%); border-color: #1d2128; }
+  body.studio-light .cell, body.studio-light .thumb canvas, body.studio-light .aspect canvas, body.studio-light #main, body.studio-light .sheet canvas {
+    background: radial-gradient(80% 70% at 50% 35%, #fbfaf7 0%, #f4f3ef 60%, #eceae4 100%); border-color: #e2e0d9; }
+  /* candidate dark stages (?stage=navy|black|charcoal) */
+  html.stage-navy { background: #070b14; }
+  html.stage-black { background: #000; }
+  html.stage-charcoal { background: #100f0e; }
+  body.studio-dark.stage-navy { --bg: #070b14; --line: #141c2c; background: radial-gradient(120% 900px at 50% 0%, #0f1626 0%, #070b14 70%) no-repeat #070b14; }
+  body.studio-dark.stage-black { --bg: #000; --line: #161616; background: radial-gradient(120% 900px at 50% 0%, #111 0%, #000 70%) no-repeat #000; }
+  body.studio-dark.stage-charcoal { --bg: #100f0e; --line: #262320; --dim: #8a837b; background: radial-gradient(120% 900px at 50% 0%, #1d1a17 0%, #100f0e 70%) no-repeat #100f0e; }
+  body.studio-dark.stage-navy :is(.cell, .thumb canvas, .aspect canvas, #main, .sheet canvas) {
+    background: radial-gradient(70% 60% at 50% 38%, #0f1626 0%, #0a101d 55%, #070b14 100%); border-color: #121a29; }
+  body.studio-dark.stage-black :is(.cell, .thumb canvas, .aspect canvas, #main, .sheet canvas) {
+    background: radial-gradient(60% 55% at 50% 38%, #111 0%, #070707 55%, #000 100%); border-color: #141414; }
+  body.studio-dark.stage-charcoal :is(.cell, .thumb canvas, .aspect canvas, #main, .sheet canvas) {
+    background: radial-gradient(70% 60% at 50% 38%, #1d1a17 0%, #161412 55%, #100f0e 100%); border-color: #221f1c; }
+  .sheet .title { grid-column: 1 / -1; color: var(--fg); font-size: 13px; letter-spacing: .08em; padding: 2px 0 4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="../js/figure.js"></script>
+<script>
+(function () {
+  'use strict';
+  var F = window.HIITFigure;
+  var EX = F.EXERCISES;
+  var PAL = {
+    work: ['#ff2bd6', '#ff8a1f'], rest: ['#22e5ff', '#4a6bff'],
+    jacks: ['#c6ff1a', '#ffe14a'], prep: ['#9b5cff', '#ff2bd6']
+  };
+  function palFor(id) { return id === 'rest' ? PAL.rest : id === 'jacks' ? PAL.jacks : PAL.work; }
+  var qs = new URLSearchParams(location.search);
+  // ?style=neon|studio&scheme=dark|light[&material=porcelain|titanium|ink|stone][&stage=navy|black|charcoal]
+  var style = qs.get('style') === 'studio' ? 'studio' : 'neon';
+  var scheme = qs.get('scheme') === 'light' ? 'light' : 'dark';
+  var material = qs.get('material') || null;
+  var STAGES = ['graphite', 'navy', 'black', 'charcoal'];
+  var stage = STAGES.indexOf(qs.get('stage')) > 0 ? qs.get('stage') : 'graphite';
+  function applyTheme() {
+    [document.documentElement, document.body].forEach(function (n) {
+      n.classList.toggle('studio-dark', style === 'studio' && scheme === 'dark');
+      n.classList.toggle('studio-light', style === 'studio' && scheme === 'light');
+      STAGES.forEach(function (k) { n.classList.toggle('stage-' + k, k === stage && k !== 'graphite' && style === 'studio' && scheme === 'dark'); });
+    });
+  }
+  applyTheme();
+  var app = document.getElementById('app');
+  var all = [];
+  window.__figs = all;
+  window.__errors = [];
+  window.addEventListener('error', function (e) { window.__errors.push(String(e.message)); });
+
+  function el(tag, cls, parent, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function make(canvas, ex, q, pal) {
+    pal = pal || palFor(ex);
+    var f = F.create(canvas, { exercise: ex, primary: pal[0], secondary: pal[1], quality: q, energy: ex === 'rest' ? 0.4 : 1,
+      style: style, scheme: scheme, material: material });
+    all.push(f);
+    return f;
+  }
+
+  /* ---------- contact sheet: ?sheet=1[&ph=0,0.25,0.5,0.75][&ex=a,b][&size=210][&pal=work][&lowcol=56][&title=1] ---------- */
+  if (qs.get('sheet')) {
+    var phases = (qs.get('ph') || '0,0.25,0.5,0.75').split(',').map(Number);
+    var exs = qs.get('ex') ? qs.get('ex').split(',') : EX;
+    var size = +(qs.get('size') || 210);
+    var q = qs.get('q') || 'high';
+    if (qs.get('cam')) { // dev: override camera yaw,pitch for the listed exercises
+      var cm = qs.get('cam').split(',').map(Number);
+      exs.forEach(function (id) { var e = F._dev.EX[id]; e.cam = { yaw: cm[0], pitch: cm[1] }; delete e._cam; delete e._box; });
+    }
+    var lowcol = +(qs.get('lowcol') || 0); // extra column: a low-quality thumbnail of each exercise
+    var sheet = el('div', 'sheet', app);
+    sheet.style.gridTemplateColumns = '90px repeat(' + phases.length + ', ' + size + 'px)' + (lowcol ? ' ' + lowcol + 'px' : '');
+    if (qs.get('title')) {
+      el('div', 'title', sheet, style === 'studio' ? (F.create(document.createElement('canvas'), { style: style, scheme: scheme, material: material }).getMaterial() +
+        (scheme === 'dark' ? ' on ' + stage : '')) : 'neon');
+    }
+    el('div', '', sheet);
+    phases.forEach(function (p) { el('div', 'colh', sheet, Math.round(p * 100) + '%'); });
+    if (lowcol) el('div', 'colh', sheet, lowcol + 'px');
+    exs.forEach(function (id) {
+      el('div', 'lbl', sheet, id);
+      phases.forEach(function (p) {
+        var c = el('canvas', '', sheet);
+        c.style.width = c.style.height = size + 'px';
+        var pal = qs.get('pal') ? PAL[qs.get('pal')] : palFor(id);
+        var f = make(c, id, q, pal);
+        f._debugSetTime(p * F._dev.EX[id].period, true);
+      });
+      if (lowcol) {
+        var lc = el('canvas', '', sheet);
+        lc.style.width = lc.style.height = lowcol + 'px';
+        lc.style.alignSelf = 'center';
+        var lp = phases[phases.length - 1];
+        make(lc, id, 'low', qs.get('pal') ? PAL[qs.get('pal')] : palFor(id))._debugSetTime(lp * F._dev.EX[id].period, true);
+      }
+    });
+    window.__ready = true;
+    return;
+  }
+
+  /* ---------- perf: ?perf=1 -> 1 high (400px) + 9 low thumbs ---------- */
+  var perfOnly = !!qs.get('perf');
+
+  el('h1', '', app, 'HIITFigure test bench');
+  var top = el('div', 'top', app);
+  var main = el('canvas', '', top); main.id = 'main';
+  var mainF = make(main, 'pushup', 'high', PAL.work);
+  var ctr = el('div', 'controls', top);
+
+  var exRow = el('div', 'row', ctr);
+  var exBtns = {};
+  EX.concat(['bogus']).forEach(function (id) {
+    var b = el('button', '', exRow, id);
+    b.onclick = function () {
+      mainF.setExercise(id);
+      for (var k in exBtns) exBtns[k].classList.toggle('on', k === id);
+    };
+    exBtns[id] = b;
+  });
+  exBtns.pushup.classList.add('on');
+
+  var colRow = el('div', 'row', ctr);
+  Object.keys(PAL).forEach(function (k) {
+    var b = el('button', '', colRow);
+    b.innerHTML = '<i class="sw" style="background:linear-gradient(90deg,' + PAL[k][0] + ',' + PAL[k][1] + ')"></i>' + k.toUpperCase();
+    b.onclick = function () { all.forEach(function (f) { f.setColors(PAL[k][0], PAL[k][1]); }); };
+  });
+
+  var styRow = el('div', 'row', ctr), styBtns = [];
+  [['neon', 'dark', 'Neon'], ['studio', 'dark', 'Studio dark'], ['studio', 'light', 'Studio light']].forEach(function (o) {
+    var b = el('button', '', styRow, o[2]);
+    b.classList.toggle('on', o[0] === style && (o[0] === 'neon' || o[1] === scheme));
+    b.onclick = function () {
+      style = o[0]; scheme = o[1]; applyTheme();
+      all.forEach(function (f) { f.setStyle(style, scheme); });
+      styBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('style', style); u.searchParams.set('scheme', scheme);
+      history.replaceState(null, '', u);
+    };
+    styBtns.push(b);
+  });
+
+  // studio material presets (dark stage) and candidate dark backgrounds
+  var matRow = el('div', 'row', ctr), matBtns = [];
+  F.MATERIALS.dark.forEach(function (name) {
+    var b = el('button', '', matRow, name);
+    b.classList.toggle('on', (material || F.MATERIALS.dark[0]) === name);
+    b.onclick = function () {
+      material = name;
+      all.forEach(function (f) { f.setMaterial(name); });
+      matBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('material', name); history.replaceState(null, '', u);
+    };
+    matBtns.push(b);
+  });
+  var stgRow = el('div', 'row', ctr), stgBtns = [];
+  STAGES.forEach(function (k) {
+    var b = el('button', '', stgRow, 'stage: ' + k);
+    b.classList.toggle('on', k === stage);
+    b.onclick = function () {
+      stage = k; applyTheme();
+      stgBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('stage', k); history.replaceState(null, '', u);
+    };
+    stgBtns.push(b);
+  });
+
+  var actRow = el('div', 'row', ctr);
+  var playing = true;
+  var pb = el('button', '', actRow, 'Pause');
+  pb.onclick = function () { playing = !playing; pb.textContent = playing ? 'Pause' : 'Play'; all.forEach(function (f) { f.setPlaying(playing); }); };
+  el('button', '', actRow, 'Pulse').onclick = function () { all.forEach(function (f) { f.pulse(); }); };
+  el('button', '', actRow, 'Cycle all').onclick = function () {
+    var i = 0;
+    var iv = setInterval(function () { mainF.setExercise(EX[i]); mainF.pulse(); if (++i >= EX.length) clearInterval(iv); }, 2500);
+  };
+  var en = el('label', 'row', ctr);
+  en.innerHTML = 'energy <input type="range" min="0" max="1" step="0.05" value="1" style="width:160px">';
+  en.querySelector('input').oninput = function (e) { all.forEach(function (f) { f.setEnergy(+e.target.value); }); };
+  var perfEl = el('div', '', ctr); perfEl.id = 'perf';
+
+  if (!perfOnly) {
+    el('h2', '', app, 'All exercises · high quality');
+    var grid = el('div', 'grid', app);
+    EX.forEach(function (id) {
+      var cell = el('div', 'cell', grid);
+      var c = el('canvas', '', cell);
+      el('span', '', cell, id);
+      make(c, id, 'high');
+    });
+  }
+  el('h2', '', app, 'Thumbnails · low quality · 90px');
+  var thumbs = el('div', 'thumbs', app);
+  EX.forEach(function (id) {
+    var t = el('div', 'thumb', thumbs);
+    var c = el('canvas', '', t);
+    el('div', '', t, id);
+    make(c, id, 'low');
+  });
+  if (!perfOnly) {
+    el('h2', '', app, 'Aspect ratios (auto-fit)');
+    var asp = el('div', 'aspect', app);
+    [['squat', 320, 140], ['pushup', 120, 300], ['legraise', 320, 140], ['jacks', 140, 300]].forEach(function (a) {
+      var c = el('canvas', '', asp);
+      c.style.width = a[1] + 'px'; c.style.height = a[2] + 'px';
+      make(c, a[0], 'high');
+    });
+  }
+
+  // frame-time meter
+  var frames = 0, t0 = performance.now(), last = t0, worst = 0;
+  function meter(t) {
+    frames++;
+    worst = Math.max(worst, t - last); last = t;
+    if (t - t0 > 1000) {
+      var draw = 0, n = 0;
+      all.forEach(function (f) { var s = f._debugStats(); draw += s.avgMs; n++; });
+      var txt = 'fps ' + (frames * 1000 / (t - t0)).toFixed(1) + '  worst ' + worst.toFixed(1) + 'ms\n' +
+        'figure CPU/frame (sum ' + n + ' inst) ' + draw.toFixed(2) + 'ms';
+      perfEl.textContent = txt;
+      window.__perf = { fps: frames * 1000 / (t - t0), worst: worst, drawMs: draw, n: n };
+      frames = 0; t0 = t; worst = 0;
+    }
+    requestAnimationFrame(meter);
+  }
+  requestAnimationFrame(meter);
+  window.__main = mainF;
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
