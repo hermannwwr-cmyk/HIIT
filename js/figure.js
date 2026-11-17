@@ -451,8 +451,8 @@
     // Standing movements: frame symmetrically around the standing pose so the
     // athlete starts (and rests) in the centre, not offset by the step/hip hinge.
     if (ex.id === 'squat' || ex.id === 'lunge' || ex.id === 'jacks' || ex.id === 'rest') {
-      project(safePose(ex, 0, 0), ex, TMPV);
-      var hx = TMPV[PELVIS * 3];
+      var hx = 0;
+      for (var m = 0; m < 24; m++) { project(safePose(ex, m / 24, m / 24 * ex.period), ex, TMPV); hx += TMPV[PELVIS * 3] / 24; }
       var half = Math.max(hx - x0, x1 - hx);
       x0 = hx - half; x1 = hx + half;
     }
@@ -1876,6 +1876,9 @@
     // dark stage: a faint pool of light on the floor so the contact shadow has something to darken
     if (mat.pool > 0) {
       var pr = (x1 - x0) / 2 + 0.45 * sc;
+      // keep the whole ellipse inside the canvas so its edge never shows as a box
+      var pcx = (x0 + x1) / 2;
+      pr = Math.min(pr, Math.min(pcx, this.W - pcx) * 0.9, Math.max(0, this.H - sy) / Math.max(flat, 0.05) * 0.9, sy / Math.max(flat, 0.05) * 0.9);
       ctx.fillStyle = unitShadow(ctx, mat.floor);
       ctx.globalAlpha = mat.pool;
       ctx.setTransform(dpr * pr, 0, 0, dpr * pr * flat, dpr * (x0 + x1) / 2, dpr * sy);

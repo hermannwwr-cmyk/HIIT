@@ -680,13 +680,34 @@
     ctx.strokeStyle = light ? rgba(ca, 0.2) : 'rgb(' + cb.map(function (v) { return Math.round(v * 0.28 + 10); }).join(',') + ')';
     ctx.lineWidth = th;
     if (this.dashed) {
-      // jumping jacks: a dotted ring (non-colour cue)
-      ctx.setLineDash([0.01, TAU * R / 60]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.3;
+      // jumping jacks: beads for the time left, small dots for the time gone (non-colour cue)
+      var nB = 60, stepB = TAU / nB, span = prog * TAU, k, ang, u;
+      ctx.fillStyle = ctx.strokeStyle;
+      for (k = 0; k < nB; k++) {
+        if (k * stepB <= span + 1e-6) continue;
+        ang = A0 + k * stepB;
+        ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, th * 0.15, 0, TAU); ctx.fill();
+      }
+      if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th; }
+      for (k = 0; k * stepB <= span + 1e-6 && k < nB; k++) {
+        u = span ? k * stepB / span : 1;
+        ang = A0 + k * stepB;
+        ctx.fillStyle = rgba([cb[0] + (ca[0] - cb[0]) * u, cb[1] + (ca[1] - cb[1]) * u, cb[2] + (ca[2] - cb[2]) * u], 1);
+        ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, th * 0.31, 0, TAU); ctx.fill();
+      }
+      // the next bead fades out smoothly instead of popping
+      var frac = (span / stepB) % 1;
+      if (k < nB && frac > 0.01) {
+        ang = A0 + k * stepB;
+        ctx.fillStyle = rgba(ca, Math.min(1, frac));
+        ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, th * 0.31, 0, TAU); ctx.fill();
+      }
+      ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
+    } else {
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
     }
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
-    ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.lineWidth = th;
 
-    if (prog > 0.001) {
+    if (prog > 0.001 && !this.dashed) {
       var grad;
       if (ctx.createConicGradient) {
         grad = ctx.createConicGradient(A0, cx, cy);

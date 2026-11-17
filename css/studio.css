@@ -435,7 +435,7 @@
     linear-gradient(180deg, var(--surface-2), var(--tile));
   border-color: var(--line);
 }
-[data-look="studio"] .sheet-fig canvas { inset: 0; width: 100%; height: 100%; }
+[data-look="studio"] .sheet-fig canvas { inset: 4% 5%; width: 90%; height: 92%; }
 [data-look="studio"] .sheet-tempo {
   font: 600 12px/1 var(--ui); letter-spacing: .01em; text-transform: none;
   color: var(--text); background: var(--surface); border: 1px solid var(--line-hi);
@@ -583,16 +583,17 @@
 
 /* finish: a coral ring sweeps closed around the athlete */
 [data-look="studio"] .done-figwrap { width: min(300px, 60vw, 30vh); aspect-ratio: 1; }
-[data-look="studio"] .done-figwrap .done-fig { width: 84%; }
+[data-look="studio"] .done-figwrap .done-fig { width: 80%; transform: translateY(-4%); }
 [data-look="studio"] .done-ring stop:first-child { stop-color: var(--gold-b); }
 [data-look="studio"] .done-ring stop:last-child { stop-color: var(--gold-a); }
 [data-look="studio"] .done-ring {
   display: block; position: absolute; inset: 0; width: 100%; height: 100%;
   transform: rotate(-90deg); overflow: visible; pointer-events: none;
 }
-[data-look="studio"] .done-ring-track { fill: none; stroke: color-mix(in srgb, var(--gold-a) 16%, transparent); stroke-width: 3.2; }
+[data-look="studio"] .done-ring-track { fill: none; stroke: color-mix(in srgb, var(--gold-b) 28%, #0b0c10); stroke-width: 6; }
+[data-look="studio"][data-scheme="light"] .done-ring-track { stroke: color-mix(in srgb, var(--gold-a) 18%, transparent); }
 [data-look="studio"] .done-ring-arc {
-  fill: none; stroke: url(#doneGrad); stroke-width: 3.2; stroke-linecap: round;
+  fill: none; stroke: url(#doneGrad); stroke-width: 6; stroke-linecap: round;
   stroke-dasharray: 100; stroke-dashoffset: 100;
 }
 [data-look="studio"] .done-ring.play .done-ring-arc {
