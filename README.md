@@ -29,6 +29,7 @@ The default is **Automatic**: the Studio look in light or dark to match the phon
 | Exercise | Group |
 | --- | --- |
 | Push Ups | Upper body |
+| Shoulder Taps | Upper body |
 | Crunches | Abs |
 | Leg Raises | Abs |
 | Flutter Kicks | Abs |
@@ -37,9 +38,24 @@ The default is **Automatic**: the Studio look in light or dark to match the phon
 | Lunges | Legs |
 
 - Every session starts with **5 random exercises** that always include at least one upper-body, one abs and one legs exercise. The order is shuffled so the same muscle group rarely comes twice in a row.
-- Change the count with **− / +** (3 to 7). The app adds or drops exercises while keeping the full-body mix.
+- Change the count with **− / +** (3 to 8). The app adds or drops exercises while keeping the full-body mix.
 - Tap any exercise to add or remove it. The numbered badges show the order they run in. **Start** stays locked until upper body, abs and legs are all covered.
 - **Shuffle** rolls a new random set at the current count.
+
+### Warm-up
+
+When a workout starts, a 2:52 SAF-style warm-up runs first:
+
+| Step | How long |
+| --- | --- |
+| Jog on the spot: slow, quick, slow, quick | 10 s each |
+| Jumping jacks | 5 counts of 4 |
+| Pectoral stretch | 5 counts of 4 |
+| Squats | 5 counts of 4 |
+| Hamstring stretch, left then right | 5 counts of 4 each |
+| Calf stretch, left then right | 5 counts of 4 each |
+
+Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
 
 ### Intensity
 
