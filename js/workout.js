@@ -27,6 +27,17 @@
       mistakes: ['Hips sagging or piking up', 'Elbows flared straight out', 'Half reps'],
       easier: 'Knees on the floor, or hands on a bench or sofa.',
       harder: 'Lower for 3 slow seconds, or raise your feet.' },
+    { id: 'shouldertap', name: 'Shoulder Taps', group: 'upper', muscles: 'Shoulders · Chest · Core',
+      cue: 'Plank on straight arms. Tap the opposite shoulder, hips stay still.',
+      steps: ['Start in a high plank, hands under your shoulders, feet hip-width apart.',
+        'Brace your core and squeeze your glutes so your body is one straight line.',
+        'Lift one hand and tap the opposite shoulder.',
+        'Put the hand back down and switch sides. Keep your hips level.'],
+      cues: ['Hips stay level, no rocking.', 'Push the floor away with the supporting arm.', 'Slow, controlled taps.'],
+      breathe: 'Breathe steadily, out on each tap.',
+      mistakes: ['Hips swaying side to side', 'Lower back sagging', 'Rushing the taps'],
+      easier: 'Do them from your knees, or set your feet wider.',
+      harder: 'Bring your feet together, or add a push up after every 4 taps.' },
     { id: 'crunch', name: 'Crunches', group: 'abs', muscles: 'Upper abs',
       cue: 'Curl your shoulders off the floor. Breathe out on the way up.',
       steps: ['Lie on your back, knees bent, feet flat and hip-width apart.',
@@ -110,6 +121,60 @@
     cue: 'Breathe deep. Shake out your arms and legs.',
     steps: [], cues: [], breathe: 'In through your nose, out through your mouth.', mistakes: [], easier: '', harder: '' };
 
+  // ---- Warm-up (SAF-style): timed jogging, then moves done in "5 counts of 4" ----
+  var WARMUP_MOVES = {
+    jog: { id: 'jog', name: 'Jog on the Spot', group: 'warmup', muscles: 'Heart rate · Legs',
+      cue: 'Light on the balls of your feet, arms swinging from the shoulders.',
+      steps: ['Stand tall, feet hip-width apart.', 'Jog on the spot, landing softly on the balls of your feet.',
+        'Swing your arms with elbows bent at about 90°.', 'Slow jog: easy knee lift. Quick jog: drive the knees up and speed up.'],
+      cues: ['Land softly.', 'Relax your shoulders.', 'Breathe easily.'],
+      breathe: 'Breathe in rhythm with your steps.',
+      mistakes: ['Landing on your heels', 'Tense shoulders', 'Holding your breath'],
+      easier: 'March on the spot instead of jogging.', harder: 'High knees on the quick jog.' },
+    pecstretch: { id: 'pecstretch', name: 'Pectoral Stretch', group: 'warmup', muscles: 'Chest · Front shoulders',
+      cue: 'Hands clasped behind you, chest up, squeeze your shoulder blades.',
+      steps: ['Stand tall, feet shoulder-width apart.', 'Clasp your hands behind your lower back, arms straight.',
+        'Squeeze your shoulder blades together and lift your chest.', 'Gently raise your hands a little, then lower on the count.'],
+      cues: ['Chest up, chin level.', 'Squeeze the shoulder blades.', 'Gentle, no bouncing.'],
+      breathe: 'Breathe slowly and deeply.',
+      mistakes: ['Leaning forward', 'Shrugging your shoulders', 'Forcing the stretch'],
+      easier: 'Hold a towel between your hands if they don\u2019t meet.', harder: 'Raise the clasped hands higher.' },
+    hamstring: { id: 'hamstring', name: 'Hamstring Stretch', group: 'warmup', muscles: 'Back of the thigh',
+      cue: 'Front heel down, toes up, hinge forward with a flat back.',
+      steps: ['Step one foot forward, heel on the floor and toes pointing up.', 'Keep that knee straight and bend the back knee slightly.',
+        'Hinge forward from your hips with a flat back, hands on the bent thigh.', 'Feel the stretch behind the straight leg. Switch sides when told.'],
+      cues: ['Flat back, hinge at the hips.', 'Toes up on the front foot.', 'Ease in, don\u2019t bounce.'],
+      breathe: 'Breathe out as you ease into the stretch.',
+      mistakes: ['Rounding your back', 'Locking the back knee', 'Bouncing'],
+      easier: 'Hinge less; keep the stretch mild.', harder: 'Hinge further while keeping your back flat.' },
+    calf: { id: 'calf', name: 'Calf Stretch', group: 'warmup', muscles: 'Calves · Achilles',
+      cue: 'Back leg straight, back heel pressed into the floor.',
+      steps: ['Take a long step forward into a staggered stance.', 'Bend the front knee; keep the back leg straight.',
+        'Press the back heel into the floor, toes pointing forward.', 'Lean forward gently until you feel the calf stretch. Switch sides when told.'],
+      cues: ['Back heel down.', 'Toes pointing forward.', 'Hips square.'],
+      breathe: 'Slow, steady breaths.',
+      mistakes: ['Back heel lifting', 'Toes turned out', 'Bending the back knee'],
+      easier: 'Shorten your stance.', harder: 'Lengthen your stance or lean further.' }
+  };
+
+  // The routine, in order. Timed steps have a duration; counted steps run
+  // `counts` × `beats` beats of `beat` seconds (SAF "5 counts of 4").
+  var WARMUP_STEPS = [
+    { move: 'jog', pace: 'slow', duration: 10 },
+    { move: 'jog', pace: 'quick', duration: 10 },
+    { move: 'jog', pace: 'slow', duration: 10 },
+    { move: 'jog', pace: 'quick', duration: 10 },
+    { move: 'jacks', counts: 5, beats: 4, beat: 0.6 },
+    { move: 'pecstretch', counts: 5, beats: 4, beat: 1 },
+    { move: 'squat', counts: 5, beats: 4, beat: 1 },
+    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1 },
+    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1 },
+    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1 },
+    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1 }
+  ];
+  function warmupStepDuration(st) { return st.duration || Math.round(st.counts * st.beats * st.beat * 1000) / 1000; }
+  var WARMUP_SECONDS = WARMUP_STEPS.reduce(function (a, st) { return a + warmupStepDuration(st); }, 0);
+
   /** Things the trainer says during the long break between sets. */
   var SET_BREAK_TIPS = [
     'Grab a drink of water.',
@@ -136,6 +201,7 @@
   EXERCISES.forEach(function (e) { BY_ID[e.id] = e; });
   BY_ID.jacks = JACKS;
   BY_ID.rest = REST;
+  Object.keys(WARMUP_MOVES).forEach(function (k) { BY_ID[k] = WARMUP_MOVES[k]; });
 
   function get(id) { return BY_ID[id] || null; }
 
@@ -143,7 +209,7 @@
     var seen = {};
     return (ids || []).filter(function (id) {
       var ex = BY_ID[id];
-      if (!ex || ex.group === 'cardio' || ex.group === 'rest' || seen[id]) return false;
+      if (!ex || ex.group === 'cardio' || ex.group === 'rest' || ex.group === 'warmup' || seen[id]) return false;
       seen[id] = true;
       return true;
     });
@@ -290,6 +356,13 @@
     var t = 0;
     function push(seg) { seg.start = t; t += seg.duration; seg.end = t; seg.index = segs.length; segs.push(seg); }
 
+    if (opts.warmup && list.length) {
+      WARMUP_STEPS.forEach(function (st, i) {
+        push({ type: 'warmup', duration: warmupStepDuration(st), exercise: st.move, move: st.move,
+          pace: st.pace || null, side: st.side || null, counts: st.counts || 0, beats: st.beats || 0, beat: st.beat || 0,
+          step: i + 1, steps: WARMUP_STEPS.length, set: 0, slot: 0, next: list[0] });
+      });
+    }
     if (prep > 0 && list.length) {
       push({ type: 'prep', duration: prep, exercise: list[0], set: 1, slot: 0, next: list[0] });
     }
@@ -319,6 +392,8 @@
       total: t,
       workSeconds: segs.reduce(function (a, g) { return a + (g.type === 'work' || g.type === 'jacks' ? g.duration : 0); }, 0),
       intervals: segs.filter(function (g) { return g.type === 'work'; }).length,
+      warmupSeconds: segs.reduce(function (a, g) { return a + (g.type === 'warmup' ? g.duration : 0); }, 0),
+      warmupEnd: segs.reduce(function (a, g) { return g.type === 'warmup' ? g.end : a; }, 0),
       setRest: setRest
     };
   }
@@ -356,6 +431,7 @@
     LEVELS: LEVELS, MIN_EXERCISES: MIN_EXERCISES, MAX_EXERCISES: MAX_EXERCISES,
     DEFAULT_COUNT: DEFAULT_COUNT, PREP_SECONDS: PREP_SECONDS, SET_REST_SECONDS: SET_REST_SECONDS,
     nextWorkIndex: nextWorkIndex,
+    WARMUP_MOVES: WARMUP_MOVES, WARMUP_STEPS: WARMUP_STEPS, WARMUP_SECONDS: WARMUP_SECONDS,
     get: get, sanitize: sanitize, coverage: coverage, validate: validate,
     randomPick: randomPick, resize: resize, arrange: arrange, adjacencyScore: adjacencyScore,
     buildTimeline: buildTimeline, segmentAt: segmentAt, formatTime: formatTime, clampCount: clampCount

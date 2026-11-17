@@ -18,6 +18,7 @@
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
     rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest · up next', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
+    warmup: { colors: ['#b18cff', '#22e5ff'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
     setrest: { colors: ['#36ffc0', '#9b5cff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
     done: { colors: ['#ffd23f', '#ff2bd6'], energy: 0.55, chip: '', flash: '' }
   };
@@ -38,27 +39,30 @@
       phase: {
         setup: [['#9b5cff', '#22e5ff'], 0.22], prep: [['#b9a8ff', '#5a6bff'], 0.45], work: [['#ff2bd6', '#ff8a1f'], 1.0],
         rest: [['#22e5ff', '#4a6bff'], 0.18], jacks: [['#c6ff1a', '#ffe14a'], 0.8], setrest: [['#36ffc0', '#9b5cff'], 0.1],
+        warmup: [['#b18cff', '#22e5ff'], 0.5],
         done: [['#ffd23f', '#ff2bd6'], 0.55]
       },
-      group: { upper: ['#ff4fd8', '#ff8a1f'], abs: ['#2ee6ff', '#4a6bff'], legs: ['#ffb21f', '#ff4f6a'], cardio: ['#c6ff1a', '#ffe14a'], rest: ['#22e5ff', '#4a6bff'] }
+      group: { upper: ['#ff4fd8', '#ff8a1f'], abs: ['#2ee6ff', '#4a6bff'], legs: ['#ffb21f', '#ff4f6a'], cardio: ['#c6ff1a', '#ffe14a'], rest: ['#22e5ff', '#4a6bff'], warmup: ['#b18cff', '#22e5ff'] }
     },
     'studio-dark': {
       style: 'studio', scheme: 'dark', meta: '#151516', fps: 30,
       phase: {
         setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#c3c9d4', '#8790a3'], 0.3], work: [['#ff5a36', '#ff3b30'], 0.7],
         rest: [['#2fb8ff', '#3b82f6'], 0.2], jacks: [['#ffc23d', '#ff9f0a'], 0.6], setrest: [['#34d399', '#14b8a6'], 0.1],
+        warmup: [['#a78bfa', '#7c6cf0'], 0.4],
         done: [['#ff5a36', '#ffb020'], 0.5]
       },
-      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'] }
+      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'], warmup: ['#a78bfa', '#7c6cf0'] }
     },
     'studio-light': {
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
         setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
         rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#bd6b00', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
+        warmup: [['#6d4fd8', '#5b3fc4'], 0.4],
         done: [['#d4380f', '#c76a0a'], 0.5]
       },
-      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'] }
+      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'], warmup: ['#6d4fd8', '#5b3fc4'] }
     }
   };
   var htmlEl = document.documentElement;
@@ -80,7 +84,7 @@
     charcoal: {
       material: 'stone', meta: '#1a1918',
       phase: { setup: ['#d8c8b8', '#c9b8a6'], prep: ['#c9bfb2', '#8f867b'], work: ['#ff6b3d', '#f04a2a'], rest: ['#5fb3e8', '#6b8fd6'],
-        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'] }
+        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'], warmup: ['#b7a3f0', '#8f7ad8'] }
     }
   };
   var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'charcoal';
@@ -96,6 +100,7 @@
     if (look === 'studio-dark' && V.phase) {
       Object.keys(V.phase).forEach(function (k) { PHASE[k].colors = V.phase[k]; });
       GROUP_COLORS.cardio = V.phase.jacks; GROUP_COLORS.rest = V.phase.rest;
+      if (V.phase.warmup) GROUP_COLORS.warmup = V.phase.warmup;
     }
   }
   applyPalette();
@@ -108,7 +113,7 @@
   function savePrefs() {
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
-        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref,
+        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -121,6 +126,7 @@
   var state = {
     level: Object.prototype.hasOwnProperty.call(H.LEVELS, prefs.level) ? prefs.level : 'easy',
     ids: H.randomPick(H.DEFAULT_COUNT),
+    warmup: prefs.warmup !== false,
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -293,7 +299,7 @@
     $('start').disabled = !v.ok;
     $('startError').textContent = v.ok ? '' : v.reason;
 
-    var tl = H.buildTimeline(ids, state.level);
+    var tl = H.buildTimeline(ids, state.level, { warmup: state.warmup });
     var total = v.ok ? H.formatTime(tl.total) : '--:--';
     $('sumLevel').textContent = level.name + ' · ' + level.sets + ' sets';
     $('sumTotal').textContent = total;
@@ -313,6 +319,9 @@
       });
     }
     $('legendRecover').innerHTML = level.recoverType === 'jacks' ? '<i class="k-jacks"></i>Jumping jacks' : '<i class="k-rest"></i>Rest';
+    $('wuToggle').setAttribute('aria-checked', state.warmup ? 'true' : 'false');
+    $('wuTime').textContent = H.formatTime(H.WARMUP_SECONDS);
+    $('legendWarmup').hidden = !state.warmup;
 
     if (hero.shown && ids.indexOf(hero.shown) < 0 && !hero.hover) showHero(ids[0] || 'rest');
     renderMe();
@@ -363,7 +372,7 @@
     var sheet = $('coachSheet');
     sheet.style.setProperty('--gc', gc[0]);
     sheet.style.setProperty('--gc2', gc[1]);
-    $('csGroup').textContent = (H.GROUPS[ex.group] ? H.GROUPS[ex.group].label : 'Cardio') + ' · Trainer’s guide';
+    $('csGroup').textContent = (H.GROUPS[ex.group] ? H.GROUPS[ex.group].label : ex.group === 'warmup' ? 'Warm-up' : 'Cardio') + ' · Trainer’s guide';
     $('csName').textContent = ex.name;
     $('csMuscles').textContent = ex.muscles;
     fillList($('csSteps'), ex.steps);
@@ -381,8 +390,8 @@
     sheet.hidden = false;
     sheet.scrollTop = 0;
     suspendBehindSheet(true);
-    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: id, primary: gc[0], secondary: gc[1], quality: 'high', energy: 0.9 });
-    guide.fig.setExercise(id);
+    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: figIdFor(id), primary: gc[0], secondary: gc[1], quality: 'high', energy: 0.9 });
+    guide.fig.setExercise(figIdFor(id));
     guide.fig.setColors(gc[0], gc[1]);
     guide.fig.setPlaying(true);
     guide.fig.pulse();
@@ -921,7 +930,7 @@
     var v = H.validate(ids);
     if (!v.ok) { $('startError').textContent = v.reason; return; }
     A.unlock();
-    var tl = H.buildTimeline(ids, state.level);
+    var tl = H.buildTimeline(ids, state.level, { warmup: state.warmup });
     run = {
       tl: tl, ids: H.sanitize(ids), level: state.level,
       base: 0, anchor: performance.now(), playing: true,
@@ -1038,6 +1047,26 @@
   function spoken(id) { return exName(id).toLowerCase(); }
   function clock(sec) { return H.formatTime(Math.ceil(Math.max(0, sec) - 1e-6)); }
 
+  // ---------------------------------------------------------------- warm-up helpers
+  var COUNT_WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+  /** Figure animation for an exercise or warm-up move id (guide uses the left side / slow pace). */
+  function figIdFor(id) { return { jog: 'jog-slow', hamstring: 'hamstring-l', calf: 'calf-l' }[id] || id; }
+  function warmFigId(seg) {
+    if (seg.move === 'jog') return seg.pace === 'quick' ? 'jog-quick' : 'jog-slow';
+    if (seg.move === 'hamstring' || seg.move === 'calf') return seg.move + '-' + (seg.side === 'right' ? 'r' : 'l');
+    return seg.move;
+  }
+  function warmName(seg) {
+    if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
+    return exName(seg.move) + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') : '');
+  }
+  function warmSpoken(seg) {
+    if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog!' : 'Jog on the spot, nice and slow.';
+    var base = spoken(seg.move) + (seg.side ? ', ' + seg.side + ' leg' : '');
+    return base + (seg.counts ? '. ' + COUNT_WORDS[seg.counts - 1] + ' counts of ' + COUNT_WORDS[seg.beats - 1] + '.' : '.');
+  }
+  var WARM_WORD = { jacks: 'JACKS', squat: 'SQUATS', pecstretch: 'STRETCH', hamstring: 'STRETCH', calf: 'STRETCH', jog: 'JOG' };
+
   /** What the trainer panel cycles through during a segment, and how fast. */
   function coachPlan(seg) {
     var ex = H.get(seg.exercise);
@@ -1056,6 +1085,12 @@
           [{ k: 'Breathing', v: H.JACKS.breathe }]) };
       case 'rest':
         return { period: 7.5, items: nx ? steps(nx) : [{ k: 'Recover', v: H.REST.cue }] };
+      case 'warmup': {
+        var m = H.get(seg.move);
+        return { period: 5, items: [{ k: 'Form', v: m.cue }].concat(
+          m.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
+          [{ k: 'Breathing', v: m.breathe }]) };
+      }
       case 'setrest': {
         var items = [];
         var tips = H.SET_BREAK_TIPS;
@@ -1072,6 +1107,7 @@
 
   /** The exercise the "How to" button explains right now. */
   function guideTarget(seg) {
+    if (seg.type === 'warmup') return seg.move;
     if (seg.type === 'work' || seg.type === 'prep') return seg.exercise;
     if (seg.type === 'jacks') return 'jacks';
     return seg.next || run.tl.exercises[0];
@@ -1084,7 +1120,9 @@
     run.coachIdx = -1;
     run.figSwapped = false;
     run.inhale = null;
+    run.lastBeat = null;
     document.body.dataset.phase = seg.type;
+    var prevSeg = tl.segments[idx - 1];
     var c = ph.colors;
 
     bg.setMood(c[0], c[1], ph.energy);
@@ -1094,11 +1132,11 @@
     ring.breathe = seg.type === 'setrest' ? 0 : null;
     ring.dashed = seg.type === 'jacks';
     ring.energy = ph.energy;
-    ring.ticks = Math.min(seg.duration, 60);
+    ring.ticks = seg.counts ? seg.counts * seg.beats : Math.min(seg.duration, 60);
     ring.shock(1);
     ring.hot = 1;
 
-    var figEx = seg.type === 'rest' ? (seg.next || 'rest') : seg.type === 'setrest' ? 'rest' : seg.exercise;
+    var figEx = seg.type === 'warmup' ? warmFigId(seg) : seg.type === 'rest' ? (seg.next || 'rest') : seg.type === 'setrest' ? 'rest' : seg.exercise;
     if (workFig) {
       workFig.setExercise(figEx);
       workFig.setColors(c[0], c[1]);
@@ -1111,10 +1149,20 @@
     var nEx = tl.exercises.length;
     var ex = H.get(seg.exercise);
     var nx = seg.next ? H.get(seg.next) : null;
-    $('wSet').textContent = seg.set + '/' + level.sets;
+    $('wSet').textContent = seg.type === 'warmup' ? '–' : seg.set + '/' + level.sets;
     $('phaseChip').textContent = ph.chip;
     var name, label, sub;
-    if (seg.type === 'prep') {
+    var flashWord = ph.flash;
+    $('beats').hidden = !(seg.type === 'warmup' && seg.counts);
+    if (seg.type === 'warmup') {
+      name = warmName(seg); label = seg.counts ? 'Count' : 'Time left';
+      sub = name;
+      $('wEx').textContent = 'Warm-up · ' + seg.step + ' of ' + seg.steps;
+      if (prevSeg && prevSeg.type === 'warmup') {
+        // one wipe per new move; a side swap says SWITCH; a pace change needs no wipe
+        flashWord = prevSeg.move !== seg.move ? WARM_WORD[seg.move] : prevSeg.side !== seg.side ? 'SWITCH' : '';
+      }
+    } else if (seg.type === 'prep') {
       name = ex.name; label = 'Starting in'; sub = 'First up · ' + ex.name;
       $('wEx').textContent = 'Exercise 1 of ' + nEx;
     } else if (seg.type === 'work') {
@@ -1141,15 +1189,17 @@
       : seg.type === 'jacks' ? 'Jumping jacks, ' + mins + '.'
       : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + name + '.'
       : seg.type === 'setrest' ? 'Set ' + seg.set + ' complete. Break, ' + mins + '.'
+      : seg.type === 'warmup' ? 'Warm-up: ' + name + (seg.counts ? ', ' + seg.counts + ' counts of ' + seg.beats + '.' : ', ' + mins + '.')
       : 'Get ready. First up: ' + name + '.';
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
-    var skipLabel = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
-    var showStart = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
+    var skipLabel = seg.type === 'warmup' ? 'Skip warm-up' : seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
+    var showStart = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest' || seg.type === 'warmup';
     $('skip').classList.toggle('has-text', showStart);
     $('skipText').textContent = skipLabel;
-    $('skip').setAttribute('aria-label', showStart ? skipLabel + ': ' + exName(seg.next || seg.exercise) : 'Next interval');
+    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Skip the warm-up and get ready to start'
+      : showStart ? skipLabel + ': ' + exName(seg.next || seg.exercise) : 'Next interval');
 
     // progress bar
     var bars = $('segs').children;
@@ -1159,7 +1209,7 @@
     }
 
     // flash, particles, sound, voice
-    flash(ph.flash, sub, false, c);
+    if (flashWord) flash(flashWord, sub, false, c);
     var stage = $('stage').getBoundingClientRect();
     var scx = stage.left + stage.width / 2, scy = stage.top + stage.height / 2;
     fx.burst(scx, scy, c.concat(['#ffffff']), seg.type === 'work' ? 110 : 50, seg.type === 'work' ? 1.1 : 0.6);
@@ -1178,6 +1228,15 @@
 
   /** Sound, vibration and voice for the start of an interval. */
   function cueSegment(seg) {
+    if (seg.type === 'warmup') {
+      var pv = run.tl.segments[seg.index - 1];
+      var first = !pv || pv.type !== 'warmup';
+      if (first) { A.play('go'); buzz([60, 40, 60]); A.say('Warm up. ' + warmSpoken(seg)); }
+      else if (pv.move === seg.move && pv.side !== seg.side) { A.play('click'); A.say('Switch. ' + seg.side + ' leg.'); }
+      else if (pv.move === seg.move) { A.play('halfway'); A.say(warmSpoken(seg)); }
+      else { A.play('click'); buzz(40); A.say(warmSpoken(seg)); }
+      return;
+    }
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
     else if (seg.type === 'rest' || seg.type === 'setrest') { A.play('rest'); buzz(80); }
     else if (seg.type === 'jacks') { A.play('jacks'); buzz([60, 40, 60]); }
@@ -1231,6 +1290,10 @@
 
   /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
+    if (seg.type === 'warmup') {
+      if (!seg.counts) setDigits(String(whole), whole + ' seconds left');
+      return;
+    }
     var long = seg.duration >= 60;
     setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
     var dg = $('digits');
@@ -1300,6 +1363,12 @@
   function nextLine(idx, t) {
     var tl = run.tl, segs = tl.segments, seg = segs[idx];
     var nw = H.nextWorkIndex(tl, idx);
+    if (seg.type === 'warmup') {
+      var ns = segs[idx + 1];
+      if (!ns) return '';
+      if (ns.type === 'warmup') return 'Next: <b>' + esc(warmName(ns)) + '</b> in <b>' + clock(ns.start - t) + '</b>';
+      return 'Then: <b>get ready</b> in <b>' + clock(ns.start - t) + '</b>';
+    }
     if (seg.type === 'prep') return '';
     if (seg.type === 'rest') return '';
     if (seg.type === 'setrest') return nw >= 0 ? 'First up: <b>' + esc(exName(segs[nw].exercise)) + '</b>' : '';
@@ -1313,6 +1382,26 @@
     }
     if (seg.type === 'work' && segs[idx + 1] && segs[idx + 1].type === 'jacks') return 'Then <b>30s jumping jacks</b> to finish';
     return '<b>Last interval.</b> Finish strong!';
+  }
+
+  /** Counted warm-up steps: one call per beat ("1, 2, 3, ONE"). */
+  function onBeat(seg, bi, prev) {
+    var count = Math.floor(bi / seg.beats) + 1, beat = bi % seg.beats + 1;
+    setDigits(String(count), 'Count ' + count + ' of ' + seg.counts);
+    var dots = $('beats').children;
+    for (var i = 0; i < dots.length; i++) { dots[i].classList.toggle('on', i < beat); dots[i].classList.toggle('now', i === beat - 1); }
+    var natural = prev != null && bi === prev + 1 && run.playing;
+    if (!natural) return;
+    var dg = $('digits');
+    if (beat === seg.beats) {
+      A.play('beatAccent');
+      A.say(COUNT_WORDS[count - 1]);
+      bg.beatNow(0.5); ring.beat = 1;
+      dg.classList.remove('tick'); void dg.offsetWidth; dg.classList.add('tick');
+    } else {
+      A.play('beat');
+      bg.beatNow(0.2);
+    }
   }
 
   function update() {
@@ -1333,6 +1422,10 @@
       var wn = $('wNext');
       wn.innerHTML = nl;
       wn.hidden = !nl;
+    }
+    if (seg.type === 'warmup' && seg.counts) {
+      var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start) / seg.beat + 1e-6)));
+      if (bi !== run.lastBeat) { var pb = run.lastBeat; run.lastBeat = bi; onBeat(seg, bi, pb); }
     }
     updateCoach(seg, t);
 
@@ -1575,7 +1668,13 @@
     $('pause').addEventListener('click', function () { if (run) setPlaying(!run.playing); });
     $('resume').addEventListener('click', function () { setPlaying(true); });
     $('endFromPause').addEventListener('click', function () { endRun(); showScreen('setup'); });
-    $('skip').addEventListener('click', skip);
+    $('skip').addEventListener('click', function () {
+      if (run && run.tl.segments[run.segIdx] && run.tl.segments[run.segIdx].type === 'warmup') { A.play('click'); A.stopVoice(); seek(run.tl.warmupEnd); }
+      else skip();
+    });
+    $('wuToggle').addEventListener('click', function () {
+      state.warmup = !state.warmup; A.play('click'); renderSetup();
+    });
     $('prev').addEventListener('click', prev);
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });

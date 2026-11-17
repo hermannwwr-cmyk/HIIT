@@ -77,6 +77,8 @@
     },
     halfway: function (t) { tone(987.77, t, 0.08, { vol: 0.2 }); tone(987.77, t + 0.12, 0.08, { vol: 0.2 }); },
     click: function (t) { tone(1400, t, 0.04, { type: 'triangle', vol: 0.12 }); },
+    beat: function (t) { tone(1046.5, t, 0.05, { type: 'triangle', vol: 0.22 }); },
+    beatAccent: function (t) { tone(1568, t, 0.09, { type: 'triangle', vol: 0.32 }); tone(784, t, 0.12, { type: 'sine', vol: 0.18 }); },
     finish: function (t) {
       var notes = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98];
       notes.forEach(function (f, i) { tone(f, t + i * 0.09, 0.6, { type: 'sawtooth', vol: 0.13, filter: 4000 }); });

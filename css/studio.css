@@ -36,6 +36,7 @@
   --setup-a: #ff5a36; --setup-b: #4f7dff;
   --gold-a: #ff5a36; --gold-b: #ffb020;
   --break-a: #34d399; --break-b: #14b8a6;
+  --warm-a: #a78bfa; --warm-b: #7c6cf0;
   --g-upper: #ff7a59;
   --g-abs: #38bdf8;
   --g-legs: #fbbf24;
@@ -73,6 +74,7 @@
   --setup-a: #f0441f; --setup-b: #3d6bff;
   --gold-a: #f0441f; --gold-b: #f59e0b;
   --break-a: #059669; --break-b: #0f766e;
+  --warm-a: #6d4fd8; --warm-b: #5b3fc4;
   --g-upper: #ea580c;
   --g-abs: #0284c7;
   --g-legs: #b45309;
@@ -632,6 +634,7 @@
   --shadow-1: 0 1px 0 rgba(255, 244, 230, .07) inset, 0 1px 2px rgba(0, 0, 0, .3), 0 22px 44px -26px rgba(0, 0, 0, .85);
   --work-a: #ff6b3d; --work-b: #f04a2a; --rest-a: #5fb3e8; --rest-b: #6b8fd6; --jacks-a: #f2b544; --jacks-b: #e8873a;
   --prep-a: #c9bfb2; --prep-b: #8f867b; --break-a: #5fcf9f; --break-b: #3fb3a0; --gold-a: #ff6b3d; --gold-b: #f2b544;
+  --warm-a: #b7a3f0; --warm-b: #8f7ad8;
   --setup-a: #d8c8b8; --setup-b: #c9b8a6;
 }
 
@@ -641,3 +644,12 @@
 [data-look="studio"][data-scheme="dark"] .ex-badge { background: var(--btn-bg); color: var(--btn-ink); }
 [data-look="studio"][data-scheme="dark"] .done-stats div { background: var(--surface); }
 [data-look="studio"][data-scheme="dark"][data-dark="charcoal"] .ctl-main { background: #ece6de; }
+
+/* ---------- warm-up (Studio) ---------- */
+[data-look="studio"] .strip .s-warmup, [data-look="studio"] .strip-legend .k-warmup { background: color-mix(in srgb, var(--warm-a) 55%, transparent); opacity: 1; }
+[data-look="studio"] .segs i.t-warmup { --sc: var(--warm-a); }
+[data-look="studio"] .wu-row { background: var(--surface-2); border-color: var(--line); border-radius: 14px; }
+[data-look="studio"] .wu-k { font: 600 14px/1.2 var(--ui); }
+[data-look="studio"] .switch { background: color-mix(in srgb, var(--text) 14%, transparent); border-color: var(--line-hi); }
+[data-look="studio"] .switch[aria-checked="true"] { background: var(--btn-bg, var(--accent)); }
+[data-look="studio"] .beats i { border-color: color-mix(in srgb, var(--c1) 50%, transparent); }

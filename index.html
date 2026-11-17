@@ -167,9 +167,17 @@
         <div><dt>Active</dt><dd id="sumWork">7:30</dd></div>
         <div><dt>Intervals</dt><dd id="sumIntervals">15</dd></div>
       </dl>
+      <div class="wu-row">
+        <div class="wu-text">
+          <span class="wu-k">Warm-up first</span>
+          <span class="wu-v">Jog, jumping jacks, squats and stretches · <b id="wuTime">2:52</b></span>
+        </div>
+        <button id="wuToggle" class="switch" type="button" role="switch" aria-checked="true" aria-label="Warm-up before the workout"><span aria-hidden="true"></span></button>
+      </div>
       <div class="strip" id="strip" aria-hidden="true"></div>
       <div class="strip-legend" aria-hidden="true">
         <span><i class="k-work"></i>Exercise</span>
+        <span id="legendWarmup"><i class="k-warmup"></i>Warm-up</span>
         <span id="legendRecover"><i class="k-rest"></i>Rest</span>
         <span><i class="k-setrest"></i>Set break 5:00</span>
         <span><i class="k-prep"></i>Get ready</span>
@@ -211,6 +219,7 @@
     <div class="w-readout">
       <p class="d-label" id="dLabel">Starting in</p>
       <div class="digits" id="digits" role="timer" aria-label="10 seconds left"></div>
+      <div class="beats" id="beats" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <p class="w-next" id="wNext"></p>
       <div class="coach" id="coach">
         <div class="coach-top">

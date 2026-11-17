@@ -13,9 +13,11 @@ function seeded(seed) {
   };
 }
 
-test('catalogue has the 7 requested exercises in 3 groups', () => {
+test('catalogue has the 8 exercises (incl. shoulder taps) in 3 groups', () => {
   assert.deepEqual(H.EXERCISES.map(e => e.id),
-    ['pushup', 'crunch', 'legraise', 'squat', 'lunge', 'flutter', 'twist']);
+    ['pushup', 'shouldertap', 'crunch', 'legraise', 'squat', 'lunge', 'flutter', 'twist']);
+  assert.equal(H.get('shouldertap').group, 'upper');
+  assert.equal(H.MAX_EXERCISES, 8);
   for (const g of ['upper', 'abs', 'legs']) {
     assert.ok(H.EXERCISES.some(e => e.group === g), g);
   }
@@ -40,7 +42,7 @@ test('random pick works for every allowed count and clamps the rest', () => {
     }
   }
   assert.equal(H.randomPick(1).length, 3);
-  assert.equal(H.randomPick(99).length, 7);
+  assert.equal(H.randomPick(99).length, 8);
 });
 
 test('random picks vary', () => {
@@ -179,4 +181,41 @@ test('formatTime', () => {
   assert.equal(H.formatTime(0), '0:00');
   assert.equal(H.formatTime(59.6), '1:00');
   assert.equal(H.formatTime(870), '14:30');
+});
+
+test('random picks use both upper-body exercises', () => {
+  const uppers = new Set();
+  for (let s = 1; s <= 300; s++) H.randomPick(5, seeded(s)).forEach(id => { if (H.get(id).group === 'upper') uppers.add(id); });
+  assert.deepEqual([...uppers].sort(), ['pushup', 'shouldertap']);
+});
+
+test('warm-up: jog slow/quick ×2, then 5 counts of 4 for each move, then get ready', () => {
+  const ids = ['pushup', 'crunch', 'squat'];
+  const tl = H.buildTimeline(ids, 'easy', { warmup: true });
+  const wu = tl.segments.filter(s => s.type === 'warmup');
+  assert.deepEqual(wu.map(s => s.exercise + (s.pace ? ':' + s.pace : '') + (s.side ? ':' + s.side : '')), [
+    'jog:slow', 'jog:quick', 'jog:slow', 'jog:quick', 'jacks', 'pecstretch', 'squat',
+    'hamstring:left', 'hamstring:right', 'calf:left', 'calf:right']);
+  wu.slice(0, 4).forEach(s => assert.equal(s.duration, 10));
+  wu.slice(4).forEach(s => { assert.equal(s.counts, 5); assert.equal(s.beats, 4); assert.equal(s.duration, s.counts * s.beats * s.beat); });
+  // warm-up comes first, then the usual get-ready, then the first exercise
+  assert.equal(tl.segments[0].type, 'warmup');
+  assert.equal(tl.segments[wu.length].type, 'prep');
+  assert.equal(tl.segments[wu.length + 1].type, 'work');
+  assert.equal(tl.warmupEnd, H.WARMUP_SECONDS);
+  assert.equal(tl.warmupSeconds, H.WARMUP_SECONDS);
+  assert.equal(H.formatTime(H.WARMUP_SECONDS), '2:52');
+  const plain = H.buildTimeline(ids, 'easy');
+  assert.equal(tl.total, plain.total + H.WARMUP_SECONDS);
+  assert.equal(tl.intervals, plain.intervals);
+  assert.equal(tl.workSeconds, plain.workSeconds, 'warm-up is not counted as exercise time');
+});
+
+test('warm-up moves have trainer content and are not selectable workout exercises', () => {
+  for (const k of ['jog', 'pecstretch', 'hamstring', 'calf']) {
+    const m = H.WARMUP_MOVES[k];
+    assert.equal(m.steps.length, 4, k);
+    assert.ok(m.cue && m.breathe && m.cues.length >= 3, k);
+  }
+  assert.deepEqual(H.sanitize(['jog', 'pecstretch', 'pushup']), ['pushup']);
 });
