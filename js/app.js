@@ -681,8 +681,7 @@
     ctx.lineWidth = th;
     if (this.dashed) {
       // jumping jacks: a dotted ring (non-colour cue)
-      var seg = TAU * R / 72;
-      ctx.setLineDash([0.01, seg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.42;
+      ctx.setLineDash([0.01, th * 0.9]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.3;
     }
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
     ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.lineWidth = th;
@@ -704,8 +703,8 @@
       ctx.lineWidth = th;
       if (this.dashed) {
         // the live arc becomes a run of beads during jacks, readable without colour
-        var dseg = TAU * R / 72;
-        ctx.setLineDash([0.01, dseg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.78;
+        var dseg = TAU * R / 60;
+        ctx.setLineDash([0.01, dseg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.62;
       }
       ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
       ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.lineWidth = th;
