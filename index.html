@@ -226,11 +226,14 @@
             <p class="dial-sub" id="dialSub"></p>
           </div>
         </div>
+        <!-- a copy of the destination's own layout, so finishing a swipe changes nothing -->
         <div class="ri-peek" id="riPeek" aria-hidden="true">
-          <p class="pk-k" id="pkK">Next</p>
-          <p class="pk-name" id="pkName"></p>
           <canvas id="peekFig" class="pk-fig"></canvas>
-          <p class="pk-t" id="pkT"></p>
+          <div class="dial pk-dial" id="pkDial">
+            <p class="dial-k" id="pkK"></p>
+            <div class="digits dial-digits" id="pkDigits"></div>
+            <p class="dial-sub" id="pkSub"></p>
+          </div>
         </div>
       </div>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">

@@ -733,7 +733,6 @@
 }
 
 /* swipe carousel + first-run tip (Studio) */
-[data-look="studio"] .pk-k { font: 600 15px/1.2 var(--ui); letter-spacing: 0; color: color-mix(in srgb, var(--dc, var(--c1)) 80%, var(--text)); }
-[data-look="studio"] .pk-name { font-weight: 600; letter-spacing: -.03em; }
-[data-look="studio"] .pk-t { font-weight: 200; }
 [data-look="studio"] .wp-tip { font-weight: 500; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }
+[data-look="studio"] .workout .w-head.pv-active .w-name { color: var(--text); }
+[data-look="studio"] .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 72%, var(--text)); }

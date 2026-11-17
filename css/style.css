@@ -1252,20 +1252,26 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .workout { touch-action: pan-y pinch-zoom; }
 .ring-in { position: absolute; inset: 0; pointer-events: none; }
 .w-stage.carousel .ring-in { clip-path: circle(var(--ri, 140px) at 50% var(--cy, 50%)); }
-.ri-cur { position: absolute; inset: 0; transform: translateX(var(--sx, 0px)); }
-.ri-peek {
-  position: absolute; left: 0; right: 0; top: calc(var(--fy, 50%) - var(--fh, 200px) / 2); height: var(--fh, 200px);
-  display: none; align-content: center; justify-items: center; gap: 4px; text-align: center;
-  transform: translateX(var(--px, 0px));
+/* what's on now: leaves with the finger, fading and shrinking a touch */
+.ri-cur {
+  position: absolute; inset: 0; transform-origin: 50% var(--fy, 50%);
+  transform: translateX(var(--sx, 0px)) scale(var(--ss, 1)); opacity: var(--so, 1);
 }
-.w-stage.carousel .ri-peek { display: grid; }
-.w-stage.settle .ri-cur, .w-stage.settle .ri-peek { transition: transform .24s cubic-bezier(.3,.9,.3,1); }
-.pk-k { margin: 0; font: 700 14px/1.2 var(--ui); letter-spacing: .04em; color: var(--dc, var(--c1)); }
-.pk-name { margin: 0; max-width: calc(var(--ri, 140px) * 1.55); font: 700 clamp(20px, calc(var(--fh, 200px) * .13), 30px)/1.1 var(--ui); color: var(--text); text-wrap: balance; }
-.pk-fig { display: none; width: calc(var(--fh, 200px) * .68); height: calc(var(--fh, 200px) * .68); }
-.ri-peek.has-fig .pk-fig { display: block; }
-.pk-t { margin: 0; font: 300 calc(var(--fh, 200px) * .34)/1 var(--ui); color: var(--dc, var(--c1)); font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
-.pk-t:empty { display: none; }
+/* where you're going: an exact copy of its own layout, easing in from the side */
+.ri-peek { position: absolute; inset: 0; display: none; opacity: var(--po, 0); transform: translateX(var(--px, 0px)); }
+.w-stage.carousel .ri-peek { display: block; }
+.w-stage.settle .ri-cur, .w-stage.settle .ri-peek { transition: transform .22s cubic-bezier(.3,.9,.3,1), opacity .22s ease; }
+.w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial { transition: none !important; }
+.pk-fig { position: absolute; left: 50%; top: var(--fy, 50%); transform: translate(-50%, -50%); width: var(--fig-size, 60%); height: var(--fig-size, 60%); display: none; }
+.ri-peek.is-fig .pk-fig { display: block; }
+.ri-peek .pk-dial { display: none; }
+.ri-peek.is-dial .pk-dial { display: grid; opacity: 1; }
+.w-head.swap .w-tag, .w-head.swap .w-name { animation: headSwap .18s ease; }
+.workout .w-head.pv-active .w-name { color: var(--text); }
+.workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
+@keyframes headSwap { from { opacity: .25; } }
+#skip.pulse, #prev.pulse { animation: ctlPulse .6s ease 2; }
+@keyframes ctlPulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--c1) 40%, transparent); } }
 #prev, #skip { position: relative; }
 #prev::before, #skip::before {
   content: ""; position: absolute; inset: 1px; border-radius: 50%; pointer-events: none;
