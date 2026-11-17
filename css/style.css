@@ -1055,6 +1055,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .w-ex:empty { display: none; }
 .w-ex b { font-weight: inherit; color: var(--c1); }
 .workout[data-mode="rest"] .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
+body[data-phase="prep"] .workout .w-name { color: var(--text); }
 
 /* rest dial: the countdown inside the ring, above the controls */
 .dial {
@@ -1200,7 +1201,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .w-lower { grid-area: lower; justify-items: stretch; align-self: start; }
   .w-readout { grid-area: auto; justify-items: start; }
   .coach { width: 100%; }
-  .upnext { left: 0; width: 100%; transform: translateY(-50%); animation: none; }
+  .upnext { left: 0; top: 0; width: 100%; transform: none; animation: none; }
   .w-prog { width: 100%; max-width: 1240px; justify-self: center; }
 }
 @media (max-height: 760px) and (max-aspect-ratio: 5/4) {
@@ -1230,6 +1231,8 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .upnext.q1 .un-mus { display: none; }
 .upnext.q2 .un-meta { display: none; }
 .upnext.q3 .un-k { display: none; }
+.un-pre { display: none; }
+.upnext.q3 .un-pre { display: inline; font-size: .62em; font-weight: 700; color: var(--c1); letter-spacing: .02em; vertical-align: .12em; }
 .upnext.compact .un-name { font-size: clamp(20px, 6vw, 26px); }
 .upnext.q4 .un-name { font-size: 19px; }
 .upnext.q4 .un-start { height: 42px; font-size: 13px; }

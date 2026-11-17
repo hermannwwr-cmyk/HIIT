@@ -523,7 +523,9 @@
     function pill(S) {
       // three fixed slots, so the opening never changes shape between phases
       var ph = Math.round(Math.max(56, Math.min(84, S * 0.19)));
-      var main = ph - 10, side = Math.max(44, Math.round(ph * 0.72));
+      var side = Math.max(44, Math.round(ph * 0.72));
+      var main = Math.max(ph - 10, side + 8); // pause always clearly the biggest
+      ph = Math.max(ph, main + 10);
       return { ph: ph, main: main, side: side, pw: side * 2 + main + 12 * 2 + 5 * 2 + 2 }; // 12px between buttons
     }
     function fit(S) {
@@ -1023,7 +1025,9 @@
     $('unK').textContent = seg.type === 'prep' ? 'First up · 1 of ' + of
       : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) + ' · first up'
       : 'Up next · ' + n + ' of ' + of;
-    $('unName').textContent = ex.name;
+    // when the card is too small for its label row, "Next ·" folds into the name line
+    var pre = seg.type === 'prep' ? 'First' : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) : 'Next';
+    $('unName').innerHTML = '<span class="un-pre">' + esc(pre) + ' · </span>' + esc(ex.name);
     $('unMeta').innerHTML = '<b>' + esc(H.GROUPS[ex.group].label) + '</b><span class="un-mus"> · ' + esc(ex.muscles) + '</span>';
     $('unStartText').textContent = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
     // a 30 s rest is part of the workout: starting early is possible, not encouraged

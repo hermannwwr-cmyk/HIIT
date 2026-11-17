@@ -665,6 +665,11 @@
 [data-look="studio"] .w-ex { font: 500 15px/1.2 var(--ui); color: var(--dim); }
 [data-look="studio"] .w-ex b { font-weight: 600; color: var(--text); }
 [data-look="studio"] .workout[data-mode="rest"] .w-name { color: color-mix(in srgb, var(--c1) 72%, var(--text)); }
+[data-look="studio"] body[data-phase="prep"] .workout .w-name { color: var(--text); }
+[data-look="studio"] .upnext.q3 .un-pre { color: color-mix(in srgb, var(--c1) 75%, var(--text)); font-weight: 600; }
+@media (min-height: 761px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .w-stage { margin-top: 8px; }
+}
 
 [data-look="studio"] .transport {
   padding: 5px; gap: 12px;
