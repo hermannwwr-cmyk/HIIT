@@ -53,13 +53,30 @@ test('random picks vary', () => {
   assert.ok(seen.size > 30, `only ${seen.size} distinct workouts`);
 });
 
-test('arrange spreads muscle groups when it can', () => {
-  const ids = ['crunch', 'legraise', 'pushup', 'squat', 'lunge'];
-  for (let s = 1; s <= 100; s++) {
-    const a = H.arrange(ids, seeded(s));
-    assert.deepEqual([...a].sort(), [...ids].sort());
-    assert.equal(H.adjacencyScore(a, true), 0, a.join(','));
+const GI = id => H.GROUP_ORDER.indexOf(H.get(id).group);
+const inGroupOrder = ids => ids.every((id, i) => i === 0 || GI(ids[i - 1]) <= GI(id));
+
+test('workouts run upper body, then abs, then legs', () => {
+  for (let n = H.MIN_EXERCISES; n <= H.MAX_EXERCISES; n++) {
+    for (let s = 1; s <= 300; s++) {
+      const ids = H.randomPick(n, seeded(s * 17 + n));
+      assert.ok(inGroupOrder(ids), ids.join(','));
+    }
   }
+  // any selection is run in group order; within a group the picked order is kept
+  assert.deepEqual(H.order(['squat', 'twist', 'pushup', 'crunch', 'lunge']), ['pushup', 'twist', 'crunch', 'squat', 'lunge']);
+  const tl = H.buildTimeline(['lunge', 'flutter', 'shouldertap', 'squat', 'crunch'], 'easy');
+  assert.deepEqual(tl.exercises, ['shouldertap', 'flutter', 'crunch', 'lunge', 'squat']);
+  assert.deepEqual(tl.segments.filter(s => s.type === 'work' && s.set === 1).map(s => s.exercise), tl.exercises);
+});
+
+test('random picks vary their order within a group', () => {
+  const seen = new Set();
+  for (let s = 1; s <= 200; s++) {
+    const abs = H.randomPick(8, seeded(s)).filter(id => H.get(id).group === 'abs');
+    seen.add(abs.join(','));
+  }
+  assert.ok(seen.size > 10, `only ${seen.size} ab orders`);
 });
 
 test('validate rejects workouts that miss a muscle group', () => {
@@ -71,21 +88,23 @@ test('validate rejects workouts that miss a muscle group', () => {
   assert.equal(H.validate(['pushup', 'twist', 'lunge', 'bogus', 'twist']).ok, true);
 });
 
-test('growing the count keeps groups spread out and the existing order', () => {
+test('growing or shrinking the count keeps picks in group order', () => {
   for (let s = 1; s <= 200; s++) {
     const r = seeded(s);
     const start = H.randomPick(3, r);
-    const grown = H.resize(start, 5, r);
+    const grown = H.resize(start, 6, r);
     assert.deepEqual(grown.filter(id => start.includes(id)), start);
-    const best = Math.min(...[0, 1, 2].map(() => H.adjacencyScore(H.arrange(grown, r), true)));
-    assert.ok(H.adjacencyScore(grown, true) <= best + 1, grown.join(','));
+    assert.ok(inGroupOrder(grown), grown.join(','));
+    const shrunk = H.resize(grown, 4, r);
+    assert.ok(inGroupOrder(shrunk) && H.coverage(shrunk).ok, shrunk.join(','));
   }
 });
 
 test('resize keeps existing picks and restores coverage', () => {
   const r = seeded(7);
   const grown = H.resize(['crunch'], 3, r);
-  assert.equal(grown[0], 'crunch');
+  assert.ok(grown.includes('crunch'));
+  assert.equal(H.get(grown[0]).group, 'upper');
   assert.ok(H.coverage(grown).ok, grown.join(','));
   const shrunk = H.resize(['pushup', 'crunch', 'legraise', 'flutter', 'squat'], 3, r);
   assert.equal(shrunk.length, 3);
@@ -93,7 +112,7 @@ test('resize keeps existing picks and restores coverage', () => {
 });
 
 test('easy timeline: 30s work / 30s rest, 3 sets, 5 min between sets, no trailing rest', () => {
-  const ids = ['pushup', 'crunch', 'squat', 'lunge', 'twist'];
+  const ids = ['pushup', 'crunch', 'twist', 'squat', 'lunge'];
   const tl = H.buildTimeline(ids, 'easy');
   const segs = tl.segments;
   assert.equal(segs[0].type, 'prep');
@@ -112,7 +131,7 @@ test('easy timeline: 30s work / 30s rest, 3 sets, 5 min between sets, no trailin
   // each set break sits right after the last exercise of a set
   for (const b of breaks) {
     const before = segs[b.index - 1], after = segs[b.index + 1];
-    assert.equal(before.type, 'work'); assert.equal(before.exercise, 'twist');
+    assert.equal(before.type, 'work'); assert.equal(before.exercise, 'lunge');
     assert.equal(after.type, 'work'); assert.equal(after.exercise, 'pushup'); assert.equal(after.set, b.set + 1);
   }
   assert.equal(tl.total, 10 + 15 * 30 + 12 * 30 + 2 * 300);
@@ -121,7 +140,7 @@ test('easy timeline: 30s work / 30s rest, 3 sets, 5 min between sets, no trailin
 });
 
 test('medium timeline: 30s work / 30s jumping jacks, 2 sets, 5 min between sets', () => {
-  const ids = ['pushup', 'crunch', 'squat', 'lunge', 'twist'];
+  const ids = ['pushup', 'crunch', 'twist', 'squat', 'lunge'];
   const tl = H.buildTimeline(ids, 'medium');
   const types = tl.segments.slice(1).map(s => s.type);
   const set = ['work', 'jacks', 'work', 'jacks', 'work', 'jacks', 'work', 'jacks', 'work', 'jacks'];
@@ -198,15 +217,19 @@ test('warm-up: jog slow/quick ×2, then 5 counts of 4 for each move, then get re
   assert.deepEqual(wu.map(s => s.exercise + (s.pace ? ':' + s.pace : '') + (s.side ? ':' + s.side : '')), [
     'jog:slow', 'jog:quick', 'jog:slow', 'jog:quick', 'jacks', 'pecstretch', 'squat',
     'hamstring:left', 'hamstring:right', 'calf:left', 'calf:right']);
-  wu.slice(0, 4).forEach(s => assert.equal(s.duration, 10));
-  wu.slice(4).forEach(s => { assert.equal(s.counts, 5); assert.equal(s.beats, 4); assert.equal(s.duration, s.counts * s.beats * s.beat); });
+  // every new move (and the very first jog) gets a lead-in before it starts; a leg switch a shorter one
+  wu.slice(0, 4).forEach((s, i) => assert.equal(s.duration, s.lead + 10));
+  assert.deepEqual(wu.map(s => s.lead), [12, 0, 0, 0, 8.5, 10, 9.5, 10, 6.5, 10, 6.5]);
+  // a spoken 5-4-3-2-1 before every new move, 3-2-1 for a leg switch, none for a jog pace change
+  assert.deepEqual(wu.map(s => s.countdown), [5, 0, 0, 0, 5, 5, 5, 5, 3, 5, 3]);
+  wu.slice(4).forEach(s => { assert.equal(s.counts, 5); assert.equal(s.beats, 4); assert.equal(s.duration, s.lead + s.counts * s.beats * s.beat); });
   // warm-up comes first, then the usual get-ready, then the first exercise
   assert.equal(tl.segments[0].type, 'warmup');
   assert.equal(tl.segments[wu.length].type, 'prep');
   assert.equal(tl.segments[wu.length + 1].type, 'work');
   assert.equal(tl.warmupEnd, H.WARMUP_SECONDS);
   assert.equal(tl.warmupSeconds, H.WARMUP_SECONDS);
-  assert.equal(H.formatTime(H.WARMUP_SECONDS), '2:52');
+  assert.equal(H.formatTime(H.WARMUP_SECONDS), '4:05');
   const plain = H.buildTimeline(ids, 'easy');
   assert.equal(tl.total, plain.total + H.WARMUP_SECONDS);
   assert.equal(tl.intervals, plain.intervals);

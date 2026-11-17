@@ -159,20 +159,27 @@
 
   // The routine, in order. Timed steps have a duration; counted steps run
   // `counts` × `beats` beats of `beat` seconds (SAF "5 counts of 4").
+  // lead: seconds of "get ready" before the move starts: time for the coach to
+  // name it ("Next warm-up: squats. Chest up, sit back."), a breath, then a
+  // spoken "5, 4, 3, 2, 1, begin", and only then the count. A leg switch
+  // counts down from 3 (countdown: 3); jog pace changes run straight on. The
+  // first lead also holds the coach's welcome.
   var WARMUP_STEPS = [
-    { move: 'jog', pace: 'slow', duration: 10 },
+    { move: 'jog', pace: 'slow', duration: 10, lead: 12 },
     { move: 'jog', pace: 'quick', duration: 10 },
     { move: 'jog', pace: 'slow', duration: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
-    { move: 'jacks', counts: 5, beats: 4, beat: 0.6 },
-    { move: 'pecstretch', counts: 5, beats: 4, beat: 1 },
-    { move: 'squat', counts: 5, beats: 4, beat: 1 },
-    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1 },
-    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1 },
-    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1 },
-    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1 }
+    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 8.5 },
+    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 9.5 },
+    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 6.5, countdown: 3 },
+    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 6.5, countdown: 3 }
   ];
-  function warmupStepDuration(st) { return st.duration || Math.round(st.counts * st.beats * st.beat * 1000) / 1000; }
+  /** The moving part of a step (without its lead-in). */
+  function warmupMoveDuration(st) { return st.duration || Math.round(st.counts * st.beats * st.beat * 1000) / 1000; }
+  function warmupStepDuration(st) { return (st.lead || 0) + warmupMoveDuration(st); }
   var WARMUP_SECONDS = WARMUP_STEPS.reduce(function (a, st) { return a + warmupStepDuration(st); }, 0);
 
   /** Things the trainer says during the long break between sets. */
@@ -258,40 +265,14 @@
   }
 
   /**
-   * Count of back-to-back exercises that hit the same group. When the
-   * workout loops for several sets, the last → first transition counts too.
+   * Workouts run top to bottom: upper body, then abs, then legs. Within a
+   * group the existing order is kept (the order the user picked them in).
    */
-  function adjacencyScore(ids, wrap) {
-    var s = 0;
-    for (var i = 1; i < ids.length; i++) {
-      if (BY_ID[ids[i]].group === BY_ID[ids[i - 1]].group) s++;
-    }
-    if (wrap && ids.length > 2 && BY_ID[ids[0]].group === BY_ID[ids[ids.length - 1]].group) s++;
-    return s;
-  }
-
-  /** Random order that spreads muscle groups out as much as possible. */
-  function arrange(ids, rng, wrap) {
-    rng = rng || Math.random;
-    var best = null, bestScore = Infinity;
-    for (var k = 0; k < 160; k++) {
-      var cand = shuffle(ids, rng);
-      var sc = adjacencyScore(cand, wrap !== false);
-      if (sc < bestScore) { best = cand; bestScore = sc; if (sc === 0) break; }
-    }
-    return best || ids.slice();
-  }
-
-  /** Insert `id` where it creates the fewest same-group neighbours (keeps the existing order). */
-  function insertSpread(list, id) {
-    var best = list.length, bestScore = Infinity;
-    for (var i = list.length; i >= 0; i--) {
-      var cand = list.slice(0, i).concat([id], list.slice(i));
-      var sc = adjacencyScore(cand, true);
-      if (sc < bestScore) { bestScore = sc; best = i; }
-    }
-    list.splice(best, 0, id);
-    return list;
+  function order(ids) {
+    return sanitize(ids)
+      .map(function (id, i) { return { id: id, g: GROUP_ORDER.indexOf(BY_ID[id].group), i: i }; })
+      .sort(function (a, b) { return a.g - b.g || a.i - b.i; })
+      .map(function (x) { return x.id; });
   }
 
   /** N random exercises that always include upper body, abs and legs. */
@@ -304,7 +285,7 @@
     });
     var rest = shuffle(EXERCISES.filter(function (e) { return picked.indexOf(e.id) < 0; }), rng);
     while (picked.length < n && rest.length) picked.push(rest.shift().id);
-    return arrange(picked, rng);
+    return order(shuffle(picked, rng));
   }
 
   /**
@@ -322,7 +303,7 @@
       });
       if (!pool.length) pool = EXERCISES.filter(function (e) { return list.indexOf(e.id) < 0; });
       if (!pool.length) break;
-      insertSpread(list, pool[Math.floor(rng() * pool.length)].id);
+      list.push(pool[Math.floor(rng() * pool.length)].id);
     }
     while (list.length > n) {
       // Prefer removing from the group with the most picks, newest first.
@@ -335,11 +316,11 @@
       }
       list.splice(victim, 1);
     }
-    return list;
+    return order(list);
   }
 
   /**
-   * Expand a workout into timed segments:
+   * Expand a workout into timed segments (exercises run upper body → abs → legs):
    *   prep → per set: [work, recover] × exercises → 5 min set break → next set
    * Easy recovers with 30s rest; the set break replaces the rest after the
    * last exercise of a set, and the very last rest is dropped. Medium follows
@@ -349,7 +330,7 @@
   function buildTimeline(ids, levelId, opts) {
     opts = opts || {};
     var level = LEVELS[levelId] || LEVELS.easy;
-    var list = sanitize(ids);
+    var list = order(ids);
     var prep = opts.prep == null ? PREP_SECONDS : opts.prep;
     var setRest = opts.setRest == null ? SET_REST_SECONDS : opts.setRest;
     var segs = [];
@@ -358,7 +339,8 @@
 
     if (opts.warmup && list.length) {
       WARMUP_STEPS.forEach(function (st, i) {
-        push({ type: 'warmup', duration: warmupStepDuration(st), exercise: st.move, move: st.move,
+        push({ type: 'warmup', duration: warmupStepDuration(st), lead: st.lead || 0, countdown: st.lead ? st.countdown || 5 : 0,
+          exercise: st.move, move: st.move,
           pace: st.pace || null, side: st.side || null, counts: st.counts || 0, beats: st.beats || 0, beat: st.beat || 0,
           step: i + 1, steps: WARMUP_STEPS.length, set: 0, slot: 0, next: list[0] });
       });
@@ -433,7 +415,7 @@
     nextWorkIndex: nextWorkIndex,
     WARMUP_MOVES: WARMUP_MOVES, WARMUP_STEPS: WARMUP_STEPS, WARMUP_SECONDS: WARMUP_SECONDS,
     get: get, sanitize: sanitize, coverage: coverage, validate: validate,
-    randomPick: randomPick, resize: resize, arrange: arrange, adjacencyScore: adjacencyScore,
+    randomPick: randomPick, resize: resize, order: order,
     buildTimeline: buildTimeline, segmentAt: segmentAt, formatTime: formatTime, clampCount: clampCount
   };
 

@@ -16,7 +16,7 @@
     setup: { colors: ['#9b5cff', '#22e5ff'], energy: 0.22, chip: '', flash: '' },
     prep: { colors: ['#b9a8ff', '#5a6bff'], energy: 0.45, chip: 'Get ready', flash: 'READY' },
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
-    rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest · up next', flash: 'REST' },
+    rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
     warmup: { colors: ['#b18cff', '#22e5ff'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
     setrest: { colors: ['#36ffc0', '#9b5cff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
@@ -34,16 +34,6 @@
   // Each look swaps the colour palette (and energy) used by the backdrop,
   // ring and figures; CSS handles the rest via html[data-look][data-scheme].
   var LOOKS = {
-    neon: {
-      style: 'neon', scheme: 'dark', meta: '#07020f', fps: null,
-      phase: {
-        setup: [['#9b5cff', '#22e5ff'], 0.22], prep: [['#b9a8ff', '#5a6bff'], 0.45], work: [['#ff2bd6', '#ff8a1f'], 1.0],
-        rest: [['#22e5ff', '#4a6bff'], 0.18], jacks: [['#c6ff1a', '#ffe14a'], 0.8], setrest: [['#36ffc0', '#9b5cff'], 0.1],
-        warmup: [['#b18cff', '#22e5ff'], 0.5],
-        done: [['#ffd23f', '#ff2bd6'], 0.55]
-      },
-      group: { upper: ['#ff4fd8', '#ff8a1f'], abs: ['#2ee6ff', '#4a6bff'], legs: ['#ffb21f', '#ff4f6a'], cardio: ['#c6ff1a', '#ffe14a'], rest: ['#22e5ff', '#4a6bff'], warmup: ['#b18cff', '#22e5ff'] }
-    },
     'studio-dark': {
       style: 'studio', scheme: 'dark', meta: '#151516', fps: 30,
       phase: {
@@ -67,7 +57,7 @@
   };
   var htmlEl = document.documentElement;
   // lookPref is what the user picked ('auto' unless they chose one); look is what's on screen.
-  var LOOK_PREF_RE = /^(auto|neon|studio-dark|studio-light)$/;
+  var LOOK_PREF_RE = /^(auto|studio-dark|studio-light)$/;
   var lookPref = LOOK_PREF_RE.test(htmlEl.getAttribute('data-look-pref')) ? htmlEl.getAttribute('data-look-pref') : 'auto';
   var schemeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   function systemScheme() {
@@ -76,8 +66,7 @@
     return schemeMQ && schemeMQ.matches ? 'dark' : 'light';
   }
   function resolveLook(pref) { return pref === 'auto' ? 'studio-' + systemScheme() : pref; }
-  var look = htmlEl.getAttribute('data-look') === 'studio' ? 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark') : 'neon';
-  function isStudio() { return LOOKS[look].style === 'studio'; }
+  var look = 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark');
   // Dark-scheme directions: Charcoal+ (default) and Graphite+ (?dark=graphite): palette + mannequin material.
   var DARK_VARIANTS = {
     graphite: { material: 'titanium', meta: '#151516' },
@@ -89,7 +78,6 @@
   };
   var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'charcoal';
   function figMaterial() {
-    if (LOOKS[look].style !== 'studio') return undefined;
     return LOOKS[look].scheme === 'dark' ? DARK_VARIANTS[darkVariant].material : 'graphite';
   }
   function applyPalette() {
@@ -114,6 +102,7 @@
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
         level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
+        swipeTip: state.swipeTip, dragTip: state.dragTip,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -127,6 +116,8 @@
     level: Object.prototype.hasOwnProperty.call(H.LEVELS, prefs.level) ? prefs.level : 'easy',
     ids: H.randomPick(H.DEFAULT_COUNT),
     warmup: prefs.warmup !== false,
+    swipeTip: !!prefs.swipeTip, // the "swipe to skip" tip has been shown once
+    dragTip: !!prefs.dragTip,   // "during exercise, drag from the controls" has been shown once
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -156,7 +147,7 @@
   }
 
   // ---------------------------------------------------------------- figures
-  var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop, setStyle: noop };
+  var stubFig = { setExercise: noop, getTime: function () { return 0; }, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop, setStyle: noop };
   function noop() {}
   var figs = [];
   function makeFig(canvas, opts) {
@@ -252,7 +243,7 @@
   function toggleExercise(id) {
     var i = state.ids.indexOf(id);
     if (i >= 0) state.ids.splice(i, 1);
-    else if (state.ids.length < H.MAX_EXERCISES) state.ids.push(id);
+    else if (state.ids.length < H.MAX_EXERCISES) state.ids = H.order(state.ids.concat([id]));
     A.play('click');
     if (i < 0) { hero.hover = null; showHero(id); }
     renderSetup();
@@ -313,7 +304,7 @@
     hint.classList.toggle('warn', !v.ok);
     if (!v.ok) hint.textContent = v.reason;
     else if (!hint.querySelector('svg')) {
-      hint.innerHTML = 'Add or remove exercises. They run in the numbered order. <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> opens the trainer’s guide.';
+      hint.innerHTML = 'Add or remove exercises. They run in the numbered order: upper body, abs, then legs. <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> opens the trainer’s guide.';
     }
 
     $('start').disabled = !v.ok;
@@ -423,6 +414,7 @@
     heroFig.setSuspended(on);
     Object.keys(thumbs).forEach(function (k) { thumbs[k].setSuspended(on); });
     if (workFig) workFig.setSuspended(on);
+    if (nextFig) nextFig.setSuspended(on);
     if (doneFig) doneFig.setSuspended(on);
     if (currentScreen !== 'workout') bg.setRunning(!on);
     setInert(on);
@@ -430,7 +422,7 @@
 
   /** Make everything behind an open dialog unreachable for keyboard and screen readers. */
   function setInert(on) {
-    var parts = currentScreen === 'workout' ? document.querySelectorAll('.w-top, .w-body, .w-bottom') : [$(currentScreen)];
+    var parts = currentScreen === 'workout' ? document.querySelectorAll('.w-top, .w-prog, .w-body') : [$(currentScreen)];
     Array.prototype.forEach.call(parts, function (el) { if (el) el.inert = !!on; });
   }
 
@@ -488,15 +480,11 @@
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.progress = 1;
-    this.ticks = 10;
     this.a = hexRgb('#9b5cff'); this.b = hexRgb('#ff2bd6');
     this.ta = this.a.slice(); this.tb = this.b.slice();
-    this.energy = 0.5;
     this.beat = 0; this.hot = 0;
-    this.rot = 0;
     this.paused = false;
     this.shocks = [];
-    this.sparks = [];
     this.w = 0; this.h = 0; this.dpr = 1;
     this.sizeDirty = true;
     this.needs = 2;
@@ -506,7 +494,7 @@
   }
   /** True while anything on the ring is animating. */
   Ring.prototype.busy = function () {
-    return this.needs > 0 || this.sparks.length > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
+    return this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
   };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
   Ring.prototype.shock = function (strength) { this.shocks.push({ t: 0, s: strength || 1 }); this.needs = 2; };
@@ -519,206 +507,129 @@
     if (w !== this.w || h !== this.h || dpr !== this.dpr) {
       this.w = w; this.h = h; this.dpr = dpr;
       this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
-      var S = Math.min(w, h);
-      var fig = $('fig');
-      fig.style.setProperty('--fig-size', Math.round(S * 0.7) + 'px');
+      this.layout();
     }
     return true;
   };
+  /**
+   * Gauge geometry. The ring has an opening at the bottom; the transport pill
+   * (back, pause, skip) sits in it, centred on the ring's end caps, and scales
+   * with the ring. The figure (or the rest countdown) fills the space inside
+   * the ring above the pill. Everything is centred in the stage.
+   */
+  Ring.prototype.layout = function () {
+    var w = this.w, h = this.h;
+    function radius(S) {
+      // top: how far above the centre the ring band reaches
+      var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5, top: S * 0.44 + 2 };
+    }
+    function pill(S) {
+      // three fixed slots, so the opening never changes shape between phases
+      var ph = Math.round(Math.max(56, Math.min(84, S * 0.19)));
+      var side = Math.max(44, Math.round(ph * 0.72));
+      var main = Math.max(ph - 10, side + 8); // pause always clearly the biggest
+      ph = Math.max(ph, main + 10);
+      return { ph: ph, main: main, side: side, pw: side * 2 + main + 12 * 2 + 5 * 2 + 2 }; // 12px between buttons
+    }
+    function fit(S) {
+      var r = radius(S), p = pill(S);
+      var half = p.pw / 2 + 12 + r.ext; // opening half-chord: pill + breathing room + cap
+      var ga = Math.asin(Math.min(0.92, half / r.R));
+      var capY = r.R * Math.cos(ga);
+      return { S: S, r: r, p: p, ga: ga, capY: capY, below: Math.max(capY + p.ph / 2, capY + r.ext) + 2 };
+    }
+    // The bottom of the ring is an opening, so the ring may be taller than the
+    // stage: size it by what is actually drawn (top of the ring down to the pill).
+    var maxS = w / 0.9, S = Math.min(maxS, h * 1.6), f = fit(S);
+    for (var k = 0; k < 12; k++) {
+      var need = f.r.top + f.below;
+      if (need <= h + 0.5 && f.p.pw <= w) break;
+      S = Math.max(60, Math.min(S * Math.pow(h / need, 0.9), S * w / f.p.pw) * 0.998);
+      f = fit(S);
+    }
+    var r = f.r, p = f.p;
+    var cy = Math.max(0, (h - (r.top + f.below)) / 2) + r.top;
+    // inside the ring, above the pill: where the figure or the rest countdown goes
+    var innerTop = cy - r.R + r.th * 0.5 + 4;
+    var innerBot = cy + f.capY - p.ph / 2 - 4;
+    var regionH = Math.max(40, innerBot - innerTop);
+    this.geo = { S: S, cx: w / 2, cy: cy, R: r.R, th: r.th, ga: f.ga, A0: Math.PI / 2 + f.ga, SW: TAU - 2 * f.ga, fy: (innerTop + innerBot) / 2, fh: regionH };
+    var st = this.c.parentNode, px = function (v) { return Math.round(v) + 'px'; };
+    st.style.setProperty('--cy', px(cy));
+    st.style.setProperty('--rr', px(r.R));
+    st.style.setProperty('--ss', px(S));
+    st.style.setProperty('--ty', px(cy + f.capY));
+    st.style.setProperty('--ph', px(p.ph));
+    st.style.setProperty('--pmain', px(p.main));
+    st.style.setProperty('--pside', px(p.side));
+    st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
+    st.style.setProperty('--fh', px(regionH));
+    st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));
+    // on the stage, so the swipe preview's figure gets exactly the same size and place
+    st.style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
+    sizeUpNext();
+  };
+  /** The up-next card overlays the readout's space; its demo tile fills that height. */
+  /**
+   * The up-next card covers the readout + coach area. It must always fit that
+   * space with its Start button inside: try the full card first, then drop
+   * extras one at a time (step, muscles, actions beside the demo, meta,
+   * label) and finally shrink the demo.
+   */
+  var UN_STATES = ['roomy', '', 'q1', 'compact q1', 'compact q1 q2', 'compact q1 q2 q3', 'compact q1 q2 q3 q4'];
+  function sizeUpNext() {
+    var lower = document.querySelector('.w-lower'), card = $('upNext');
+    var H = lower.offsetHeight, W = Math.min(lower.offsetWidth, 520);
+    if (!H || !W) return;
+    if (window.innerWidth > window.innerHeight * 1.25) {
+      // side-by-side layout: the card may also use the empty space under the readout
+      H = Math.max(H, window.innerHeight - 12 - lower.getBoundingClientRect().top);
+    }
+    var S = typeof ring !== 'undefined' && ring && ring.geo ? ring.geo.S : 300;
+    var wasHidden = card.hidden;
+    if (wasHidden) { card.style.visibility = 'hidden'; card.hidden = false; }
+    var cap = Math.min(W * 0.47, S * 0.62, 230);
+    var fig, i, cls;
+    function apply(state, f) {
+      card.className = 'upnext' + (state ? ' ' + state : '');
+      card.style.setProperty('--un-fig', Math.round(f) + 'px');
+      return card.offsetHeight <= H + 0.5;
+    }
+    var fits = false;
+    for (i = H < 230 ? 3 : 0; i < UN_STATES.length && !fits; i++) {
+      cls = UN_STATES[i];
+      var compact = cls.indexOf('compact') >= 0;
+      fig = Math.max(56, Math.min(cap, compact ? H - 20 : H - 28 - 50 - 12));
+      if (cls === 'roomy' && fig < 140) continue;
+      fits = apply(cls, fig);
+    }
+    while (!fits && fig > 56) { fig = Math.max(56, fig * 0.86); fits = apply(cls, fig); }
+    if (wasHidden) { card.hidden = true; card.style.visibility = ''; }
+  }
   Ring.prototype.draw = function (dt) {
     if (!this.resize()) return;
     if (this.needs > 0) this.needs--;
     var ctx = this.ctx, w = this.w, h = this.h, dpr = this.dpr;
-    var k = 1 - Math.exp(-dt * 5);
+    // colour changes ease in; a quick switch (swipe armed) settles in ~120 ms
+    var k = 1 - Math.exp(-dt * (performance.now() < (this.fastUntil || 0) ? 28 : 5));
     for (var i = 0; i < 3; i++) { this.a[i] += (this.ta[i] - this.a[i]) * k; this.b[i] += (this.tb[i] - this.b[i]) * k; }
     this.beat *= Math.exp(-dt * 4);
     this.hot *= Math.exp(-dt * 2.5);
-    if (!this.paused && !reduced) this.rot += dt * (0.15 + 0.5 * this.energy);
-
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    if (isStudio()) { this.drawStudio(ctx, w, h, dt); return; }
-    var S = Math.min(w, h);
-    var cx = w / 2, cy = h / 2;
-    var R = S * 0.405;
-    var th = Math.max(6, S * 0.03);
-    var A0 = -Math.PI / 2;
-    var prog = Math.max(0, Math.min(1, this.progress));
-    var a1 = A0 + TAU * prog;
-    var ca = this.a, cb = this.b;
-
-    ctx.lineCap = 'round';
-
-    // ticks: one per second of the interval, lit while that second remains
-    var n = this.ticks;
-    var t0 = R + th * 1.25, len = S * 0.022;
-    for (i = 0; i < n; i++) {
-      var ang = A0 + (i + 0.5) / n * TAU;
-      var lit = (i + 0.5) / n <= prog;
-      var major = i % 5 === 0;
-      var L = major ? len * 1.6 : len;
-      ctx.strokeStyle = lit ? rgba(ca, 0.9) : 'rgba(255,255,255,0.10)';
-      ctx.lineWidth = major ? 2.4 : 1.6;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(ang) * t0, cy + Math.sin(ang) * t0);
-      ctx.lineTo(cx + Math.cos(ang) * (t0 + L), cy + Math.sin(ang) * (t0 + L));
-      ctx.stroke();
-    }
-
-    // groove + track, so the remaining arc reads on bright frames
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = th * 1.6;
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = th;
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
-
-    // breathing pacer for the long set break: 4 s in, 6 s out
-    if (this.breathe != null) {
-      var bt = this.breathe % 10;
-      var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
-      var br = R * (0.42 + 0.4 * bv);
-      var bgrad = ctx.createRadialGradient(cx, cy, br * 0.2, cx, cy, br);
-      bgrad.addColorStop(0, rgba(ca, 0.02));
-      bgrad.addColorStop(0.75, rgba(ca, 0.10 + 0.08 * bv));
-      bgrad.addColorStop(1, rgba(ca, 0));
-      ctx.fillStyle = bgrad;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
-      ctx.strokeStyle = rgba(ca, 0.25 + 0.35 * bv);
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.stroke();
-    }
-
-    ctx.globalCompositeOperation = 'lighter';
-
-    // HUD decorations
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(this.rot);
-    ctx.strokeStyle = rgba(cb, 0.35);
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([2, 9]);
-    ctx.beginPath(); ctx.arc(0, 0, R * 0.86, 0, TAU); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.rotate(-this.rot * 1.7);
-    ctx.strokeStyle = rgba(ca, 0.4);
-    ctx.lineWidth = 2;
-    var rr = R + th * 1.25 + len * 2.4;
-    for (i = 0; i < 3; i++) {
-      ctx.beginPath(); ctx.arc(0, 0, rr, i * TAU / 3, i * TAU / 3 + 0.55); ctx.stroke();
-    }
-    ctx.restore();
-
-    // whole-session progress: thin inner arc
-    var tp = Math.max(0, Math.min(1, this.total || 0));
-    var ri = R - th * 1.6;
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, ri, 0, TAU); ctx.stroke();
-    if (tp > 0.001) {
-      ctx.strokeStyle = rgba(cb, 0.85);
-      ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + TAU * tp); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath(); ctx.arc(cx + Math.cos(A0 + TAU * tp) * ri, cy + Math.sin(A0 + TAU * tp) * ri, 2.6, 0, TAU); ctx.fill();
-    }
-
-    // progress arc with layered glow
-    if (prog > 0.0005) {
-      var grad;
-      if (ctx.createConicGradient) {
-        grad = ctx.createConicGradient(A0, cx, cy);
-        grad.addColorStop(0, rgba(cb, 1));
-        grad.addColorStop(Math.max(0.001, prog), rgba(ca, 1));
-        grad.addColorStop(Math.min(1, prog + 0.001), rgba(ca, 1));
-        grad.addColorStop(1, rgba(ca, 1));
-      } else {
-        grad = rgba(ca, 1);
-      }
-      var heat = 1 + this.hot * 0.8 + this.beat * 0.4;
-      var passes = [[th * 3.6, 0.07], [th * 2.2, 0.16], [th * 1.0, 0.95]];
-      for (i = 0; i < passes.length; i++) {
-        ctx.globalAlpha = Math.min(1, passes[i][1] * heat);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = passes[i][0];
-        ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
-      }
-      ctx.globalAlpha = 0.55 + 0.45 * this.hot;
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = th * 0.26;
-      ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
-      ctx.globalAlpha = 1;
-
-      // comet head
-      var hx = cx + Math.cos(a1) * R, hy = cy + Math.sin(a1) * R;
-      var hr = th * (2.6 + this.beat * 2 + this.hot * 2);
-      var rg = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
-      rg.addColorStop(0, 'rgba(255,255,255,1)');
-      rg.addColorStop(0.25, rgba(ca, 0.9));
-      rg.addColorStop(1, rgba(ca, 0));
-      ctx.fillStyle = rg;
-      ctx.beginPath(); ctx.arc(hx, hy, hr, 0, TAU); ctx.fill();
-
-      // sparks shed from the head
-      if (!this.paused && !reduced) {
-        var rate = 40 * (0.25 + this.energy) * dt;
-        while (rate > 0) {
-          if (Math.random() < rate) {
-            var tang = a1 + Math.PI / 2; // clockwise tangent: the head moves the other way
-            var sp = S * (0.05 + Math.random() * 0.25) * (0.5 + this.energy);
-            var spread = (Math.random() - 0.5) * 1.6;
-            this.sparks.push({
-              x: hx, y: hy,
-              vx: Math.cos(tang + spread) * sp + Math.cos(a1) * sp * 0.4 * (Math.random() - 0.3),
-              vy: Math.sin(tang + spread) * sp + Math.sin(a1) * sp * 0.4 * (Math.random() - 0.3),
-              life: 1, decay: 1.4 + Math.random() * 1.6, size: 0.8 + Math.random() * 1.8,
-              c: Math.random() < 0.5 ? ca : cb
-            });
-          }
-          rate -= 1;
-        }
-      }
-    }
-
-    // sparks
-    for (i = this.sparks.length - 1; i >= 0; i--) {
-      var p = this.sparks[i];
-      p.life -= dt * p.decay;
-      if (p.life <= 0) { this.sparks.splice(i, 1); continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      p.vx *= 0.96; p.vy *= 0.96;
-      ctx.strokeStyle = rgba(p.c, p.life);
-      ctx.lineWidth = p.size;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.04, p.y - p.vy * 0.04); ctx.stroke();
-    }
-    if (this.sparks.length > 400) this.sparks.splice(0, this.sparks.length - 400);
-
-    // shockwaves
-    for (i = this.shocks.length - 1; i >= 0; i--) {
-      var s = this.shocks[i];
-      s.t += dt * 1.3;
-      if (s.t >= 1) { this.shocks.splice(i, 1); continue; }
-      var e = 1 - Math.pow(1 - s.t, 3);
-      ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.8 * s.s);
-      ctx.lineWidth = th * (1 - s.t) * 1.4;
-      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.08, 0, TAU); ctx.stroke();
-      ctx.strokeStyle = rgba([255, 255, 255], (1 - s.t) * 0.5 * s.s);
-      ctx.lineWidth = Math.max(1, th * 0.25 * (1 - s.t));
-      ctx.beginPath(); ctx.arc(cx, cy, R - e * S * 0.1, 0, TAU); ctx.stroke();
-    }
-
-    ctx.globalCompositeOperation = 'source-over';
+    this.drawStudio(ctx, w, h, dt);
   };
 
   /** Studio ring: one thick gradient arc with a shaded end cap, nothing else. */
   Ring.prototype.drawStudio = function (ctx, w, h, dt) {
     var light = LOOKS[look].scheme === 'light';
-    var S = Math.min(w, h), cx = Math.round(w / 2), cy = Math.round(h / 2);
-    var th = Math.max(9, S * 0.05);
-    var R = S * 0.44 - th * 0.5;
-    var A0 = -Math.PI / 2;
+    var g = this.geo;
+    var S = g.S, cx = Math.round(g.cx), cy = Math.round(g.cy);
+    var th = g.th;
+    var R = g.R;
+    var A0 = g.A0, SW = g.SW, A1 = A0 + SW;
     var prog = Math.max(0, Math.min(1, this.progress));
-    var a1 = A0 + TAU * prog;
+    var a1 = A0 + SW * prog;
     var ca = this.a, cb = this.b;
     var ink = light ? [17, 19, 24] : [244, 245, 247];
     var breathing = this.breathe != null;
@@ -727,13 +638,14 @@
     if (breathing) {
       var bt = this.breathe % 10;
       var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
-      var br = (R - th) * (0.55 + 0.42 * bv);
-      var pg = ctx.createRadialGradient(cx, cy, br * 0.15, cx, cy, br);
+      var by = g.fy, bmax = Math.min(R - th, g.fh * 0.66);
+      var br = bmax * (0.55 + 0.45 * bv);
+      var pg = ctx.createRadialGradient(cx, by, br * 0.15, cx, by, br);
       pg.addColorStop(0, rgba(ca, 0));
       pg.addColorStop(0.7, rgba(ca, (light ? 0.08 : 0.07) + 0.07 * bv));
       pg.addColorStop(1, rgba(ca, 0));
       ctx.fillStyle = pg;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, by, br, 0, TAU); ctx.fill();
     }
 
     // track (dashed during jumping jacks so the phase reads without colour)
@@ -742,10 +654,10 @@
     ctx.lineWidth = th;
     if (this.dashed) {
       // jumping jacks: beads for the time left, small dots for the time gone (non-colour cue)
-      var nB = 60, stepB = TAU / nB, span = prog * TAU, k, ang, u;
+      var nB = 48, stepB = SW / nB, span = prog * SW, k, ang, u;
       ctx.fillStyle = ctx.strokeStyle;
       var fadeK = Math.floor(span / stepB + 1e-6) + 1, fadeA = (span / stepB) % 1;
-      for (k = 0; k < nB; k++) {
+      for (k = 0; k <= nB; k++) {
         if (k * stepB <= span + 1e-6) continue;
         ctx.globalAlpha = k === fadeK ? 1 - Math.min(1, fadeA) : 1; // no bullseye under the fading bead
         ang = A0 + k * stepB;
@@ -753,7 +665,7 @@
       }
       ctx.globalAlpha = 1;
       if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th; }
-      for (k = 0; k * stepB <= span + 1e-6 && k < nB; k++) {
+      for (k = 0; k * stepB <= span + 1e-6 && k <= nB; k++) {
         u = span ? k * stepB / span : 1;
         ang = A0 + k * stepB;
         ctx.fillStyle = rgba([cb[0] + (ca[0] - cb[0]) * u, cb[1] + (ca[1] - cb[1]) * u, cb[2] + (ca[2] - cb[2]) * u], 1);
@@ -761,23 +673,26 @@
       }
       // the next bead fades out smoothly instead of popping
       var frac = (span / stepB) % 1;
-      if (k < nB && frac > 0.01) {
+      if (k <= nB && frac > 0.01) {
         ang = A0 + k * stepB;
         ctx.fillStyle = rgba(ca, Math.min(1, frac));
         ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, th * 0.31, 0, TAU); ctx.fill();
       }
       ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
     } else {
-      ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, cy, R, A0, A1); ctx.stroke();
+      ctx.lineCap = 'butt';
     }
 
     if (prog > 0.001 && !this.dashed) {
       var grad;
       if (ctx.createConicGradient) {
         grad = ctx.createConicGradient(A0, cx, cy);
+        var pf = prog * SW / TAU;
         grad.addColorStop(0, rgba(cb, 1));
-        grad.addColorStop(Math.max(0.001, prog), rgba(ca, 1));
-        grad.addColorStop(Math.min(1, prog + 0.001), rgba(ca, 1));
+        grad.addColorStop(Math.max(0.001, pf), rgba(ca, 1));
+        grad.addColorStop(Math.min(1, pf + 0.001), rgba(ca, 1));
         grad.addColorStop(1, rgba(ca, 1));
       } else grad = rgba(ca, 1);
       // tail cap in the tail colour, butt-ended arc, then the head cap: no seams
@@ -789,7 +704,7 @@
       ctx.lineWidth = th;
       if (this.dashed) {
         // the live arc becomes a run of beads during jacks, readable without colour
-        var dseg = TAU * R / 60;
+        var dseg = SW * R / 48;
         ctx.setLineDash([0.01, dseg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.62;
       }
       ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
@@ -822,18 +737,14 @@
       var e = 1 - Math.pow(1 - s.t, 3);
       ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.45 * s.s);
       ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(cx, cy, R + th * 0.6 + e * S * 0.05, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R + th * 0.6 + e * S * 0.05, A0, A1); ctx.stroke();
     }
-    this.sparks.length = 0;
   };
 
   // ================================================================ FX
+  // Celebration confetti on the finish screen.
   var fx = {
-    c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], waves: [], w: 0, h: 0, dpr: 1, dirty: false,
-    wave: function (x, y, colors, strength) {
-      if (reduced || isStudio()) return;
-      this.waves.push({ x: x, y: y, c: hexRgb(colors[0]), c2: hexRgb(colors[1] || colors[0]), s: strength || 1, t: 0 });
-    },
+    c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], w: 0, h: 0, dpr: 1, dirty: false,
     resize: function () {
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
       var w = window.innerWidth, h = window.innerHeight;
@@ -842,33 +753,21 @@
         this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
       }
     },
-    burst: function (x, y, colors, count, power) {
-      if (reduced || isStudio()) return;
-      var m = Math.min(window.innerWidth, window.innerHeight);
-      for (var i = 0; i < count; i++) {
-        var a = Math.random() * TAU;
-        var sp = m * (0.3 + Math.random() * 0.9) * (power || 1);
-        this.parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 0, drag: 0.9,
-          life: 1, decay: 0.9 + Math.random() * 0.9, size: 1 + Math.random() * 2.2, c: hexRgb(colors[i % colors.length]), streak: true });
-      }
-    },
     confetti: function (colors) {
       if (reduced) return;
       var W = window.innerWidth, Hh = window.innerHeight;
-      var n = isStudio() ? 40 : 180;
-      for (var i = 0; i < n; i++) {
+      for (var i = 0; i < 40; i++) {
         var fromLeft = i % 2 === 0;
         var a = fromLeft ? -Math.PI / 3 - Math.random() * 0.5 : -2 * Math.PI / 3 + Math.random() * 0.5;
         var sp = Hh * (0.9 + Math.random() * 0.9);
         this.parts.push({ x: fromLeft ? -10 : W + 10, y: Hh * 0.85, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
           g: Hh * 0.9, drag: 0.985, life: 1, decay: 0.28 + Math.random() * 0.25,
-          size: 4 + Math.random() * 6, c: hexRgb(colors[(i >> 1) % colors.length]), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 12, streak: false });
+          size: 4 + Math.random() * 6, c: hexRgb(colors[(i >> 1) % colors.length]), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 12 });
       }
     },
     draw: function (dt) {
       if (this.parts.length > 400) this.parts.splice(0, this.parts.length - 400);
-      if (this.waves.length > 6) this.waves.splice(0, this.waves.length - 6);
-      if (!this.parts.length && !this.waves.length) {
+      if (!this.parts.length) {
         if (this.dirty) { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.c.width, this.c.height); this.dirty = false; }
         return;
       }
@@ -877,23 +776,6 @@
       var ctx = this.ctx;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.clearRect(0, 0, this.w, this.h);
-      ctx.globalCompositeOperation = isStudio() ? 'source-over' : 'lighter';
-      var reach = Math.hypot(this.w, this.h) * 0.8;
-      for (var wi = this.waves.length - 1; wi >= 0; wi--) {
-        var wv = this.waves[wi];
-        wv.t += dt * 1.15;
-        if (wv.t >= 1) { this.waves.splice(wi, 1); continue; }
-        var we = 1 - Math.pow(1 - wv.t, 3), fade = 1 - wv.t;
-        ctx.strokeStyle = rgba(wv.c, fade * 0.45 * wv.s);
-        ctx.lineWidth = 46 * fade * wv.s;
-        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach, 0, TAU); ctx.stroke();
-        ctx.strokeStyle = rgba(wv.c2, fade * 0.6 * wv.s);
-        ctx.lineWidth = 10 * fade;
-        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach * 0.9, 0, TAU); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,' + (fade * 0.7 * wv.s).toFixed(3) + ')';
-        ctx.lineWidth = 2.5 * fade + 0.5;
-        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach * 0.97, 0, TAU); ctx.stroke();
-      }
       for (var i = this.parts.length - 1; i >= 0; i--) {
         var p = this.parts[i];
         p.life -= dt * p.decay;
@@ -901,27 +783,19 @@
         var drag = Math.pow(p.drag, dt * 60);
         p.vx *= drag; p.vy = p.vy * drag + p.g * dt;
         p.x += p.vx * dt; p.y += p.vy * dt;
-        if (p.streak) {
-          ctx.strokeStyle = rgba(p.c, p.life);
-          ctx.lineWidth = p.size;
-          ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.05, p.y - p.vy * 0.05); ctx.stroke();
-        } else {
-          p.rot += p.vr * dt;
-          ctx.save();
-          ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-          ctx.fillStyle = rgba(p.c, Math.min(1, p.life * 1.5));
-          ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.4 + Math.abs(Math.sin(p.rot * 2))));
-          ctx.restore();
-        }
+        p.rot += p.vr * dt;
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = rgba(p.c, Math.min(1, p.life * 1.5));
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.4 + Math.abs(Math.sin(p.rot * 2))));
+        ctx.restore();
       }
-      ctx.globalCompositeOperation = 'source-over';
     }
   };
 
   // ================================================================ WORKOUT
   var ring = new Ring($('ring'));
-  var workFig = null;
+  var workFig = null, nextFig = null;
   var run = null;
   var wakeLock = null;
 
@@ -950,17 +824,21 @@
     var v = H.validate(ids);
     if (!v.ok) { $('startError').textContent = v.reason; return; }
     A.unlock();
+    if (A.get('voice') && !A.voiceSupported()) notice(VOICE_HELP);
     var tl = H.buildTimeline(ids, state.level, { warmup: state.warmup });
     run = {
-      tl: tl, ids: H.sanitize(ids), level: state.level,
+      tl: tl, ids: tl.exercises.slice(), level: state.level,
       base: 0, anchor: performance.now(), playing: true,
       segIdx: -1, lastWhole: null, lastClock: -1, coachIdx: -1, figSwapped: false,
-      played: tl.segments.map(function () { return 0; }), lastT: 0, cuePending: -1, finished: false
+      played: tl.segments.map(function () { return 0; }), lastT: 0, cuePending: -1, finished: false,
+      welcome: true // the coach's welcome is still to come (said once, with the first cue)
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
-    workFig.setPlaying(true);
-    buildSegs(tl);
+    if (!nextFig) nextFig = makeFig($('nextFig'), { exercise: tl.exercises[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.45 });
+    run.mode = null;
+    guardHistory();
+    buildProgress(tl);
     setPauseUi(false);
     lockScreen();
     requestAnimationFrame(function () { focusOn($('stage')); });
@@ -1014,15 +892,20 @@
       lockScreen();
       if (run.cuePending === run.segIdx) { run.cuePending = -1; cueSegment(run.tl.segments[run.segIdx]); }
       else A.play('click');
-    } else { A.stopVoice(); A.sleep(); }
+    } else {
+      A.stopVoice(); A.sleep();
+      if (run.warm && !run.warm.go) run.warm.said = false; // "Begin!" was cut: the start signal carries it on resume
+    }
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
     if (!run || !run.playing) return;
     run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
     A.stopVoice();
+    if (run.warm && !run.warm.go) run.warm.said = false; // a cut "Begin!": the start signal carries it on resume
     A.sleep();
     if (workFig) workFig.setPlaying(false);
+    if (nextFig) nextFig.setPlaying(false);
     ring.paused = true;
     bg.setRunning(false);
     syncPauseButton(true);
@@ -1034,33 +917,144 @@
     btn.querySelector('use').setAttribute('href', paused ? '#i-play' : '#i-pause');
   }
 
+  var veilGuard = 0;
   function setPauseUi(paused) {
+    var veil = $('pausedVeil');
+    if (paused && veil.hidden) {
+      // Resume lands exactly under the finger that pressed pause
+      var pr = $('pause').getBoundingClientRect();
+      if (pr.width) {
+        veil.style.setProperty('--rx', Math.round(pr.left + pr.width / 2) + 'px');
+        veil.style.setProperty('--ry', Math.round(pr.top + pr.height / 2) + 'px');
+      }
+      veil.classList.add('guard');
+      clearTimeout(veilGuard);
+      veilGuard = setTimeout(function () { veil.classList.remove('guard'); }, 500);
+    }
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
     setInert(!$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden);
     ring.needs = 2;
     if (paused && run) {
       var seg = run.tl.segments[Math.min(run.segIdx, run.tl.segments.length - 1)];
       if (seg) {
-        var what = seg.type === 'work' || seg.type === 'prep' ? exName(seg.exercise) : seg.type === 'jacks' ? H.JACKS.name : seg.type === 'setrest' ? 'Set break' : 'Rest';
-        $('veilStatus').textContent = what + ' · ' + clock(seg.end - elapsedNow()) + ' left · Set ' + seg.set + '/' + run.tl.level.sets;
+        var what = seg.type === 'work' || seg.type === 'prep' ? exName(seg.exercise) : seg.type === 'jacks' ? H.JACKS.name
+          : seg.type === 'setrest' ? 'Set break' : seg.type === 'warmup' ? warmName(seg) : 'Rest';
+        $('veilStatus').textContent = what + ' · ' + clock(seg.end - elapsedNow()) + ' left · ' +
+          (seg.type === 'warmup' ? 'Warm-up' : 'Set ' + seg.set + '/' + run.tl.level.sets);
       }
     }
     syncPauseButton(paused);
-    if (workFig) workFig.setPlaying(!paused);
+    syncFigs();
     ring.paused = paused;
     bg.setRunning(!paused);
     if (paused) setTimeout(function () { if (!$('pausedVeil').hidden) $('resume').focus(); }, 30);
   }
 
-  function buildSegs(tl) {
-    var wrap = $('segs');
+  /** Which of the two figures is on screen animates; the hidden one rests. */
+  function syncFigs() {
+    var live = !!(run && run.playing && !run.finished);
+    if (workFig) workFig.setPlaying(live && run.mode !== 'rest');
+    if (nextFig) nextFig.setPlaying(live && run.mode === 'rest');
+  }
+
+  // ---------------------------------------------------------------- session progress strip
+  // One group per set (plus the warm-up), one cell per exercise, coloured by body area.
+  var prog = { bySeg: {}, groups: [], warm: null, live: null };
+  function buildProgress(tl) {
+    var wrap = $('wpTrack');
     wrap.textContent = '';
-    tl.segments.forEach(function (s) {
-      var i = document.createElement('i');
-      i.className = 't-' + s.type;
-      i.style.setProperty('--w', s.duration);
-      wrap.appendChild(i);
+    prog = { bySeg: {}, groups: {}, warm: null, live: null };
+    function group(key, label, n) {
+      var g = document.createElement('div');
+      g.className = 'wp-group';
+      g.style.setProperty('--n', n);
+      g.dataset.label = label;
+      wrap.appendChild(g);
+      prog.groups[key] = g;
+      return g;
+    }
+    if (tl.warmupEnd > 0) {
+      var wg = group('w', 'Warm-up', Math.max(1.5, tl.exercises.length * 0.4));
+      wg.classList.add('wp-warm');
+      prog.warm = document.createElement('i');
+      prog.warm.className = 'wp-cell g-warmup';
+      wg.appendChild(prog.warm);
+    }
+    for (var s = 1; s <= tl.level.sets; s++) group(s, 'Set ' + s, tl.exercises.length);
+    tl.segments.forEach(function (sg) {
+      if (sg.type !== 'work') return;
+      var c = document.createElement('i');
+      c.className = 'wp-cell g-' + H.get(sg.exercise).group;
+      prog.groups[sg.set].appendChild(c);
+      prog.bySeg[sg.index] = c;
     });
+  }
+  function updateProgress(seg) {
+    var tl = run.tl, idx = seg.index, sets = tl.level.sets, nEx = tl.exercises.length;
+    var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
+    var nextWork = restMode || seg.type === 'jacks' ? H.nextWorkIndex(tl, idx) : -1;
+    Object.keys(prog.bySeg).forEach(function (k) {
+      var c = prog.bySeg[k], i = +k;
+      c.classList.toggle('is-done', i < idx);
+      c.classList.toggle('is-now', i === idx);
+      c.classList.toggle('is-next', i === nextWork); // during rest: where you're headed
+      c.style.setProperty('--p', i < idx ? 1 : 0);
+    });
+    if (prog.warm) {
+      var wDone = seg.type !== 'warmup';
+      prog.warm.classList.toggle('is-done', wDone);
+      prog.warm.classList.toggle('is-now', !wDone);
+      prog.warm.style.setProperty('--p', wDone ? 1 : 0);
+    }
+    var curSet = seg.type === 'warmup' ? 0 : seg.set;
+    Object.keys(prog.groups).forEach(function (k) {
+      var g = prog.groups[k], n = k === 'w' ? 0 : +k;
+      var done = k === 'w' ? curSet > 0 : n < curSet || (n === curSet && seg.type === 'setrest');
+      g.classList.toggle('is-done', done);
+      g.classList.toggle('is-cur', !done && n === curSet);
+    });
+    prog.live = seg.type === 'work' ? prog.bySeg[idx] : seg.type === 'warmup' ? prog.warm : null;
+
+    var setTxt, leftTxt;
+    function sets_(n) { return n + (n === 1 ? ' set' : ' sets'); }
+    if (seg.type === 'warmup') {
+      setTxt = 'Warm-up';
+      leftTxt = '';
+    } else if (seg.type === 'setrest') {
+      setTxt = 'Set ' + seg.set + ' of ' + sets + ' done';
+      leftTxt = sets_(sets - seg.set) + ' left';
+    } else {
+      var more = sets - seg.set;
+      setTxt = 'Set ' + seg.set + ' of ' + sets;
+      leftTxt = more > 0 ? sets_(more) + ' left after this' : 'Final set';
+    }
+    $('wpSet').textContent = setTxt;
+    $('wpLeft').textContent = leftTxt;
+    $('wpLeft').hidden = !leftTxt;
+    $('wpSkip').hidden = seg.type !== 'warmup';
+  }
+
+  /** The rest screen's "Up next" card: name, body area and a live demo of what's coming. */
+  function showUpNext(seg) {
+    var tl = run.tl;
+    var id = seg.type === 'prep' ? seg.exercise : seg.next;
+    var ex = id ? H.get(id) : null;
+    if (!ex) return;
+    var n = tl.exercises.indexOf(id) + 1, of = tl.exercises.length;
+    $('unK').textContent = seg.type === 'prep' ? 'First up · 1 of ' + of
+      : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) + ' · first up'
+      : 'Up next · ' + n + ' of ' + of;
+    // when the card is too small for its label row, "Next ·" folds into the name line
+    var pre = seg.type === 'prep' ? 'First' : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) : 'Next';
+    $('unName').innerHTML = '<span class="un-pre">' + esc(pre) + ' · </span>' + esc(ex.name);
+    $('unMeta').innerHTML = '<b>' + esc(H.GROUPS[ex.group].label) + '</b><span class="un-mus"> · ' + esc(ex.muscles) + '</span>';
+    $('unStartText').textContent = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
+    // a 30 s rest is part of the workout: starting early is possible, not encouraged
+    $('unStart').classList.toggle('quiet', seg.type === 'rest');
+    $('unStart').setAttribute('aria-label', (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + ex.name);
+    var c = PHASE[seg.type].colors; // the card wears the phase colour, never a work colour
+    if (nextFig) { nextFig.setExercise(id); nextFig.setColors(c[0], c[1]); nextFig.pulse(); }
+    sizeUpNext();
   }
 
   function exName(id) { var e = H.get(id); return e ? e.name : ''; }
@@ -1080,10 +1074,29 @@
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
     return exName(seg.move) + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') : '');
   }
-  function warmSpoken(seg) {
-    if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog!' : 'Jog on the spot, nice and slow.';
-    var base = spoken(seg.move) + (seg.side ? ', ' + seg.side + ' leg' : '');
-    return base + (seg.counts ? '. ' + COUNT_WORDS[seg.counts - 1] + ' counts of ' + COUNT_WORDS[seg.beats - 1] + '.' : '.');
+  // "HIIT" is said "hit"; spelt this way so no voice reads out the letters
+  var WELCOME = 'Welcome to today\u2019s hit session!';
+  // how the coach names a warm-up move, and one short form cue (kept brief: the countdown follows)
+  var WARM_SAY = { jog: 'jogging on the spot', pecstretch: 'chest stretch' };
+  var WARM_CUE = { pecstretch: 'Hands behind, chest up.', squat: 'Chest up, sit back.', hamstring: 'Flat back.', calf: 'Back heel down.' };
+  /** Was most of the warm-up actually done (not skipped)? */
+  function warmedUp() {
+    var segs = run.tl.segments, done = 0;
+    for (var i = 0; i < segs.length && segs[i].type === 'warmup'; i++) done += run.played[i];
+    return done >= run.tl.warmupEnd * 0.6;
+  }
+  /** What the coach says as a warm-up step begins (before its 5, 4, 3, 2, 1). */
+  function warmAnnounce(seg, pv) {
+    var first = !pv || pv.type !== 'warmup';
+    if (first) {
+      if (run.welcome) { run.welcome = false; run.welcomeIdx = seg.index; return WELCOME + ' Let\u2019s warm up, jogging on the spot, nice and easy.'; }
+      run.welcomeIdx = -1;
+      return 'Warm-up. Jogging on the spot, nice and easy.';
+    }
+    if (pv.move === seg.move && pv.side !== seg.side) return 'Switch to your ' + seg.side + ' leg.';
+    if (pv.move === seg.move) return seg.pace === 'quick' ? 'Quick jog!' : 'Back to an easy jog.'; // pace change, no countdown
+    return 'Next warm-up: ' + (WARM_SAY[seg.move] || spoken(seg.move)) + (seg.side ? ', ' + seg.side + ' leg.' : '.') +
+      (WARM_CUE[seg.move] ? ' ' + WARM_CUE[seg.move] : '');
   }
   var WARM_WORD = { jacks: 'JACKS', squat: 'SQUATS', pecstretch: 'STRETCH', hamstring: 'STRETCH', calf: 'STRETCH', jog: 'JOG' };
 
@@ -1094,15 +1107,16 @@
     function steps(e, named) { return e.steps.map(function (s, i) { return { k: 'Step ' + (i + 1) + ' of ' + e.steps.length + (named ? ' · ' + e.name : ''), v: s }; }); }
     switch (seg.type) {
       case 'prep':
-        return { period: 5, items: [{ k: 'First up · ' + ex.name, v: ex.steps[0] }, { k: 'First up · ' + ex.name, v: ex.cue }] };
+        return { period: 5, items: [{ k: 'Setup', v: ex.steps[0] }, { k: 'Form', v: ex.cue }] };
       case 'work':
         return { period: 7.5, items: [{ k: 'Form', v: ex.cue }].concat(
           ex.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
           [{ k: 'Breathing', v: ex.breathe }]) };
-      case 'jacks':
-        return { period: 7.5, items: [{ k: 'Form', v: H.JACKS.cue }].concat(
-          H.JACKS.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
-          [{ k: 'Breathing', v: H.JACKS.breathe }]) };
+      case 'jacks': {
+        var up = nx ? [{ k: 'Up next · ' + nx.name, v: nx.steps[0] }] : [];
+        return { period: 6, items: [{ k: 'Form', v: H.JACKS.cue }].concat(up,
+          [{ k: 'Breathing', v: H.JACKS.breathe }], up.length ? [{ k: 'Up next · ' + nx.name, v: nx.cue }] : []) };
+      }
       case 'rest':
         return { period: 7.5, items: nx ? steps(nx) : [{ k: 'Recover', v: H.REST.cue }] };
       case 'warmup': {
@@ -1133,6 +1147,36 @@
     return seg.next || run.tl.exercises[0];
   }
 
+  /** Chip, title, meta line and countdown label for an interval (the screen and the swipe preview share it). */
+  function headFor(seg) {
+    var tl = run.tl, nEx = tl.exercises.length, ex = H.get(seg.exercise), nx = seg.next ? H.get(seg.next) : null;
+    // the next move's name inside the ring only when the ring is big enough to hold it
+    var big = !!(ring.geo && ring.geo.S >= 300);
+    var h = { chip: PHASE[seg.type].chip };
+    if (seg.type === 'warmup') {
+      h.name = seg.move === 'jog' ? warmName(seg) : exName(seg.move); h.label = seg.counts ? 'Count' : 'Time left';
+      h.ex = esc('Move ' + seg.step + ' of ' + seg.steps + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') + ' side' : ''));
+    } else if (seg.type === 'prep') {
+      h.name = 'Get into position'; h.label = big && ex.name.length <= 14 ? ex.name + ' in' : 'Starting in';
+      h.ex = esc('Set 1 · ' + nEx + ' exercises');
+    } else if (seg.type === 'work') {
+      h.name = ex.name; h.label = 'Time left';
+      h.ex = '<span class="ex-word">Exercise </span>' + (seg.slot + 1) + ' of ' + nEx + ' · <b>' + esc(H.GROUPS[ex.group].label) + '</b>';
+    } else if (seg.type === 'jacks') {
+      h.name = H.JACKS.name; h.label = 'Time left';
+      h.ex = esc(seg.setBreak ? 'Keep moving · then a break' : nx ? 'Keep moving' : 'Last push');
+    } else if (seg.type === 'rest') {
+      h.name = 'Rest'; h.label = nx && big && nx.name.length <= 14 ? nx.name + ' in' : 'Next in';
+      h.ex = esc(seg.duration + ' s · breathe');
+    } else {
+      h.name = 'Set ' + seg.set + ' complete'; h.label = 'Set ' + (seg.set + 1) + ' in';
+      h.ex = esc((seg.duration >= 60 ? seg.duration / 60 + ' minute' : seg.duration + ' second') + ' break');
+    }
+    return h;
+  }
+  /** No label inside small rings (or short landscape ones): the countdown gets the room. */
+  function dialBare() { return !!(ring.geo && (ring.geo.S < 300 || (window.innerWidth > window.innerHeight && ring.geo.fh < 200))); }
+
   function enterSegment(idx) {
     var tl = run.tl, seg = tl.segments[idx], ph = PHASE[seg.type];
     run.segIdx = idx;
@@ -1141,6 +1185,9 @@
     run.figSwapped = false;
     run.inhale = null;
     run.lastBeat = null;
+    run.getSet = false;
+    run.warm = null;
+    $('workout').classList.remove('final10', 'final3', 'beat', 'wu-lead');
     document.body.dataset.phase = seg.type;
     var prevSeg = tl.segments[idx - 1];
     var c = ph.colors;
@@ -1149,19 +1196,24 @@
     bg.flashNow();
     ring.setColors(c[0], c[1]);
     ring.a = ring.ta.slice(); ring.b = ring.tb.slice(); // snap: no muddy blend mid-flash
-    ring.breathe = seg.type === 'setrest' ? 0 : null;
+    var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
+    run.mode = restMode ? 'rest' : 'active';
+    $('workout').dataset.mode = run.mode;
+    // the page tint keeps its colour while it fades out after a rest
+    if (restMode) $('workout').style.setProperty('--tint', c[0]);
+    $('upNext').hidden = !restMode;
+    $('dial').setAttribute('aria-hidden', 'true');
+    syncFigs();
+    ring.breathe = seg.type === 'setrest' || seg.type === 'rest' ? 0 : null;
     ring.dashed = seg.type === 'jacks';
-    ring.energy = ph.energy;
-    ring.ticks = seg.counts ? seg.counts * seg.beats : Math.min(seg.duration, 60);
-    ring.shock(1);
-    ring.hot = 1;
+    if (!run.quiet) { ring.shock(1); ring.hot = 1; }
 
-    var figEx = seg.type === 'warmup' ? warmFigId(seg) : seg.type === 'rest' ? (seg.next || 'rest') : seg.type === 'setrest' ? 'rest' : seg.exercise;
-    if (workFig) {
-      workFig.setExercise(figEx);
+    if (restMode) showUpNext(seg);
+    else if (workFig) {
+      workFig.setExercise(seg.type === 'warmup' ? warmFigId(seg) : seg.exercise);
       workFig.setColors(c[0], c[1]);
-      workFig.setEnergy(seg.type === 'rest' || seg.type === 'setrest' ? 0.35 : ph.energy);
-      workFig.pulse();
+      workFig.setEnergy(ph.energy);
+      if (!run.quiet) workFig.pulse();
     }
 
     // header + labels
@@ -1169,81 +1221,59 @@
     var nEx = tl.exercises.length;
     var ex = H.get(seg.exercise);
     var nx = seg.next ? H.get(seg.next) : null;
-    $('wSet').textContent = seg.type === 'warmup' ? '–' : seg.set + '/' + level.sets;
-    $('phaseChip').textContent = ph.chip;
-    var name, label, sub;
+    var hd = headFor(seg);
+    $('phaseChip').textContent = hd.chip;
+    $('wEx').innerHTML = hd.ex;
+    var name = hd.name, label = hd.label, sub;
+    if (seg.type === 'warmup' && seg.lead) label = 'Get ready';
     var flashWord = ph.flash;
-    $('beats').hidden = !(seg.type === 'warmup' && seg.counts);
+    $('beats').hidden = !(seg.type === 'warmup' && seg.counts); // kept in the layout (invisible) during the lead-in: no jump at BEGIN
     if (seg.type === 'warmup') {
-      name = warmName(seg); label = seg.counts ? 'Count' : 'Time left';
-      sub = name;
-      $('wEx').textContent = 'Warm-up · ' + seg.step + ' of ' + seg.steps;
+      sub = warmName(seg);
       if (prevSeg && prevSeg.type === 'warmup') {
         // one wipe per new move; a side swap says SWITCH; a pace change needs no wipe
         flashWord = prevSeg.move !== seg.move ? WARM_WORD[seg.move] : prevSeg.side !== seg.side ? 'SWITCH' : '';
       }
-    } else if (seg.type === 'prep') {
-      name = ex.name; label = 'Starting in'; sub = 'First up · ' + ex.name;
-      $('wEx').textContent = 'Exercise 1 of ' + nEx;
-    } else if (seg.type === 'work') {
-      name = ex.name; label = 'Time left';
-      sub = (seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + ' · ' : '') + ex.name;
-      $('wEx').textContent = 'Exercise ' + (seg.slot + 1) + ' of ' + nEx;
-    } else if (seg.type === 'jacks') {
-      name = H.JACKS.name; label = 'Time left';
-      sub = seg.setBreak ? 'Then a 5:00 break' : nx ? 'Next · ' + nx.name : 'Last push';
-      $('wEx').textContent = 'Active recovery';
-    } else if (seg.type === 'rest') {
-      name = nx ? nx.name : 'Rest'; label = 'Next exercise in';
-      sub = nx ? 'Next · ' + nx.name : 'Breathe';
-      $('wEx').textContent = 'Recover';
-    } else { // setrest
-      name = 'Set ' + seg.set + ' done'; label = 'Set ' + (seg.set + 1) + ' starts in';
-      sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
-      $('wEx').textContent = 'Breathe in…';
-    }
+    } else if (seg.type === 'prep') sub = 'First up · ' + ex.name;
+    else if (seg.type === 'work') sub = (seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + ' · ' : '') + ex.name;
+    else if (seg.type === 'jacks') sub = seg.setBreak ? 'Then a 5:00 break' : nx ? 'Next · ' + nx.name : 'Last push';
+    else if (seg.type === 'rest') sub = nx ? 'Next · ' + nx.name : 'Breathe';
+    else sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
+    if (run.quiet) flashWord = ''; // a swipe already showed the change
     $('wName').textContent = name;
+    fitName();
     $('dLabel').textContent = label;
+    if (restMode) {
+      $('dialK').textContent = label;
+      $('dialSub').textContent = '';
+      $('dial').classList.toggle('bare', dialBare());
+    }
     var mins = seg.duration >= 60 ? (seg.duration / 60) + ' minutes' : seg.duration + ' seconds';
     $('srStatus').textContent = seg.type === 'work' ? 'Work: ' + name + ', ' + mins + '.'
       : seg.type === 'jacks' ? 'Jumping jacks, ' + mins + '.'
-      : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + name + '.'
+      : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + (nx ? nx.name : '') + '.'
       : seg.type === 'setrest' ? 'Set ' + seg.set + ' complete. Break, ' + mins + '.'
       : seg.type === 'warmup' ? 'Warm-up: ' + name + (seg.counts ? ', ' + seg.counts + ' counts of ' + seg.beats + '.' : ', ' + mins + '.')
-      : 'Get ready. First up: ' + name + '.';
+      : 'Get ready. First up: ' + ex.name + '.';
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
-    var skipLabel = seg.type === 'warmup' ? 'Skip warm-up' : seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
-    var showStart = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest' || seg.type === 'warmup';
-    $('skip').classList.toggle('has-text', showStart);
-    $('skipText').textContent = skipLabel;
-    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Skip the warm-up and get ready to start'
-      : showStart ? skipLabel + ': ' + exName(seg.next || seg.exercise) : 'Next interval');
+    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Next warm-up move'
+      : restMode ? (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise)
+      : 'Next interval');
 
-    // progress bar
-    var bars = $('segs').children;
-    for (var i = 0; i < bars.length; i++) {
-      bars[i].style.setProperty('--p', i < idx ? 1 : 0);
-      bars[i].classList.toggle('now', i === idx);
+    updateProgress(seg);
+    if (restMode && seg.type !== 'setrest' && !state.swipeTip) {
+      state.swipeTip = true; savePrefs();
+      $('wpTip').hidden = false; $('wProg').classList.add('tipping');
+      setTimeout(function () { $('wpTip').hidden = true; $('wProg').classList.remove('tipping'); }, 7000);
+      setTimeout(function () { if (carousel) carousel.nudge(); }, 1300);
     }
 
-    // flash, particles, sound, voice
+    // phase wipe, sound, voice
     if (flashWord) flash(flashWord, sub, false, c);
-    var stage = $('stage').getBoundingClientRect();
-    var scx = stage.left + stage.width / 2, scy = stage.top + stage.height / 2;
-    fx.burst(scx, scy, c.concat(['#ffffff']), seg.type === 'work' ? 110 : 50, seg.type === 'work' ? 1.1 : 0.6);
-    fx.wave(scx, scy, c, seg.type === 'work' ? 1 : 0.6);
-    if (seg.type === 'setrest' && !isStudio()) fx.confetti([c[0], c[1], '#ffffff', '#c6ff1a']);
-    var wb = document.querySelector('.w-body');
-    wb.classList.remove('punch');
-    if (!reduced) { void wb.offsetWidth; wb.classList.add('punch'); }
     if (run.playing) cueSegment(seg);
     else run.cuePending = idx; // play the cues when the user resumes
-
-    var stageEl = $('workout');
-    stageEl.classList.remove('shake');
-    if (seg.type === 'work' && !reduced) { void stageEl.offsetWidth; stageEl.classList.add('shake'); }
   }
 
   /** Sound, vibration and voice for the start of an interval. */
@@ -1251,10 +1281,10 @@
     if (seg.type === 'warmup') {
       var pv = run.tl.segments[seg.index - 1];
       var first = !pv || pv.type !== 'warmup';
-      if (first) { A.play('go'); buzz([60, 40, 60]); A.say('Warm up. ' + warmSpoken(seg)); }
-      else if (pv.move === seg.move && pv.side !== seg.side) { A.play('click'); A.say('Switch. ' + seg.side + ' leg.'); }
-      else if (pv.move === seg.move) { A.play('halfway'); A.say(warmSpoken(seg)); }
-      else { A.play('click'); buzz(40); A.say(warmSpoken(seg)); }
+      A.play(first && !seg.lead ? 'go' : 'halfway');
+      if (seg.lead) buzz(40);
+      // landed mid-countdown (undo, seek): the numbers speak for themselves
+      if (!seg.lead || elapsedNow() < seg.start + seg.lead - (seg.countdown || 5) - VLEAD - GAP) A.say(warmAnnounce(seg, pv));
       return;
     }
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
@@ -1263,12 +1293,33 @@
     else A.play('click');
 
     var nextName = seg.next ? spoken(seg.next) : '';
-    if (seg.type === 'prep') A.say('Get ready. First up, ' + spoken(seg.exercise) + '.');
-    else if (seg.type === 'work') A.say((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!');
-    else if (seg.type === 'rest') A.say('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''));
+    if (seg.type === 'prep') {
+      var pw = run.tl.segments[seg.index - 1];
+      var intro = run.welcome ? WELCOME + ' ' : pw && pw.type === 'warmup' && !run.praised && warmedUp() ? 'Warm-up done, nice work. ' : '';
+      if (intro && !run.welcome) run.praised = true;
+      run.welcome = false;
+      A.say(intro + 'Get ready. First up, ' + spoken(seg.exercise) + '.');
+    }
+    else if (seg.type === 'work') sayLater((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!', 350);
+    else if (seg.type === 'rest') sayLater('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''), 350);
     else if (seg.type === 'jacks') A.say('Jumping jacks! ' + (seg.setBreak ? 'Then a five minute break.' : nextName ? 'Next up, ' + nextName + '.' : 'Last one, finish strong!'));
-    else if (seg.type === 'setrest') A.say('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.');
+    else if (seg.type === 'setrest') sayLater('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.', 350);
   }
+
+  /** Exercise names are never cut off: shrink to fit one line, wrap only below a floor. */
+  function fitName() {
+    var el = $('wName');
+    el.style.fontSize = '';
+    el.classList.remove('wrap');
+    var w = el.clientWidth;
+    if (!w || el.scrollWidth <= w + 1) return;
+    var fs = parseFloat(getComputedStyle(el).fontSize);
+    var floor = window.innerWidth < 360 ? 18 : 20;
+    var nfs = Math.max(floor, Math.floor(fs * w / el.scrollWidth * 0.98));
+    el.style.fontSize = nfs + 'px';
+    if (el.scrollWidth > w + 1) el.classList.add('wrap');
+  }
+  window.addEventListener('resize', function () { if (currentScreen === 'workout') fitName(); });
 
   var flashTimer = 0;
   function flash(text, sub, count, colors) {
@@ -1291,50 +1342,69 @@
 
   var digitsText = '';
   function setDigits(text, spokenLabel) {
-    var dg = $('digits');
-    if (text !== digitsText) {
-      if (text.length !== digitsText.length) {
-        dg.textContent = '';
-        for (var i = 0; i < text.length; i++) {
-          var sp = document.createElement('span');
-          sp.className = text[i] === ':' ? 'd colon' : 'd';
-          dg.appendChild(sp);
+    if (text !== digitsText || (run && run.mode === 'rest' && $('dialDigits').textContent !== text)) {
+      // the dial only follows the clock in rest mode, so it never shows work numbers while fading out
+      var targets = run && run.mode === 'rest' ? [$('digits'), $('dialDigits')] : [$('digits')];
+      targets.forEach(function (dg) {
+        var slash = text.indexOf('/');
+        if (dg.children.length !== text.length || dg.dataset.slash !== String(slash)) {
+          dg.dataset.slash = String(slash);
+          dg.textContent = '';
+          for (var i = 0; i < text.length; i++) {
+            var sp = document.createElement('span');
+            sp.className = text[i] === ':' ? 'd colon' : slash >= 0 && i >= slash ? 'd of' : 'd';
+            dg.appendChild(sp);
+          }
         }
-      }
-      for (var j = 0; j < text.length; j++) dg.children[j].textContent = text[j];
-      dg.classList.toggle('long', text.length > 2);
+        for (var j = 0; j < text.length; j++) dg.children[j].textContent = text[j];
+        dg.classList.toggle('long', (slash >= 0 ? slash : text.length) > 2);
+      });
       digitsText = text;
     }
-    dg.setAttribute('aria-label', spokenLabel);
+    $('digits').setAttribute('aria-label', spokenLabel);
+  }
+  /** Restart a one-shot animation class on both countdowns. */
+  function pulseDigits(cls) {
+    [$('digits'), $('dialDigits')].forEach(function (dg) {
+      dg.classList.remove('tick', 'final');
+      void dg.offsetWidth;
+      if (cls) dg.classList.add(cls);
+    });
   }
 
   /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
     if (seg.type === 'warmup') {
-      if (!seg.counts) setDigits(String(whole), whole + ' seconds left');
+      if (!seg.counts && moving(seg)) setDigits(String(whole), whole + ' seconds left');
       return;
     }
-    var long = seg.duration >= 60;
+    var long = whole >= 60;
     setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
-    var dg = $('digits');
+    // the last 10 seconds look different: phase-coloured digits that pulse each second
+    var wk = $('workout');
+    wk.classList.toggle('final10', whole <= 10);
+    wk.classList.toggle('final3', whole <= 3);
     var natural = prev != null && whole < prev && prev - whole <= 2 && run.playing;
     if (!natural) return;
-    dg.classList.remove('tick', 'final');
-    void dg.offsetWidth;
     if (whole <= 3) {
-      dg.classList.add('final');
-      A.play(whole === 1 ? 'tickLast' : 'tick');
+      pulseDigits('final');
+      if (A.get('sfx')) A.play(whole === 1 ? 'tickLast' : 'tick');
+      else A.say(['One', 'Two', 'Three'][whole - 1]); // beeps off: the coach counts
       bg.beatNow(1);
-      if (!reduced && !isStudio()) flash(String(whole), '', true);
-      var edge = $('edge');
-      edge.classList.remove('on'); void edge.offsetWidth; edge.classList.add('on');
-      var sr = $('stage').getBoundingClientRect();
-      fx.wave(sr.left + sr.width / 2, sr.top + sr.height / 2, PHASE[seg.type].colors, 0.5);
       ring.shock(0.7);
       ring.hot = Math.max(ring.hot, 0.8);
-      buzz(35);
+      wk.classList.remove('beat'); void wk.offsetWidth; wk.classList.add('beat'); // edge pulse
+      buzz(whole === 1 ? [40, 40, 40] : 35);
+    } else if (whole <= 10) {
+      // 10: a chime you can't miss; 9…4: a tick each second
+      if (whole === 10) A.play('alert10');
+      else if (!A.speaking()) A.play('tickSoft'); // never tick over the coach
+      if (whole === 10) buzz([30, 60, 30]);
+      pulseDigits('tick');
+      bg.beatNow(0.35);
+      ring.hot = Math.max(ring.hot, 0.45);
     } else {
-      dg.classList.add('tick');
+      pulseDigits('tick');
       bg.beatNow(seg.type === 'work' ? 0.45 : 0.2);
       ring.beat = 1;
     }
@@ -1348,23 +1418,24 @@
     if (seg.type === 'work') {
       if (whole === 20) A.say(ex.cues[(seg.set - 1) % ex.cues.length]);
       else if (whole === Math.floor(seg.duration / 2) && whole !== 20 && whole !== 10) A.play('halfway');
-      else if (whole === 10) A.say('Ten seconds. Keep pushing!');
+      else if (whole === 10) tenSeconds('Keep pushing!');
     } else if (seg.type === 'jacks') {
-      if (whole === 10) A.say(seg.setBreak ? 'Ten seconds. Then your break.' : nx ? 'Ten seconds. ' + nx + ' next.' : 'Ten seconds. Finish strong!');
+      if (whole === 10) tenSeconds(seg.setBreak ? 'Then your break.' : nx ? cap(nx) + ' next.' : 'Finish strong!');
     } else if (seg.type === 'rest') {
-      if (whole === 10) A.say('Ten seconds. Get ready for ' + nx + '.');
+      if (whole === 10) tenSeconds(nx ? cap(nx) + ' next. Get in position.' : 'Get in position.');
     } else if (seg.type === 'setrest') {
       if (whole === 240 || whole === 180 || whole === 120) A.say((whole / 60) + ' minutes left in your break.');
       else if (whole === 60) A.say('One minute. Set ' + (seg.set + 1) + ' is coming up.');
       else if (whole === 30) A.say('Thirty seconds. First up, ' + nx + '. Get in position.');
-      else if (whole === 10) A.say('Ten seconds.');
-    }
-    if (seg.type === 'setrest' && whole <= 30 && !run.figSwapped && seg.next && workFig) {
-      run.figSwapped = true;
-      workFig.setExercise(seg.next);
-      workFig.pulse();
+      else if (whole === 10) tenSeconds('Get in position.');
     }
   }
+  /** At 10 s the chime says "ten seconds"; the line follows once it has rung (or the coach says it all). */
+  function tenSeconds(line) {
+    if (A.get('sfx')) sayLater(line, 650);
+    else A.say('Ten seconds. ' + line);
+  }
+  function cap(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
 
   function updateCoach(seg, t) {
     var plan = coachPlan(seg);
@@ -1377,6 +1448,9 @@
     var v = $('coachV');
     v.textContent = item.v;
     v.classList.remove('swap'); void v.offsetWidth; v.classList.add('swap');
+    var tip = $('unTip');
+    tip.innerHTML = '<b>' + esc(item.k) + '</b> ' + esc(item.v);
+    tip.classList.remove('swap'); void tip.offsetWidth; tip.classList.add('swap');
   }
 
   /** The always-visible "what's next and when" line. */
@@ -1397,8 +1471,10 @@
       if (segs[i].type === 'setrest') return 'Set break in <b>' + clock(segs[i].start - t) + '</b>';
     }
     if (nw >= 0) {
-      var then = segs[idx + 1] && segs[idx + 1].type === 'jacks' && seg.type === 'work' ? ' after jacks' : '';
-      return 'Next: <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>' + then;
+      if (segs[idx + 1] && segs[idx + 1].type === 'jacks' && seg.type === 'work') {
+        return 'Then <b>jumping jacks</b> → <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>';
+      }
+      return 'Next: <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>';
     }
     if (seg.type === 'work' && segs[idx + 1] && segs[idx + 1].type === 'jacks') return 'Then <b>30s jumping jacks</b> to finish';
     return '<b>Last interval.</b> Finish strong!';
@@ -1407,21 +1483,21 @@
   /** Counted warm-up steps: one call per beat ("1, 2, 3, ONE"). */
   function onBeat(seg, bi, prev) {
     var count = Math.floor(bi / seg.beats) + 1, beat = bi % seg.beats + 1;
-    setDigits(String(count), 'Count ' + count + ' of ' + seg.counts);
+    setDigits(count + '/' + seg.counts, 'Count ' + count + ' of ' + seg.counts);
     var dots = $('beats').children;
     for (var i = 0; i < dots.length; i++) { dots[i].classList.toggle('on', i < beat); dots[i].classList.toggle('now', i === beat - 1); }
     var natural = prev != null && bi === prev + 1 && run.playing;
     if (!natural) return;
-    var dg = $('digits');
     if (beat === seg.beats) {
       A.play('beatAccent');
-      A.say(COUNT_WORDS[count - 1]);
       bg.beatNow(0.5); ring.beat = 1;
-      dg.classList.remove('tick'); void dg.offsetWidth; dg.classList.add('tick');
+      pulseDigits('tick');
     } else {
       A.play('beat');
       bg.beatNow(0.2);
     }
+    // phone speech starts 0.2–0.6 s late: ask for the count word just before its beat
+    if (beat === seg.beats - 1) sayLater(COUNT_WORDS[count - 1], Math.max(0, seg.beat * 1000 - 300));
   }
 
   function update() {
@@ -1433,6 +1509,7 @@
     if (idx >= tl.segments.length) { finish(); return; }
     if (idx !== run.segIdx) enterSegment(idx);
     var seg = tl.segments[idx];
+    if (seg.type === 'warmup' && seg.lead) t = warmLead(seg, t); // may hold the clock while the coach talks
     var remaining = Math.max(0, seg.end - t);
     var whole = Math.max(1, Math.ceil(remaining - 1e-6));
     if (whole !== run.lastWhole) {
@@ -1443,21 +1520,36 @@
       wn.innerHTML = nl;
       wn.hidden = !nl;
     }
-    if (seg.type === 'warmup' && seg.counts) {
-      var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start) / seg.beat + 1e-6)));
+    if (seg.type === 'warmup' && seg.counts && moving(seg)) {
+      var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start - seg.lead) / seg.beat + 1e-6)));
       if (bi !== run.lastBeat) { var pb = run.lastBeat; run.lastBeat = bi; onBeat(seg, bi, pb); }
     }
     updateCoach(seg, t);
 
-    if (seg.type === 'setrest') {
+    if (run.mode === 'rest' && remaining <= 3 && !run.getSet) {
+      // the last seconds of any rest: "Get set", and the ring turns to the work colour
+      run.getSet = true;
+      $('dialK').textContent = 'Get set';
+      $('dialSub').textContent = '';
+      if (seg.type !== 'prep') { $('wName').textContent = 'Get set'; fitName(); }
+      var wc = PHASE.work.colors; ring.setColors(wc[0], wc[1]);
+    }
+    if (seg.type === 'setrest' || seg.type === 'rest') {
       ring.breathe = t - seg.start;
       var inhale = (ring.breathe % 10) < 4;
-      if (inhale !== run.inhale) { run.inhale = inhale; $('wEx').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
+      if (inhale !== run.inhale && remaining > 3) { run.inhale = inhale; $('dialSub').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
     }
-    ring.progress = remaining / seg.duration;
+    if (seg.type === 'warmup' && seg.lead) {
+      // two sweeps per warm-up step: the lead-in runs down to BEGIN, then the move itself
+      // (so the ring empties exactly with "Starts in", and again with the last count)
+      var le = seg.start + seg.lead;
+      ring.progress = t < le ? (le - t) / seg.lead : remaining / (seg.duration - seg.lead);
+    } else ring.progress = remaining / seg.duration;
     ring.total = t / tl.total;
-    var cur = $('segs').children[idx];
-    if (cur) cur.style.setProperty('--p', ((t - seg.start) / seg.duration).toFixed(4));
+    if (prog.live) {
+      var pf = prog.live === prog.warm ? t / tl.warmupEnd : (t - seg.start) / seg.duration;
+      prog.live.style.setProperty('--p', Math.min(1, pf).toFixed(4));
+    }
 
     var sec = Math.floor(t);
     if (sec !== run.lastClock) {
@@ -1467,31 +1559,445 @@
     }
   }
 
+  /** A warm-up step is moving (its lead-in is over). */
+  function moving(seg) { return !seg.lead || !!(run.warm && run.warm.idx === seg.index && run.warm.go); }
+  function leadText(title, sub) {
+    if ($('wlTitle').textContent !== title) $('wlTitle').textContent = title;
+    if ($('wlSub').textContent !== sub) $('wlSub').textContent = sub;
+  }
+  /**
+   * Warm-up lead-in. The coach names the move ("Next warm-up: squats…") while
+   * the screen says "Get ready · Starts in N". The countdown never starts over
+   * the coach (the clock holds, up to 4 s: "Listen…") and a breath of silence
+   * comes first. Then a spoken "5, 4, 3, 2, 1" (3, 2, 1 for a leg switch) with
+   * a big number each second, and "Begin!" as the BEGIN wipe opens on the
+   * first beat: only then the count. While the coach is counting there are no
+   * ticks over the numbers; if the voice can't play, ticks carry it instead.
+   */
+  var VLEAD = 0.3;   // phone speech starts late: each number is asked for this early
+  var GAP = 0.8;     // silence between the coach's line and the first number
+  var CD_WORDS = ['One', 'Two', 'Three', 'Four', 'Five'];
+  function warmLead(seg, t) {
+    var cd = seg.countdown || 5;
+    var leadEnd = seg.start + seg.lead, now = performance.now();
+    var cs = leadEnd - cd, hp = cs - VLEAD - GAP; // countdown start; hold point
+    var w = run.warm;
+    if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, counting: false, go: false, flashed: false, holdSince: 0, k: -1, vk: -1, said: false };
+    if (w.go) return t;
+    var wk = $('workout'), box = $('wlBox');
+    wk.classList.add('wu-lead');
+    // the screen greets you while the coach does, then gives the instruction
+    var title = run.welcomeIdx === seg.index && t - seg.start < 3.5 ? 'Welcome' : 'Get ready';
+    // whole seconds: a half-second lead shows its first number for a full second
+    var startsIn = 'Starts in ' + Math.max(1, Math.min(Math.floor(seg.lead), Math.ceil(leadEnd - t - 1e-6)));
+    box.classList.remove('listen');
+    if (t < hp) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
+    if (!w.counting) {
+      if (t - hp > 0.6 || !run.playing) w.counting = true; // jumped in, or paused: no hold
+      else {
+        if (!w.holdSince) w.holdSince = now;
+        if (A.speaking() && A.voiceWorks() && now - w.holdSince < 4000) {
+          run.base = hp - 0.001; run.anchor = now; // hold: let the coach finish
+          box.classList.remove('runway');
+          // only a real wait says so (a line ending right on time doesn't flicker "Listen…")
+          if (now - w.holdSince > 700) { leadText(title, 'Listen\u2026'); box.classList.add('listen'); }
+          return run.base;
+        }
+        w.counting = true;
+      }
+    }
+    if (t >= leadEnd) { w.go = true; startMove(seg, t - leadEnd < 0.6 && run.playing); return t; }
+    // the voice: each number asked for VLEAD early so it lands on its second; then "Begin!"
+    var vk = Math.floor(t - cs + VLEAD + 1e-6);
+    if (vk !== w.vk) {
+      var vnat = vk === w.vk + 1 || (w.vk >= 0 && vk === w.vk + 2); // a late frame may skip one
+      w.vk = vk;
+      if (vk >= 0 && vnat && run.playing) {
+        if (vk < cd) A.say(CD_WORDS[cd - 1 - vk]);
+        else { w.said = true; A.say('Begin!'); }
+      }
+    }
+    if (t < cs) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
+    // the numbers: big, pulsing, one per second; 3-2-1 also pulse the screen edge
+    var k = Math.min(cd - 1, Math.floor(t - cs + 1e-6));
+    if (k !== w.k) {
+      var natural = k === w.k + 1 || (w.k >= 0 && k === w.k + 2);
+      w.k = k;
+      var n = cd - k;
+      box.classList.add('runway');
+      leadText(String(n), 'Starts in');
+      box.classList.remove('pulse'); void box.offsetWidth; box.classList.add('pulse');
+      if (run.playing && natural) {
+        // the coach's numbers are the countdown; without a voice the ticks carry it (louder for 3, 2, 1)
+        if (A.get('sfx') && !A.voiceWorks()) A.play(n > 3 ? 'tickSoft' : n === 1 ? 'tickLast' : 'tick');
+        if (n <= 3) {
+          wk.classList.remove('beat'); void wk.offsetWidth; wk.classList.add('beat');
+          ring.shock(0.6); ring.hot = Math.max(ring.hot, 0.7);
+          buzz(n === 1 ? [40, 40, 40] : 35);
+        } else bg.beatNow(0.3);
+      }
+    }
+    // BEGIN's wipe: after "One" has had its moment, and it opens as the count begins
+    if (!w.flashed && run.playing && t >= leadEnd - 0.35) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
+    return t;
+  }
+  /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
+  function startMove(seg, loud) {
+    $('workout').classList.remove('wu-lead');
+    $('dLabel').textContent = seg.counts ? 'Count' : 'Time left';
+    $('beats').hidden = !seg.counts;
+    run.lastWhole = null; run.lastBeat = null;
+    if (!loud) return;
+    // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
+    if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
+    else if (!(run.warm && run.warm.said)) A.say('Begin!');
+    buzz([90, 50, 180]);
+    ring.shock(1); ring.hot = 1;
+  }
+  /** Say something a moment later, if we're still in the same interval. */
+  function sayLater(text, ms) {
+    var idx = run.segIdx;
+    setTimeout(function () { if (run && !run.finished && run.playing && run.segIdx === idx) A.say(text); }, ms);
+  }
+
   function skip() {
     if (!run) return;
-    var idx = H.segmentAt(run.tl, elapsedNow());
-    var next = run.tl.segments[idx + 1];
+    var from = elapsedNow();
+    var idx = H.segmentAt(run.tl, from);
+    var seg = run.tl.segments[idx], next = run.tl.segments[idx + 1];
     A.play('click');
     seek(next ? next.start : run.tl.total);
+    if (seg && next && seg.end - from > 4) offerUndo(skippedWhat(seg), from);
+  }
+  function skippedWhat(seg) {
+    return seg.type === 'warmup' ? 'Skipped ' + warmName(seg).toLowerCase()
+      : seg.type === 'setrest' ? 'Skipped the set break'
+      : seg.type === 'rest' ? 'Skipped rest'
+      : seg.type === 'prep' ? 'Started early'
+      : seg.type === 'jacks' ? 'Skipped jumping jacks'
+      : 'Skipped ' + exName(seg.exercise);
+  }
+  function skipWarmup() {
+    if (!run) return;
+    var from = elapsedNow();
+    // the welcome was cut short: the get-ready says it instead
+    if (run.welcomeIdx === 0 && A.speaking() && from < 8) run.welcome = true;
+    A.play('click'); A.stopVoice();
+    seek(run.tl.warmupEnd);
+    offerUndo('Skipped warm-up', from);
+  }
+  /** A skip throws time away; give a few seconds to take it back. */
+  var undo = { at: null, timer: 0 };
+  function offerUndo(text, at) {
+    if (undo.at != null) { undo.n++; text = 'Moved ' + undo.n + ' times'; } // chain: undo goes back to the first one
+    else { undo.at = at; undo.n = 1; }
+    $('toastText').textContent = text;
+    var t = $('toast');
+    t.hidden = false;
+    $('wProg').classList.add('undoing'); // takes the place of the "sets left" text
+    t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');
+    clearTimeout(undo.timer);
+    undo.timer = setTimeout(hideUndo, 8000);
+  }
+  function hideUndo() { clearTimeout(undo.timer); undo.at = null; $('toast').hidden = true; $('wProg').classList.remove('undoing'); }
+  /**
+   * Where ⏮ goes: during a rest or set break, back to the exercise you just
+   * did; otherwise restart this interval, or go to the previous one if it
+   * only just began.
+   */
+  function backTarget() {
+    var tl = run.tl, t = elapsedNow(), idx = Math.min(H.segmentAt(tl, t), tl.segments.length - 1), seg = tl.segments[idx];
+    if (seg.type === 'rest' || seg.type === 'setrest') {
+      for (var i = idx - 1; i >= 0; i--) if (tl.segments[i].type === 'work') return { seg: tl.segments[i], kind: 'redo' };
+    }
+    if (t - seg.start < 3 && idx > 0) return { seg: tl.segments[idx - 1], kind: 'back' };
+    return { seg: seg, kind: 'restart' };
   }
   function prev() {
     if (!run) return;
-    var t = elapsedNow();
-    var idx = H.segmentAt(run.tl, t);
-    var seg = run.tl.segments[Math.min(idx, run.tl.segments.length - 1)];
+    var from = elapsedNow(), b = backTarget();
     A.play('click');
-    if (t - seg.start < 3 && idx > 0) {
-      seek(run.tl.segments[idx - 1].start);
-    } else {
-      run.segIdx = -1; // replay the entry effects for this interval
-      seek(seg.start);
-    }
+    if (b.kind === 'restart') run.segIdx = -1; // replay the entry effects for this interval
+    seek(b.seg.start);
+    offerUndo((b.kind === 'restart' ? 'Restarted ' : b.kind === 'redo' ? 'Redoing ' : 'Back to ') + segName(b.seg), from);
   }
+  function segName(sg) {
+    return sg.type === 'work' ? exName(sg.exercise) : sg.type === 'rest' ? 'rest' : sg.type === 'jacks' ? 'jumping jacks'
+      : sg.type === 'setrest' ? 'the set break' : sg.type === 'prep' ? 'get ready' : warmName(sg).toLowerCase();
+  }
+
+  // ---------------------------------------------------------------- swipe carousel: left = next, right = back
+  /**
+   * The ring's inside is a carousel. Dragging slides what's on now out with the
+   * finger and slides a preview of the destination in from the other side,
+   * clipped to the ring: the next exercise's live demo, "Rest 0:30", "Restart
+   * Push Ups"... The ring blends toward the destination's colour, and ⏭ / ⏮
+   * charges with an arc that fills; when it's full (with a haptic tick) the
+   * button turns solid and letting go does it. Pause never moves.
+   *   - Rest, get ready, set break: swipe anywhere (you're at the phone).
+   *   - Exercise, jacks, warm-up: only a drag that starts on the controls, and
+   *     only a full charge; wipes, palms and picking the phone up do nothing.
+   * Tapping ⏭ / ⏮ plays the same slide. Edges (system back), palms, dialogs and
+   * the paused screen are ignored; double taps can't skip twice.
+   */
+  var carousel = null;
+  function initSwipe() {
+    var area = $('workout'), tp = $('transport'), stage = $('stage');
+    var peek = $('riPeek'), pkDial = $('pkDial'), pkK = $('pkK'), pkDigits = $('pkDigits'), pkSub = $('pkSub');
+    var chip = $('phaseChip'), wName = $('wName'), wEx = $('wEx'), head = document.querySelector('.w-head');
+    var peekFig = null, saved = null, dest = null;
+    var g = null, eatClick = false, lockUntil = 0, settleT = 0, nudgeT = 0;
+    function locked() { return performance.now() < lockUntil; }
+    function blocked(e) {
+      return !run || run.finished || currentScreen !== 'workout' || locked() ||
+        !$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden ||
+        (e.target.closest && e.target.closest('.w-top, .w-prog, .veil'));
+    }
+    function threshold() { return Math.min(110, Math.max(64, window.innerWidth * 0.2)); }
+    function travel() { return 2 * (parseFloat(getComputedStyle(stage).getPropertyValue('--ri')) || 140) + 24; }
+    function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
+
+    /** Where a move in direction dir (+1 next, -1 back) lands, and the preview of it. */
+    function prepare(dir) {
+      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, prefix = '';
+      if (dir > 0) sg = tl.segments[idx + 1];
+      else { var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : ''; }
+      dest = { dir: dir, seg: sg, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
+      tp.style.setProperty('--dc', dest.colors[0]);
+      peek.classList.remove('is-fig', 'is-dial', 'is-end');
+      if (!sg) { peek.classList.add('is-end'); return; }
+      var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
+      if (restLike) {
+        // the dial exactly as it will look: same label, digits and breathing line
+        peek.classList.add('is-dial');
+        pkDial.classList.toggle('bare', dialBare());
+        pkK.textContent = headFor(sg).label;
+        var d = sg.duration, txt = d >= 60 ? H.formatTime(d) : String(d);
+        pkDigits.textContent = '';
+        for (var i = 0; i < txt.length; i++) { var sp = document.createElement('span'); sp.className = txt[i] === ':' ? 'd colon' : 'd'; sp.textContent = txt[i]; pkDigits.appendChild(sp); }
+        pkDigits.classList.toggle('long', txt.length > 2);
+        pkSub.textContent = sg.type === 'prep' ? '' : 'Breathe in…';
+        peek.style.setProperty('--c1', dest.colors[0]);
+      } else {
+        // the figure exactly where and how big it will be
+        peek.classList.add('is-fig');
+        var fid = sg.type === 'warmup' ? warmFigId(sg) : sg.exercise;
+        if (!peekFig) peekFig = makeFig($('peekFig'), { exercise: fid, primary: dest.colors[0], secondary: dest.colors[1], quality: 'high', energy: 0.7 });
+        else peekFig.setExercise(fid);
+        peekFig.setColors(dest.colors[0], dest.colors[1]);
+        peekFig.setPlaying(true);
+      }
+    }
+    /** Armed: the title and the ring switch to the destination, so letting go changes nothing more. */
+    function arm(on) {
+      if (on === tp.classList.contains('armed')) return;
+      tp.classList.toggle('armed', on);
+      if (on) {
+        buzz(12);
+        if (dest && dest.seg) {
+          saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
+          var h = headFor(dest.seg);
+          chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
+          wEx.innerHTML = h.ex;
+          // the head wears the destination's colours too
+          var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
+          head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
+          head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
+          head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
+          ring.fastUntil = performance.now() + 300;
+          ring.setColors(dest.colors[0], dest.colors[1]);
+        }
+      } else restoreHead();
+    }
+    function clearHeadColours() {
+      head.style.removeProperty('--c1'); head.style.removeProperty('--c2');
+      head.classList.remove('pv-active', 'pv-rest');
+    }
+    function restoreHead() {
+      clearHeadColours();
+      if (run) ring.fastUntil = performance.now() + 300;
+      if (saved) {
+        chip.textContent = saved.chip; wName.textContent = saved.name; wEx.innerHTML = saved.ex; fitName();
+        saved = null;
+      }
+      if (run) { var cur = run.tl.segments[run.segIdx]; if (cur) { var c = PHASE[cur.type].colors; ring.setColors(c[0], c[1]); } }
+    }
+    /** Progress k (0..1+) of a move in direction dir: what's on now leaves with the finger, the destination eases in. */
+    function set(k, dir, over) {
+      var th = threshold(), D = travel(), kk = Math.min(1, k), e = easeOut(kk), extra = (over || 0) * 0.06;
+      stage.style.setProperty('--sx', (-dir * (kk * th + extra)).toFixed(1) + 'px');
+      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.35).toFixed(3));
+      stage.style.setProperty('--ss', (1 - 0.06 * kk).toFixed(4));
+      stage.style.setProperty('--px', (dir * 0.35 * D * (1 - e) - dir * extra).toFixed(1) + 'px');
+      stage.style.setProperty('--po', easeOut(Math.max(0, (kk - 0.25) / 0.75)).toFixed(3));
+      tp.style.setProperty('--ck', kk.toFixed(3));
+      tp.classList.toggle('charge-next', dir > 0 && kk > 0);
+      tp.classList.toggle('charge-prev', dir < 0 && kk > 0);
+      arm(kk >= 1);
+    }
+    function open() { clearTimeout(settleT); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); }
+    function close(after) {
+      stage.classList.remove('swiping');
+      clearTimeout(settleT);
+      settleT = setTimeout(function () {
+        if (g && g.on) return; // a new swipe took over: keep the carousel
+        stage.classList.remove('settle', 'carousel');
+        tp.classList.remove('charge-next', 'charge-prev');
+        if (peekFig) peekFig.setPlaying(false);
+        if (after) after();
+      }, reduced ? 0 : 260);
+    }
+    function springBack(dir) {
+      stage.classList.add('settle');
+      set(0, dir);
+      close();
+    }
+    /** Finish the move from wherever it is (swipes, ⏭ / ⏮ taps and arrow keys). */
+    function commit(dir, act) {
+      if (!run || locked()) return;
+      lockUntil = performance.now() + (reduced ? 300 : 600); // no double skips
+      if (!dest || dest.dir !== dir || !stage.classList.contains('carousel')) { open(); prepare(dir); }
+      stage.classList.remove('swiping');
+      stage.classList.add('settle');
+      set(1, dir);
+      setTimeout(function () {
+        // swap in the real interval: it looks exactly like the preview, so snap without animating
+        saved = null;
+        clearHeadColours();
+        stage.classList.remove('settle');
+        stage.classList.add('snap');
+        document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
+        var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
+        run.quiet = true;
+        act();
+        run.quiet = false;
+        if (hand != null && workFig && dest.seg) {
+          // the real figure continues exactly where the preview was: same move, pose and colours
+          var nowSeg = run.tl.segments[run.segIdx];
+          if (nowSeg && nowSeg.index === dest.seg.index) {
+            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, { instant: true, time: hand });
+            workFig.setColors(dest.colors[0], dest.colors[1], true);
+          }
+        }
+        stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
+        stage.style.setProperty('--po', 0);
+        tp.classList.remove('armed');
+        stage.classList.remove('carousel', 'swiping');
+        tp.classList.remove('charge-next', 'charge-prev');
+        if (peekFig) peekFig.setPlaying(false);
+        dest = null;
+        requestAnimationFrame(function () { requestAnimationFrame(function () { stage.classList.remove('snap'); document.body.classList.remove('instant-phase'); }); });
+      }, reduced ? 0 : 220);
+    }
+    /** One-time nudge that shows the next interval is just a swipe away. */
+    function nudge() {
+      if (!run || g || locked() || reduced) return;
+      open(); prepare(1);
+      stage.classList.remove('swiping'); stage.classList.add('settle');
+      set(0.35, 1);
+      nudgeT = setTimeout(function () { nudgeT = 0; springBack(1); }, 700);
+    }
+    /** A sideways swipe during exercise that we ignored: show where skipping lives instead. */
+    var hinted = false;
+    function hintControls(dir) {
+      if (hinted) return;
+      hinted = true;
+      var btn = dir > 0 ? $('skip') : $('prev');
+      btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
+      if (!state.dragTip) {
+        state.dragTip = true; savePrefs();
+        var tip = $('wpTip'); tip.textContent = 'During exercise, drag from the controls to skip';
+        tip.hidden = false; $('wProg').classList.add('tipping');
+        setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, 5000);
+      }
+    }
+    carousel = { commit: commit, nudge: nudge };
+
+    area.addEventListener('pointerdown', function (e) {
+      if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
+      if (e.pointerType === 'touch') {
+        if (e.width > 40 || e.height > 40) return; // a palm or a wipe, not a fingertip
+        if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
+      }
+      var restMode = run.mode === 'rest', ignored = false;
+      if (!restMode) {
+        // during exercise only a drag that starts on the controls counts
+        var r = tp.getBoundingClientRect(), m = 16;
+        ignored = e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
+      }
+      hinted = false;
+      if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
+      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored };
+    });
+    area.addEventListener('pointermove', function (e) {
+      if (!g || e.pointerId !== g.id) return;
+      var dx = e.clientX - g.x, dy = e.clientY - g.y;
+      if (g.ignored) {
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) { hintControls(dx < 0 ? 1 : -1); g = null; }
+        else if (Math.abs(dy) > 48) g = null;
+        return;
+      }
+      if (!g.on) {
+        if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } // vertical: not ours
+        if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        g.on = true;
+        try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        open();
+      }
+      var dir = dx < 0 ? 1 : -1;
+      if (dir !== g.dir) { if (g.dir) arm(false); g.dir = dir; prepare(dir); }
+      g.dx = dx;
+      var th = threshold(), adx = Math.abs(dx);
+      set(adx / th, dir, Math.max(0, adx - th));
+    });
+    function end(e, cancelled) {
+      if (!g || e.pointerId !== g.id) return;
+      var s = g; g = null;
+      if (!s.on) return;
+      var dt = Math.max(1, performance.now() - s.t), adx = Math.abs(s.dx);
+      var full = adx >= threshold();
+      var flick = s.rest && adx > 56 && adx / dt > 0.45; // flicks only while resting
+      if (cancelled || !(full || flick)) { arm(false); springBack(s.dir || 1); return; }
+      eatClick = true; // a swipe that started on a button must not also press it
+      setTimeout(function () { eatClick = false; }, 350);
+      commit(s.dx < 0 ? 1 : -1, s.dx < 0 ? skip : prev);
+    }
+    area.addEventListener('pointerup', function (e) { end(e, false); });
+    area.addEventListener('pointercancel', function (e) { end(e, true); });
+    area.addEventListener('click', function (e) { if (eatClick) { e.preventDefault(); e.stopPropagation(); eatClick = false; } }, true);
+  }
+
+  // ---------------------------------------------------------------- notices
+  var noticeT = 0;
+  function notice(text, ms) {
+    $('noticeText').textContent = text;
+    $('notice').hidden = false;
+    clearTimeout(noticeT);
+    noticeT = setTimeout(function () { $('notice').hidden = true; }, ms || 12000);
+  }
+  // The voice coach depends on the browser's speech engine. Some in-app viewers
+  // don't have one (or drop every line): say so instead of staying silent.
+  var ANDROID = /Android/i.test(navigator.userAgent);
+  var VOICE_HELP = 'The voice coach can\u2019t play in this viewer. Open the link in ' +
+    (ANDROID ? 'Chrome' : /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'Safari' : 'Safari or Chrome') + ' to hear it. Beeps still work.';
+  A.onVoiceProblem(function () { if (A.get('voice')) notice(VOICE_HELP); });
+
+  // A browser / system "back" mid-workout asks before leaving instead of dropping the session.
+  function guardHistory() {
+    try { if (!(history.state && history.state.hiit)) history.pushState({ hiit: 1 }, ''); } catch (e) { /* sandboxed: fine */ }
+  }
+  window.addEventListener('popstate', function () {
+    if (currentScreen === 'workout' && run && !run.finished) {
+      guardHistory();
+      if ($('quitDialog').hidden) openQuit();
+    }
+  });
 
   var doneFig = null;
   function finish() {
     if (!run || run.finished) return;
     run.finished = true;
+    releaseHistory();
     var st = playedStats();
     var counted = st.active >= st.planned * 0.5;
     if (counted) recordWorkout(st.total);
@@ -1510,6 +2016,7 @@
     bg.setRunning(true);
     setTimeout(function () { if (currentScreen === 'done') bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy); }, 2200);
     if (workFig) workFig.setPlaying(false);
+    if (nextFig) nextFig.setPlaying(false);
     showScreen('done');
 
     var tl = run.tl;
@@ -1530,13 +2037,7 @@
     else { doneFig.setExercise('jacks'); doneFig.setPlaying(true); }
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
-    if (isStudio()) { if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? PHASE.done.colors[1] : '#ffffff']); }
-    else fx.confetti(['#ffd23f', '#ff2bd6', '#22e5ff', '#c6ff1a', '#ffffff']);
-    setTimeout(function () {
-      var r = $('doneFig').getBoundingClientRect();
-      fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6', '#ffffff'], 140, 1.2);
-      fx.wave(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6'], 1);
-    }, 200);
+    if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? PHASE.done.colors[1] : '#ffffff']);
     setTimeout(function () { $('again').focus({ preventScroll: true }); }, 400);
   }
 
@@ -1565,17 +2066,24 @@
     requestAnimationFrame(step);
   }
 
+  /** The workout added a history entry (so Back asks first); take it away when we leave. */
+  function releaseHistory() {
+    try { if (history.state && history.state.hiit) history.back(); } catch (e) { /* ignore */ }
+  }
   function endRun() {
     if (run) run.finished = true;
+    releaseHistory();
     run = null;
     unlockScreen();
     A.stopVoice();
     A.sleep(0);
     if (workFig) workFig.setPlaying(false);
+    if (nextFig) nextFig.setPlaying(false);
     $('pausedVeil').hidden = true;
     setInert(false);
     $('quitDialog').hidden = true;
     $('coachSheet').hidden = true;
+    hideUndo();
   }
 
   // quit dialog
@@ -1585,7 +2093,10 @@
     resumeAfterDialog = run.playing;
     pauseQuietly();
     $('pausedVeil').hidden = true;
-    $('quitDialog').hidden = false;
+    var qd = $('quitDialog');
+    qd.hidden = false;
+    qd.classList.add('guard');
+    setTimeout(function () { qd.classList.remove('guard'); }, 500);
     setInert(true);
     $('quitNo').focus();
   }
@@ -1665,11 +2176,7 @@
       showHero(state.ids[0]);
       renderSetup();
     });
-    $('start').addEventListener('click', function (e) {
-      var r = e.currentTarget.getBoundingClientRect();
-      fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ff2bd6', '#ff8a1f', '#ffffff'], 70, 0.8);
-      startWorkout(state.ids);
-    });
+    $('start').addEventListener('click', function () { startWorkout(state.ids); });
     $('heroGuide').addEventListener('click', function (e) { openGuide(hero.shown || state.ids[0], 'setup', e.currentTarget); });
 
     $('sfxToggle').addEventListener('click', function () { A.set('sfx', !A.get('sfx')); A.unlock(); A.play('click'); syncToggles(); savePrefs(); });
@@ -1687,23 +2194,31 @@
 
     $('pause').addEventListener('click', function () { if (run) setPlaying(!run.playing); });
     $('resume').addEventListener('click', function () { setPlaying(true); });
-    $('endFromPause').addEventListener('click', function () { endRun(); showScreen('setup'); });
-    $('skip').addEventListener('click', function () {
-      if (run && run.tl.segments[run.segIdx] && run.tl.segments[run.segIdx].type === 'warmup') { A.play('click'); A.stopVoice(); seek(run.tl.warmupEnd); }
-      else skip();
+    $('endFromPause').addEventListener('click', openQuit); // always confirm
+    $('skip').addEventListener('click', function () { if (carousel && run) carousel.commit(1, skip); else skip(); });
+    $('unStart').addEventListener('click', skip);
+    $('wpSkip').addEventListener('click', skipWarmup);
+    $('toastUndo').addEventListener('click', function () {
+      if (run && undo.at != null) { A.play('click'); seek(undo.at); }
+      hideUndo();
     });
     $('wuToggle').addEventListener('click', function () {
       state.warmup = !state.warmup; A.play('click'); renderSetup();
     });
-    $('prev').addEventListener('click', prev);
+    $('prev').addEventListener('click', function () { if (carousel && run) carousel.commit(-1, prev); else prev(); });
+    initSwipe();
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });
+    $('noticeClose').addEventListener('click', function () { $('notice').hidden = true; });
     $('quitYes').addEventListener('click', function () { endRun(); showScreen('setup'); });
-    $('howTo').addEventListener('click', function (e) {
+    function howTo(e) {
       if (!run) return;
       var seg = run.tl.segments[run.segIdx];
       if (seg) openGuide(guideTarget(seg), 'workout', e.currentTarget);
-    });
+    }
+    $('howTo').addEventListener('click', howTo);
+    $('unHow').addEventListener('click', howTo);
+    document.querySelector('.un-figwrap').addEventListener('click', function () { $('unHow').click(); });
 
     $('csClose').addEventListener('click', closeGuide);
     $('csDone').addEventListener('click', closeGuide);
@@ -1751,8 +2266,8 @@
         var ae = document.activeElement;
         if (ae && ae.tagName === 'BUTTON' && ae !== $('pause') && focusByKeyboard) return;
         e.preventDefault(); setPlaying(!run.playing);
-      } else if (e.key === 'ArrowRight') { e.preventDefault(); skip(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+      } else if (e.key === 'ArrowRight') { e.preventDefault(); if (carousel) carousel.commit(1, skip); else skip(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); if (carousel) carousel.commit(-1, prev); else prev(); }
     });
 
     var scrollRaf = 0;
@@ -1811,8 +2326,11 @@
         bg.setMood(c[0], c[1], PHASE[seg.type].energy);
         ring.setColors(c[0], c[1]); ring.a = ring.ta.slice(); ring.b = ring.tb.slice();
         if (workFig) workFig.setColors(c[0], c[1]);
+        if (run.mode === 'rest') showUpNext(seg);
+        updateProgress(seg);
       }
     }
+    ring.sizeDirty = true;
     if (currentScreen === 'done') {
       bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy);
       if (doneFig) doneFig.setColors(PHASE.done.colors[0], PHASE.done.colors[1]);
@@ -1890,6 +2408,7 @@
   window.__hiit = {
     state: state,
     get run() { return run; },
+    get ring() { return ring; },
     seek: function (t) { seek(t); },
     advance: function (sec) { if (run && !run.finished) { run.base += sec; update(); } },
     start: function () { startWorkout(state.ids); },

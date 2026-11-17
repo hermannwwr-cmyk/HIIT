@@ -2275,11 +2275,17 @@
   };
 
   /* ------------------------------------------------------------ public API */
-  FP.setExercise = function (id) {
+  /**
+   * Show another exercise. opts.instant: no morph from the current pose;
+   * opts.time: start at that point of the loop (hand over from another figure).
+   */
+  FP.setExercise = function (id, opts) {
     if (this.dead) return;
     var ex = getEx(id);
-    if (ex === this.ex) return;
-    if (this.hasPose && this.W > 0) {
+    if (ex === this.ex && !(opts && opts.time != null)) return;
+    if (opts && opts.instant) {
+      this.morphT = 1; this.from = null;
+    } else if (this.hasPose && this.W > 0) {
       this.from = new Float32Array(this.cur);
       this.fromMeta = { floorY: this.meta.floorY, sc: this.meta.sc, farL: this.meta.farL, farR: this.meta.farR, flat: this.meta.flat };
       this.fromGnd = this.studio ? new Float32Array(this.gnd) : null;
@@ -2289,13 +2295,18 @@
       this.morphT = 1;
     }
     this.ex = ex;
-    this.time = 0;
+    this.time = opts && opts.time != null ? opts.time : 0;
+    this._still = false;
   };
-  FP.setColors = function (primary, secondary) {
+  /** Seconds into the current exercise's loop (to hand over to another figure). */
+  FP.getTime = function () { return this.time; };
+  /** New accent colours; instant skips the cross-fade. */
+  FP.setColors = function (primary, secondary, instant) {
     if (this.dead) return;
     this.c1a = this.c1; this.c2a = this.c2;
     this.c1b = parseColor(primary, this.c1b); this.c2b = parseColor(secondary, this.c2b);
-    this.colT = 0;
+    this.colT = instant ? 1 : 0;
+    if (instant) { this.c1 = this.c1b; this.c2 = this.c2b; }
   };
   FP.setPlaying = function (b) { if (!this.dead) this.playing = !!b; };
   /** Stop drawing entirely (e.g. while covered by a sheet); resumes where it was. */
