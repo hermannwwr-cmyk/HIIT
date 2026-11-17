@@ -1012,7 +1012,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 /* rest, get-ready and set-break tint the whole page in their colour */
 .workout::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 24%, transparent), color-mix(in srgb, var(--c1) 8%, transparent) 75%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tint, var(--c1)) 24%, transparent), color-mix(in srgb, var(--tint, var(--c1)) 8%, transparent) 75%);
   opacity: 0; transition: opacity .5s ease;
 }
 .workout[data-mode="rest"]::before { opacity: 1; }
@@ -1286,3 +1286,10 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
 .wp-tip[hidden] { display: none; }
 .w-prog.tipping .wp-left { display: none; }
+
+/* a swipe already showed the new phase: its colours switch without a cross-fade */
+body.instant-phase, body.instant-phase * { transition-property: none !important; }
+/* the chip line never wraps (it would resize the ring) */
+.w-tag { flex-wrap: nowrap; }
+.w-tag .chip { flex: none; }
+.w-ex { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

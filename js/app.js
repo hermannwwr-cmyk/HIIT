@@ -147,7 +147,7 @@
   }
 
   // ---------------------------------------------------------------- figures
-  var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop, setStyle: noop };
+  var stubFig = { setExercise: noop, getTime: function () { return 0; }, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop, setStyle: noop };
   function noop() {}
   var figs = [];
   function makeFig(canvas, opts) {
@@ -1171,20 +1171,21 @@
     var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
     run.mode = restMode ? 'rest' : 'active';
     $('workout').dataset.mode = run.mode;
+    // the page tint keeps its colour while it fades out after a rest
+    if (restMode) $('workout').style.setProperty('--tint', c[0]);
     $('upNext').hidden = !restMode;
     $('dial').setAttribute('aria-hidden', 'true');
     syncFigs();
     ring.breathe = seg.type === 'setrest' || seg.type === 'rest' ? 0 : null;
     ring.dashed = seg.type === 'jacks';
-    ring.shock(1);
-    ring.hot = 1;
+    if (!run.quiet) { ring.shock(1); ring.hot = 1; }
 
     if (restMode) showUpNext(seg);
     else if (workFig) {
       workFig.setExercise(seg.type === 'warmup' ? warmFigId(seg) : seg.exercise);
       workFig.setColors(c[0], c[1]);
       workFig.setEnergy(ph.energy);
-      workFig.pulse();
+      if (!run.quiet) workFig.pulse();
     }
 
     // header + labels
@@ -1631,8 +1632,8 @@
         if (dest && dest.seg) {
           saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
           var h = headFor(dest.seg);
-          chip.textContent = h.chip; wName.textContent = h.name; fitName();
-          wEx.innerHTML = (dest.prefix ? '<b>' + esc(dest.prefix) + '</b> · ' : '') + h.ex;
+          chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
+          wEx.innerHTML = h.ex;
           // the head wears the destination's colours too
           var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
           head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
@@ -1660,10 +1661,10 @@
     function set(k, dir, over) {
       var th = threshold(), D = travel(), kk = Math.min(1, k), e = easeOut(kk), extra = (over || 0) * 0.06;
       stage.style.setProperty('--sx', (-dir * (kk * th + extra)).toFixed(1) + 'px');
-      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.8).toFixed(3));
+      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.45).toFixed(3));
       stage.style.setProperty('--ss', (1 - 0.06 * kk).toFixed(4));
       stage.style.setProperty('--px', (dir * 0.35 * D * (1 - e) - dir * extra).toFixed(1) + 'px');
-      stage.style.setProperty('--po', e.toFixed(3));
+      stage.style.setProperty('--po', easeOut(Math.max(0, (kk - 0.25) / 0.75)).toFixed(3));
       tp.style.setProperty('--ck', kk.toFixed(3));
       tp.classList.toggle('charge-next', dir > 0 && kk > 0);
       tp.classList.toggle('charge-prev', dir < 0 && kk > 0);
@@ -1700,9 +1701,19 @@
         clearHeadColours();
         stage.classList.remove('settle');
         stage.classList.add('snap');
+        document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
+        var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
         run.quiet = true;
         act();
         run.quiet = false;
+        if (hand != null && workFig && dest.seg) {
+          // the real figure continues exactly where the preview was: same move, pose and colours
+          var nowSeg = run.tl.segments[run.segIdx];
+          if (nowSeg && nowSeg.index === dest.seg.index) {
+            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, { instant: true, time: hand });
+            workFig.setColors(dest.colors[0], dest.colors[1], true);
+          }
+        }
         stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
         stage.style.setProperty('--po', 0);
         tp.classList.remove('armed');
@@ -1710,7 +1721,7 @@
         tp.classList.remove('charge-next', 'charge-prev');
         if (peekFig) peekFig.setPlaying(false);
         dest = null;
-        requestAnimationFrame(function () { requestAnimationFrame(function () { stage.classList.remove('snap'); }); });
+        requestAnimationFrame(function () { requestAnimationFrame(function () { stage.classList.remove('snap'); document.body.classList.remove('instant-phase'); }); });
       }, reduced ? 0 : 220);
     }
     /** One-time nudge that shows the next interval is just a swipe away. */
