@@ -22,14 +22,21 @@
     return ctx;
   }
 
-  /** Call from a user gesture so browsers allow audio. */
+  /** Call from a user gesture so browsers allow audio (and speech: iOS needs a real word spoken in the gesture). */
   function unlock() {
     var c = ensure();
     if (c && c.state === 'suspended') { try { c.resume(); } catch (e) { /* ignore */ } }
-    if (window.speechSynthesis && settings.voice) {
+    if (window.speechSynthesis && settings.voice && !voice.unlocked) {
       try {
-        var u = new SpeechSynthesisUtterance(' ');
-        u.volume = 0; window.speechSynthesis.speak(u);
+        var u = new SpeechSynthesisUtterance('Ready');
+        u.volume = 0; u.lang = 'en-US';
+        var started = false;
+        u.onstart = function () { started = true; voice.ok = true; };
+        try { window.speechSynthesis.resume(); } catch (e) { /* ignore */ }
+        window.speechSynthesis.speak(u);
+        voice.unlocked = true;
+        // the silent unlock line counts as the first check, so a dead engine is noticed within seconds
+        setTimeout(function () { if (!started && !voice.ok) noteMiss(); }, 2500);
       } catch (e) { /* ignore */ }
     }
   }
@@ -143,16 +150,42 @@
     window.speechSynthesis.onvoiceschanged = function () { voiceCache = null; };
   }
 
+  /*
+   * Speech is fragile on phones and in in-app browsers: some drop a line spoken
+   * right after cancel(), some leave the queue paused, some have no voice at
+   * all. We work around the first two and notice the third: if lines never
+   * actually start playing, onProblem() is called once so the app can say so.
+   */
+  var voice = { ok: false, unlocked: false, misses: 0, seq: 0, told: false, onProblem: null };
+  function speakNow(text) {
+    var s = window.speechSynthesis;
+    var u = new SpeechSynthesisUtterance(text);
+    var v = pickVoice();
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+    u.rate = 1.05; u.pitch = 1; u.volume = 1;
+    var started = false, id = ++voice.seq;
+    u.onstart = function () { started = true; voice.ok = true; voice.misses = 0; };
+    try { s.resume(); } catch (e) { /* ignore */ }
+    s.speak(u);
+    // nothing started within 2.5 s and no newer line replaced it: that line was lost
+    setTimeout(function () {
+      if (started || voice.seq !== id || !settings.voice) return;
+      noteMiss();
+    }, 2500);
+  }
+  function noteMiss() {
+    voice.misses++;
+    if (voice.misses >= 2 && !voice.ok && !voice.told && voice.onProblem) { voice.told = true; voice.onProblem(); }
+  }
   function say(text) {
     if (!settings.voice || !window.speechSynthesis || !text) return;
     try {
       var s = window.speechSynthesis;
-      s.cancel();
-      var u = new SpeechSynthesisUtterance(text);
-      var v = pickVoice();
-      if (v) u.voice = v;
-      u.rate = 1.05; u.pitch = 1; u.volume = 1;
-      s.speak(u);
+      if (s.speaking || s.pending) {
+        s.cancel();
+        voice.seq++; // the interrupted line isn't a failure
+        setTimeout(function () { try { speakNow(text); } catch (e) { /* ignore */ } }, 60);
+      } else speakNow(text);
     } catch (e) { /* ignore */ }
   }
 
@@ -174,6 +207,8 @@
     unlock: unlock, play: play, say: say, stopVoice: stopVoice, sleep: sleep, speaking: speaking,
     set: function (k, v) { settings[k] = !!v; if (k === 'voice' && !v) stopVoice(); },
     get: function (k) { return settings[k]; },
-    voiceSupported: function () { return !!window.speechSynthesis; }
+    voiceSupported: function () { return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); },
+    /** fn() is called once if spoken lines never actually play here. */
+    onVoiceProblem: function (fn) { voice.onProblem = fn; }
   };
 })();

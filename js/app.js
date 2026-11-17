@@ -824,6 +824,7 @@
     var v = H.validate(ids);
     if (!v.ok) { $('startError').textContent = v.reason; return; }
     A.unlock();
+    if (A.get('voice') && !A.voiceSupported()) notice(VOICE_HELP);
     var tl = H.buildTimeline(ids, state.level, { warmup: state.warmup });
     run = {
       tl: tl, ids: tl.exercises.slice(), level: state.level,
@@ -1901,6 +1902,19 @@
     area.addEventListener('click', function (e) { if (eatClick) { e.preventDefault(); e.stopPropagation(); eatClick = false; } }, true);
   }
 
+  // ---------------------------------------------------------------- notices
+  var noticeT = 0;
+  function notice(text, ms) {
+    $('noticeText').textContent = text;
+    $('notice').hidden = false;
+    clearTimeout(noticeT);
+    noticeT = setTimeout(function () { $('notice').hidden = true; }, ms || 12000);
+  }
+  // The voice coach depends on the browser's speech engine. Some in-app viewers
+  // don't have one (or drop every line): say so instead of staying silent.
+  var VOICE_HELP = 'The voice coach can\u2019t play in this viewer. Open the link in Safari or Chrome to hear it. Beeps still work.';
+  A.onVoiceProblem(function () { if (A.get('voice')) notice(VOICE_HELP); });
+
   // A browser / system "back" mid-workout asks before leaving instead of dropping the session.
   function guardHistory() {
     try { if (!(history.state && history.state.hiit)) history.pushState({ hiit: 1 }, ''); } catch (e) { /* sandboxed: fine */ }
@@ -2128,6 +2142,7 @@
     initSwipe();
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });
+    $('noticeClose').addEventListener('click', function () { $('notice').hidden = true; });
     $('quitYes').addEventListener('click', function () { endRun(); showScreen('setup'); });
     function howTo(e) {
       if (!run) return;
