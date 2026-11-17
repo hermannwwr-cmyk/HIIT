@@ -109,7 +109,7 @@
     ' vec3 col=mix(dark,light,uLight);',
     // spotlight pool around the athlete
     ' vec2 sp=q*vec2(.9,1.35);',
-    ' float pool=exp(-dot(sp,sp)*2.4);',
+    ' float pool=exp(-dot(sp,sp)*mix(3.6,2.4,uLight));',
     ' col+=mix(uDPool,vec3(.03,.03,.026),uLight)*pool;',
     ' col+=mix(vec3(dot(uA,vec3(.3,.59,.11))),uA,.55)*pool*uDTint*(1.-uLight);',
     // soft top key light falling on the stage

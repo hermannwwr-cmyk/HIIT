@@ -12,16 +12,16 @@
   --dock: #1b1b1d;
   --ink: #151516;
   --ink-2: #1c1c1e;
-  --surface: rgba(40, 40, 43, .92);
-  --surface-2: rgba(52, 52, 56, .95);
-  --surface-solid: #28282b;
-  --tile: #2e2e32;
+  --surface: rgba(46, 46, 49, .92);
+  --surface-2: rgba(58, 58, 62, .95);
+  --surface-solid: #2e2e31;
+  --tile: #343438;
   --line: rgba(255, 255, 255, .07);
   --line-hi: rgba(255, 255, 255, .14);
   --btn-bg: #d4380f; --btn-ink: #ffffff;
   --text: #f4f5f7;
-  --dim: #b2b8c4;
-  --mute: #8d94a3;
+  --dim: #b8bac0;
+  --mute: #a0a2a8;
   --accent: #ff5a36;
   --accent-2: #ff2d55;
   --accent-ink: #160b06;
@@ -648,9 +648,9 @@
 :root[data-look="studio"][data-scheme="dark"][data-dark="charcoal"] {
   --dock: #141210;
   --ink: #100f0e; --ink-2: #1b1917;
-  --surface: rgba(43, 40, 37, .9); --surface-2: rgba(55, 51, 47, .94); --surface-solid: #2a2724; --tile: #322e2a;
+  --surface: rgba(49, 45, 42, .92); --surface-2: rgba(60, 56, 52, .95); --surface-solid: #302c29; --tile: #36322e;
   --line: rgba(255, 238, 218, .075); --line-hi: rgba(255, 238, 218, .15);
-  --text: #f3eee7; --dim: #c2b9ad; --mute: #a59b90;
+  --text: #f3eee7; --dim: #c2b9ad; --mute: #aea498;
   --accent: #ff7349; --accent-ink: #170d07; --btn-bg: #d4380f; --btn-ink: #ffffff;
   --shadow-1: 0 1px 0 rgba(255, 244, 230, .07) inset, 0 1px 2px rgba(0, 0, 0, .3), 0 22px 44px -26px rgba(0, 0, 0, .85);
   --work-a: #ff6b3d; --work-b: #f04a2a; --rest-a: #5fb3e8; --rest-b: #6b8fd6; --jacks-a: #f2b544; --jacks-b: #e8873a;

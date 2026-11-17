@@ -89,11 +89,11 @@
     },
     charcoal: {
       material: 'stone', meta: '#100f0e',
-      phase: { setup: ['#ff6b3d', '#6b8fd6'], prep: ['#c9bfb2', '#8f867b'], work: ['#ff6b3d', '#f04a2a'], rest: ['#5fb3e8', '#6b8fd6'],
+      phase: { setup: ['#d8c8b8', '#6b8fd6'], prep: ['#c9bfb2', '#8f867b'], work: ['#ff6b3d', '#f04a2a'], rest: ['#5fb3e8', '#6b8fd6'],
         jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'] }
     }
   };
-  var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'graphite';
+  var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'charcoal';
   function figMaterial() {
     if (LOOKS[look].style !== 'studio') return undefined;
     return LOOKS[look].scheme === 'dark' ? DARK_VARIANTS[darkVariant].material : 'graphite';
