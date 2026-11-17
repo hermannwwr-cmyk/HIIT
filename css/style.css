@@ -1177,7 +1177,12 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 
 /* ---- paused: Resume exactly where Pause was; End workout far away (and confirmed) */
 .veil-paused { display: block; }
-.veil-paused.guard { pointer-events: none; }
+.veil-paused.guard, #quitDialog.guard { pointer-events: none; }
+/* confirm dialog: "Keep going" on top, where Resume was; End workout below it */
+#quitDialog .veil-actions { flex-direction: column; align-items: stretch; width: min(100%, 300px); margin-inline: auto; }
+@media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  .workout[data-mode="rest"] .w-name { display: none; } /* chip, page tint and ring already say rest */
+}
 .veil-paused .veil-card { position: absolute; left: 50%; bottom: calc(100% - var(--ry, 50vh) + 64px); transform: translateX(-50%); width: min(calc(100vw - 32px), 420px); }
 .veil-resume {
   position: absolute; left: var(--rx, 50%); top: var(--ry, 50%); transform: translate(-50%, -50%);

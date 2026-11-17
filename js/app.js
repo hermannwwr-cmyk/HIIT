@@ -576,6 +576,10 @@
     var lower = document.querySelector('.w-lower'), card = $('upNext');
     var H = lower.offsetHeight, W = Math.min(lower.offsetWidth, 520);
     if (!H || !W) return;
+    if (window.innerWidth > window.innerHeight * 1.25) {
+      // side-by-side layout: the card may also use the empty space under the readout
+      H = Math.max(H, window.innerHeight - 12 - lower.getBoundingClientRect().top);
+    }
     var S = typeof ring !== 'undefined' && ring && ring.geo ? ring.geo.S : 300;
     var wasHidden = card.hidden;
     if (wasHidden) { card.style.visibility = 'hidden'; card.hidden = false; }
@@ -1007,7 +1011,7 @@
     } else {
       var more = sets - seg.set;
       setTxt = 'Set ' + seg.set + ' of ' + sets;
-      leftTxt = more > 0 ? (window.innerWidth < 360 ? more + ' more ' + (more === 1 ? 'set' : 'sets') : sets_(more) + ' left after this') : 'Final set';
+      leftTxt = more > 0 ? sets_(more) + ' left after this' : 'Final set';
     }
     $('wpSet').textContent = setTxt;
     $('wpLeft').textContent = leftTxt;
@@ -1117,6 +1121,7 @@
     run.figSwapped = false;
     run.inhale = null;
     run.lastBeat = null;
+    run.getSet = false;
     document.body.dataset.phase = seg.type;
     var prevSeg = tl.segments[idx - 1];
     var c = ph.colors;
@@ -1310,17 +1315,12 @@
       if (!seg.counts) setDigits(String(whole), whole + ' seconds left');
       return;
     }
-    var long = seg.duration >= 60;
+    var long = whole >= 60;
     setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
     var natural = prev != null && whole < prev && prev - whole <= 2 && run.playing;
     if (!natural) return;
     if (whole <= 3) {
       pulseDigits('final');
-      if (run.mode === 'rest') {
-        $('dialK').textContent = 'Get set';
-        $('dialSub').textContent = '';
-        var wc = PHASE.work.colors; ring.setColors(wc[0], wc[1]);
-      }
       A.play(whole === 1 ? 'tickLast' : 'tick');
       bg.beatNow(1);
       ring.shock(0.7);
@@ -1441,6 +1441,14 @@
     }
     updateCoach(seg, t);
 
+    if (run.mode === 'rest' && remaining <= 3 && !run.getSet) {
+      // the last seconds of any rest: "Get set", and the ring turns to the work colour
+      run.getSet = true;
+      $('dialK').textContent = 'Get set';
+      $('dialSub').textContent = '';
+      if (seg.type !== 'prep') { $('wName').textContent = 'Get set'; fitName(); }
+      var wc = PHASE.work.colors; ring.setColors(wc[0], wc[1]);
+    }
     if (seg.type === 'setrest' || seg.type === 'rest') {
       ring.breathe = t - seg.start;
       var inhale = (ring.breathe % 10) < 4;
@@ -1606,7 +1614,10 @@
     resumeAfterDialog = run.playing;
     pauseQuietly();
     $('pausedVeil').hidden = true;
-    $('quitDialog').hidden = false;
+    var qd = $('quitDialog');
+    qd.hidden = false;
+    qd.classList.add('guard');
+    setTimeout(function () { qd.classList.remove('guard'); }, 500);
     setInert(true);
     $('quitNo').focus();
   }
