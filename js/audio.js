@@ -69,8 +69,8 @@
     // 10 seconds left: a two-note chime, clearly different from the ticks
     alert10: function (t) {
       [[1319, 0], [1760, 0.16]].forEach(function (n) {
-        tone(n[0], t + n[1], 0.5, { type: 'triangle', vol: 0.42 });
-        tone(n[0] * 2, t + n[1], 0.22, { type: 'sine', vol: 0.12 });
+        tone(n[0], t + n[1], 0.5, { type: 'triangle', vol: 0.3 });
+        tone(n[0] * 2, t + n[1], 0.22, { type: 'sine', vol: 0.09 });
       });
     },
     // 9 … 4: a short wood-block tick each second

@@ -548,7 +548,8 @@
       f = fit(S);
     }
     var r = f.r, p = f.p;
-    var cy = Math.max(0, (h - (r.top + f.below)) / 2) + r.top;
+    // spare height goes mostly below the controls: the ring sits close under the title
+    var cy = Math.max(0, h - (r.top + f.below)) * 0.3 + r.top;
     // inside the ring, above the pill: where the figure or the rest countdown goes
     var innerTop = cy - r.R + r.th * 0.5 + 4;
     var innerBot = cy + f.capY - p.ph / 2 - 4;
@@ -1269,7 +1270,7 @@
 
     var nextName = seg.next ? spoken(seg.next) : '';
     if (seg.type === 'prep') A.say('Get ready. First up, ' + spoken(seg.exercise) + '.');
-    else if (seg.type === 'work') A.say((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!');
+    else if (seg.type === 'work') sayLater((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!', 350);
     else if (seg.type === 'rest') A.say('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''));
     else if (seg.type === 'jacks') A.say('Jumping jacks! ' + (seg.setBreak ? 'Then a five minute break.' : nextName ? 'Next up, ' + nextName + '.' : 'Last one, finish strong!'));
     else if (seg.type === 'setrest') A.say('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.');
@@ -1357,7 +1358,8 @@
     if (!natural) return;
     if (whole <= 3) {
       pulseDigits('final');
-      A.play(whole === 1 ? 'tickLast' : 'tick');
+      if (A.get('sfx')) A.play(whole === 1 ? 'tickLast' : 'tick');
+      else A.say(['One', 'Two', 'Three'][whole - 1]); // beeps off: the coach counts
       bg.beatNow(1);
       ring.shock(0.7);
       ring.hot = Math.max(ring.hot, 0.8);
@@ -1365,7 +1367,8 @@
       buzz(whole === 1 ? [40, 40, 40] : 35);
     } else if (whole <= 10) {
       // 10: a chime you can't miss; 9…4: a tick each second
-      A.play(whole === 10 ? 'alert10' : 'tickSoft');
+      if (whole === 10) A.play('alert10');
+      else if (!A.speaking()) A.play('tickSoft'); // never tick over the coach
       if (whole === 10) buzz([30, 60, 30]);
       pulseDigits('tick');
       bg.beatNow(0.35);
@@ -1385,18 +1388,24 @@
     if (seg.type === 'work') {
       if (whole === 20) A.say(ex.cues[(seg.set - 1) % ex.cues.length]);
       else if (whole === Math.floor(seg.duration / 2) && whole !== 20 && whole !== 10) A.play('halfway');
-      else if (whole === 10) A.say('Ten seconds. Keep pushing!');
+      else if (whole === 10) tenSeconds('Keep pushing!');
     } else if (seg.type === 'jacks') {
-      if (whole === 10) A.say(seg.setBreak ? 'Ten seconds. Then your break.' : nx ? 'Ten seconds. ' + nx + ' next.' : 'Ten seconds. Finish strong!');
+      if (whole === 10) tenSeconds(seg.setBreak ? 'Then your break.' : nx ? cap(nx) + ' next.' : 'Finish strong!');
     } else if (seg.type === 'rest') {
-      if (whole === 10) A.say('Ten seconds. Get ready for ' + nx + '.');
+      if (whole === 10) tenSeconds(nx ? cap(nx) + ' next. Get in position.' : 'Get in position.');
     } else if (seg.type === 'setrest') {
       if (whole === 240 || whole === 180 || whole === 120) A.say((whole / 60) + ' minutes left in your break.');
       else if (whole === 60) A.say('One minute. Set ' + (seg.set + 1) + ' is coming up.');
       else if (whole === 30) A.say('Thirty seconds. First up, ' + nx + '. Get in position.');
-      else if (whole === 10) A.say('Ten seconds.');
+      else if (whole === 10) tenSeconds('Get in position.');
     }
   }
+  /** At 10 s the chime says "ten seconds"; the line follows once it has rung (or the coach says it all). */
+  function tenSeconds(line) {
+    if (A.get('sfx')) sayLater(line, 650);
+    else A.say('Ten seconds. ' + line);
+  }
+  function cap(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
 
   function updateCoach(seg, t) {
     var plan = coachPlan(seg);
@@ -1512,32 +1521,50 @@
 
   /** A warm-up step is moving (its lead-in is over). */
   function moving(seg) { return !seg.lead || !!(run.warm && run.warm.idx === seg.index && run.warm.go); }
+  function leadText(title, sub) {
+    if ($('wlTitle').textContent !== title) $('wlTitle').textContent = title;
+    if ($('wlSub').textContent !== sub) $('wlSub').textContent = sub;
+  }
   /**
-   * Warm-up lead-in: "Get ready" with a countdown while the coach explains the
-   * move. The count never starts while the coach is still talking (the clock
-   * holds, up to 4 s); then "ready…" and a loud start signal, and only then 1.
+   * Warm-up lead-in: "Get ready · Starts in N" while the coach explains the
+   * move. The runway never starts while the coach is still talking (the clock
+   * holds, up to 4 s: "Listen…"). Then "Ready", tick, tick at the move's own
+   * tempo; the GO wipe starts so that it opens exactly on the first beat, with
+   * a loud start signal, and only then the count.
    */
   function warmLead(seg, t) {
     var leadEnd = seg.start + seg.lead, now = performance.now();
+    var b = seg.beat || 0.6, rs = leadEnd - 3 * b; // runway: ready, tick, tick, GO
     var w = run.warm;
-    if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, ready: false, go: false, holdSince: 0, readyAt: 0, left: null };
+    if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, runway: false, go: false, flashed: false, holdSince: 0, k: -1 };
     if (w.go) return t;
     $('workout').classList.add('wu-lead');
-    if (t < leadEnd) {
-      var left = Math.max(1, Math.ceil(leadEnd - t - 1e-6));
-      if (left !== w.left) { w.left = left; setDigits(String(left), 'Starts in ' + left + ' seconds'); }
-      if (!w.ready && t >= leadEnd - 1 && run.playing && !A.speaking()) { w.ready = true; w.readyAt = now; A.play('ready'); }
-      return t;
+    if (t < rs) { leadText('Get ready', 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6))); return t; }
+    if (!w.runway) {
+      if (t - rs > 0.6 || !run.playing) w.runway = true; // jumped in, or paused: no hold
+      else {
+        if (!w.holdSince) w.holdSince = now;
+        if (A.speaking() && now - w.holdSince < 4000) {
+          run.base = rs - 0.001; run.anchor = now; // hold: let the coach finish
+          leadText('Get ready', 'Listen…');
+          return run.base;
+        }
+        w.runway = true;
+      }
     }
-    if (t - leadEnd > 0.6 || !run.playing) { w.go = true; startMove(seg, false); return t; } // jumped in: no fanfare
-    if (!w.holdSince) w.holdSince = now;
-    var talking = A.speaking();
-    if (!w.ready && !talking) { w.ready = true; w.readyAt = now; A.play('ready'); }
-    if ((talking || !w.ready || now - w.readyAt < 800) && now - w.holdSince < 4000) {
-      run.base = leadEnd - 0.001; run.anchor = now; // hold: let the coach finish
-      return run.base;
+    if (t >= leadEnd) { w.go = true; startMove(seg, t - leadEnd < 0.6 && run.playing); return t; }
+    var k = Math.min(2, Math.floor((t - rs) / b + 1e-6));
+    if (k !== w.k) {
+      var natural = k === w.k + 1;
+      w.k = k;
+      leadText('Ready', ['3', '2', '1'][k]);
+      if (run.playing && natural) {
+        if (k === 0) { if (A.get('sfx')) A.play('ready'); else A.say('Ready'); }
+        else if (A.get('sfx')) A.play('tickSoft');
+      }
     }
-    w.go = true; startMove(seg, true);
+    // GO's wipe covers the screen for ~0.64 s, then opens exactly as the count begins
+    if (!w.flashed && run.playing && t >= leadEnd - 0.64) { w.flashed = true; flash('GO', warmName(seg), false, PHASE.warmup.colors); }
     return t;
   }
   /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
@@ -1547,10 +1574,14 @@
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
     if (!loud) return;
-    A.play('start');
+    if (A.get('sfx')) A.play('start'); else A.say('Go!');
     buzz([90, 50, 180]);
-    flash('GO', warmName(seg), false, PHASE.warmup.colors);
     ring.shock(1); ring.hot = 1;
+  }
+  /** Say something a moment later, if we're still in the same interval. */
+  function sayLater(text, ms) {
+    var idx = run.segIdx;
+    setTimeout(function () { if (run && !run.finished && run.playing && run.segIdx === idx) A.say(text); }, ms);
   }
 
   function skip() {
@@ -2093,6 +2124,7 @@
     }
     $('howTo').addEventListener('click', howTo);
     $('unHow').addEventListener('click', howTo);
+    document.querySelector('.un-figwrap').addEventListener('click', function () { $('unHow').click(); });
 
     $('csClose').addEventListener('click', closeGuide);
     $('csDone').addEventListener('click', closeGuide);

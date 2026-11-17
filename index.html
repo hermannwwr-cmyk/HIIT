@@ -169,7 +169,7 @@
       <div class="wu-row">
         <div class="wu-text">
           <span class="wu-k">Warm-up first</span>
-          <span class="wu-v">Jog, jumping jacks, squats and stretches · <b id="wuTime">3:22</b></span>
+          <span class="wu-v">Jog, jumping jacks, squats and stretches · <b id="wuTime">3:36</b></span>
         </div>
         <button id="wuToggle" class="switch" type="button" role="switch" aria-checked="true" aria-label="Warm-up before the workout"><span aria-hidden="true"></span></button>
       </div>
@@ -244,9 +244,13 @@
     </div>
     <div class="w-lower">
       <div class="w-readout" id="readout">
-        <p class="d-label" id="dLabel">Starting in</p>
-        <div class="digits" id="digits" role="timer" aria-label="10 seconds left"></div>
-        <div class="beats" id="beats" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="rd-main">
+          <p class="d-label" id="dLabel">Starting in</p>
+          <div class="digits" id="digits" role="timer" aria-label="10 seconds left"></div>
+          <div class="beats" id="beats" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <!-- warm-up lead-in: words, not a number, so it can't be mistaken for the count -->
+          <div class="wl-box" aria-hidden="true"><p class="wl-title" id="wlTitle">Get ready</p><p class="wl-sub" id="wlSub"></p></div>
+        </div>
         <p class="w-next" id="wNext"></p>
         <button id="howTo" class="howto-btn" type="button"><svg aria-hidden="true"><use href="#i-info"/></svg><span id="howToLabel">How to</span></button>
       </div>

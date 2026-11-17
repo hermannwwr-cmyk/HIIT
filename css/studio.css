@@ -667,9 +667,7 @@
 [data-look="studio"] .workout[data-mode="rest"] .w-name { color: color-mix(in srgb, var(--c1) 72%, var(--text)); }
 [data-look="studio"] body[data-phase="prep"] .workout .w-name { color: var(--text); }
 [data-look="studio"] .upnext.q3 .un-pre { color: color-mix(in srgb, var(--c1) 75%, var(--text)); font-weight: 600; }
-@media (min-height: 761px) and (max-aspect-ratio: 5/4) {
-  [data-look="studio"] .w-stage { margin-top: 8px; }
-}
+
 
 [data-look="studio"] .transport {
   padding: 5px; gap: 12px;
@@ -749,3 +747,10 @@
   [data-look="studio"] .workout.final10 .digits.tick, [data-look="studio"] .workout.final3 .digits.final { animation: none; }
 }
 [data-look="studio"] .workout.wu-lead .d-label { font: 600 16px/1 var(--ui); color: color-mix(in srgb, var(--c1) 80%, var(--text)); }
+[data-look="studio"] .wl-title { font: 600 clamp(28px, 10.5vw, 44px)/1.05 var(--ui); letter-spacing: -.035em; color: color-mix(in srgb, var(--c1) 85%, var(--text)); }
+[data-look="studio"] .wl-sub { font: 500 17px/1.2 var(--ui); color: var(--mute); }
+/* last 10 s: the digits gain weight with the colour, so they read from across the room */
+[data-look="studio"] .workout.final10 .digits { font-weight: 400; }
+[data-look="studio"][data-scheme="dark"] .workout::after {
+  box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--c1) 85%, transparent), inset 0 0 90px color-mix(in srgb, var(--c1) 55%, transparent);
+}

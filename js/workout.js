@@ -159,21 +159,21 @@
 
   // The routine, in order. Timed steps have a duration; counted steps run
   // `counts` × `beats` beats of `beat` seconds (SAF "5 counts of 4").
-  // lead: seconds of "get ready" before the move starts, so the coach finishes
-  // explaining it and a clear start signal sounds before the count begins
-  // (a new move gets 4 s, switching legs 3 s; jog pace changes run straight on).
+  // lead: seconds of "get ready" before the move starts: time for the coach to
+  // explain it, then "ready, tick, tick, GO" at the move's own tempo, and only
+  // then the count (jog pace changes run straight on).
   var WARMUP_STEPS = [
-    { move: 'jog', pace: 'slow', duration: 10, lead: 4 },
+    { move: 'jog', pace: 'slow', duration: 10, lead: 5 },
     { move: 'jog', pace: 'quick', duration: 10 },
     { move: 'jog', pace: 'slow', duration: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
-    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 4 },
-    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 4 },
-    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 4 },
-    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 4 },
-    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 3 },
-    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 4 },
-    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 3 }
+    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 4.5 },
+    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 6 },
+    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 5.5 },
+    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 6.5 },
+    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 5 },
+    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 6.5 },
+    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 5 }
   ];
   /** The moving part of a step (without its lead-in). */
   function warmupMoveDuration(st) { return st.duration || Math.round(st.counts * st.beats * st.beat * 1000) / 1000; }

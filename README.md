@@ -43,7 +43,7 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 
 ### Warm-up
 
-When a workout starts, a 3:22 SAF-style warm-up runs first:
+When a workout starts, a 3:36 SAF-style warm-up runs first:
 
 | Step | How long |
 | --- | --- |
@@ -54,7 +54,7 @@ When a workout starts, a 3:22 SAF-style warm-up runs first:
 | Hamstring stretch, left then right | 5 counts of 4 each |
 | Calf stretch, left then right | 5 counts of 4 each |
 
-Each new move starts with a short **Get ready**: the coach explains the move, and the count never begins while the coach is still talking (it waits for the coach to finish). Then a "ready" double beep and a loud start signal with **GO** on screen and a vibration, and only then the first count. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
+Each new move starts with a short **Get ready**: the coach explains the move (the demo waits, dimmed), and nothing starts while the coach is still talking (the screen says *Listen…* and the clock waits). Then **Ready**, two ticks at the move's own tempo, a full-screen **GO** with a loud start signal and a vibration, and only then the first count. With beeps off, the coach says "Ready" and "Go!" instead. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
 
 ### Intensity
 
@@ -80,7 +80,7 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 - Big countdown labelled for what it counts down to: *Time left*, *Crunches in*, *Set 2 in*. The warm-up shows counts as *2/5*.
 - *Next: Squats in 0:58* line during every exercise, so you always know what's coming and when.
 - **Start now** (or **Start set 2**) on the Up next card jumps straight to the next exercise; **Skip warm-up** sits in the progress strip. Every skip or back can be undone for 8 seconds.
-- The ring shows the current interval. **The last 10 seconds are unmistakable:** a two-note chime at 10, a tick every second from 9 to 4, louder beeps on 3, 2, 1 with a glow around the screen edge, and the digits turn the phase colour and pulse each second.
+- The ring shows the current interval. **The last 10 seconds are unmistakable:** a two-note chime at 10 (the coach's line follows it, never on top), a tick every second from 9 to 4 (skipped while the coach is talking), louder beeps on 3, 2, 1 with a glow around the screen edge, and the digits turn the phase colour, get bolder and pulse each second. With beeps off, the coach says "Ten seconds" and counts "Three, two, one".
 - The finish screen shows total time, time spent on each exercise, and your workouts and day streak on this device.
 
 ### Controls

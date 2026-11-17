@@ -1148,7 +1148,9 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 /* short spaces: demo on the left, actions stacked beside it */
 .upnext.compact { grid-template-areas: "fig text" "fig act"; padding: 10px; gap: 8px 12px; }
 .upnext.compact .un-meta .un-mus { display: none; }
-.upnext.compact .un-act .link-btn { display: none; }
+.upnext.compact .un-act .link-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
+.upnext.compact .un-act .link-btn span { display: none; }
+.un-figwrap { cursor: pointer; }
 .upnext.compact .un-start { max-width: none; height: 46px; padding: 0 14px; }
 @media (max-width: 359px) { .un-mus, .ex-word { display: none; } }
 
@@ -1320,6 +1322,18 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 .workout.beat::after { animation: edgePulse .7s ease-out; }
 @keyframes edgePulse { 0% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .workout.beat::after { animation: none; } }
-/* warm-up lead-in: the "get ready" countdown is quiet, so it can't be mistaken for the count */
-.workout.wu-lead .digits .d { opacity: .38; }
-.workout.wu-lead .d-label { font-weight: 800; letter-spacing: .06em; color: var(--c1); }
+/* warm-up lead-in: words where the count will be ("Get ready · Starts in 3", "Ready · 2"),
+   never a big number, so it can't be mistaken for the count */
+.rd-main { position: relative; display: grid; justify-items: center; gap: 8px; width: 100%; }
+.wl-box { position: absolute; inset: 0; display: none; align-content: center; justify-items: center; gap: 6px; text-align: center; }
+.workout.wu-lead .wl-box { display: grid; }
+.workout.wu-lead .rd-main > :not(.wl-box) { visibility: hidden; }
+.wl-title { margin: 0; font: 800 clamp(28px, 10.5vw, 44px)/1.05 var(--display); letter-spacing: -.01em; color: var(--c1); }
+.wl-sub { margin: 0; font: 600 17px/1.2 var(--ui); color: var(--dim); font-variant-numeric: tabular-nums; }
+/* the figure waits, dimmed, until GO */
+.workout.wu-lead .fig { opacity: .5; filter: saturate(.2); }
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) { .rd-main { justify-items: start; } .wl-box { justify-items: start; text-align: left; } }
+/* smaller beat dots, tucked under the count */
+.beats { gap: 8px; margin-top: -6px; }
+.beats i { width: 9px; height: 9px; border-width: 2px; }
+.beats i:last-child { width: 12px; height: 12px; margin-top: -1.5px; }
