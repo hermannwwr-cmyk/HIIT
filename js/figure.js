@@ -3,7 +3,8 @@
  * Classic script (no modules, no deps, works from file://).
  *
  *   window.HIITFigure = {
- *     EXERCISES: ['pushup','crunch','legraise','flutter','squat','lunge','twist','jacks','rest'],
+ *     EXERCISES: ['pushup','crunch','legraise','flutter','squat','lunge','twist','jacks','rest',
+ *                 'shouldertap','jog-slow','jog-quick','pecstretch','hamstring-l','hamstring-r','calf-l','calf-r'],
  *     STYLES: ['neon','studio'],
  *     STUDIO: { dark: {body, shade, lit}, light: {...} },   // default studio materials (read-only info)
  *     MATERIALS: { dark: ['porcelain','titanium','ink','stone'], light: ['graphite'] },
@@ -30,7 +31,8 @@
 
   var TAU = Math.PI * 2;
   var DEG = Math.PI / 180;
-  var EXERCISES = ['pushup', 'crunch', 'legraise', 'flutter', 'squat', 'lunge', 'twist', 'jacks', 'rest'];
+  var EXERCISES = ['pushup', 'crunch', 'legraise', 'flutter', 'squat', 'lunge', 'twist', 'jacks', 'rest',
+    'shouldertap', 'jog-slow', 'jog-quick', 'pecstretch', 'hamstring-l', 'hamstring-r', 'calf-l', 'calf-r'];
   var MORPH_S = 0.45;
   var COLOR_S = 0.3;
 
@@ -389,12 +391,229 @@
     }
   };
 
+  /* ---------------------------------------------- upper body + SAF warm-up */
+  // Mirrored side view for the left-side variants of the one-sided stretches: the
+  // stretched leg is always the near (brighter, front-most) one. Yaw 180 - y shows the
+  // figure's left side; the figure then faces screen-left.
+  var SIDE_ORDER_M = ['AR', 'LR', 'T', 'LL', 'AL'];
+  function sideCam(mirror, yaw, pitch) { return { yaw: mirror ? 180 - yaw : yaw, pitch: pitch }; }
+  function sideFar(mirror) { return mirror ? { L: 0, R: 1 } : { L: 1, R: 0 }; }
+
+  // Shoulder taps: high plank (pushup top), one hand at a time taps the opposite
+  // shoulder; hips stay level and square (only a 1 cm weight shift onto the support hand).
+  EX.shouldertap = {
+    period: 1.6, cam: { yaw: 58, pitch: 18 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
+    emit: [HAL, HAR, HEAD],
+    orderAt: function (p) { return p < 0.5 ? ['LL', 'LR', 'T', 'AL', 'AR'] : ['LL', 'LR', 'T', 'AR', 'AL']; },
+    pose: function (p) {
+      var J = {};
+      var half = p < 0.5 ? 0 : 1, q = (p - half * 0.5) * 2;
+      var tapS = half ? 'L' : 'R', tg = half ? -1 : 1, othS = half ? 'R' : 'L';
+      var tap = kf(q, [[0, 0], [0.1, 0], [0.42, 1], [0.56, 1], [0.88, 0], [1, 0]]);
+      var al = 19.1, bd = dir(al), fa = (al + 74) * DEG;
+      var ank = [B.foot * Math.cos(fa), 0.012 + B.foot * Math.sin(fa), 0];
+      var P = addS(ank, bd, B.shin + B.thigh - 0.0008);
+      P[2] -= tg * 0.006 * sine(clamp(tap * 1.6, 0, 1)); // weight onto the support hand
+      torso(J, P, bd, bd, dir(al + 8), Z, Z, 0);
+      var F = J.F, up = mul(F, -1);
+      for (var i = 0; i < 2; i++) {
+        var s = SIDES[i][0], sg = SIDES[i][1];
+        var a = [ank[0], ank[1], 0.072 * sg];
+        var r = ik(J['hip' + s], a, B.thigh, B.shin, J.F);
+        J['kn' + s] = r[0]; J['an' + s] = r[1]; J['to' + s] = [0, 0.012, 0.072 * sg];
+        var W = [0.69, 0.035, 0.125 * sg];
+        if (s !== tapS || tap <= 0) { armIK(J, s, W, [-1, 0.85, 0.75 * sg], [1, -0.35, 0]); continue; }
+        // tapping hand: lifts off, crosses under the chin, palm lands on the front of the
+        // opposite shoulder
+        var sh = J['sh' + othS];
+        var T = add(addS(addS(sh, F, 0.05), Z, tg * 0.035), mul(bd, 0.03));
+        var e = tap, wr = lerp3(W, T, sine(e));
+        wr = addS(wr, Y, 0.07 * Math.sin(Math.PI * e));
+        var pole = norm(add(mul([-1, 0.85, 0.75 * sg], 1 - e), mul([-0.35, -0.55, 0.9 * sg], e)));
+        var hd = norm(add(mul([1, -0.35, 0], 1 - e), mul(add(mul(Z, -tg), mul(up, 0.45)), e)));
+        armIK(J, s, wr, pole, hd);
+      }
+      return J;
+    }
+  };
+  function lerp3(a, b, t) { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+
+  // Jogging on the spot. o: knee (thigh lift, deg from vertical), shin (shin angle behind
+  // vertical at the top), arm [mid, amplitude] deg, elbow (forearm angle to upper arm),
+  // lean, rot (shoulder counter-rotation), base/bounce (pelvis height), toe (stance on the
+  // ball of the foot), flight (s of the swing spent lifting).
+  function jogEx(period, o) {
+    return {
+      period: period, cam: { yaw: 38, pitch: 5 }, far: { L: 0.45, R: 0 }, order: ['AL', 'T', 'LL', 'LR', 'AR'], center: true,
+      emit: [TOL, TOR, HAL, HAR],
+      orderAt: function (p) {
+        // the lifted leg and a forward-swung far arm pass in front of the torso
+        var lifted = Math.sin(TAU * p) >= 0 ? 'LR' : 'LL', standing = lifted === 'LR' ? 'LL' : 'LR';
+        var up = Math.abs(Math.sin(TAU * p)) > 0.3, farFwd = Math.sin(TAU * p) > 0.2;
+        var L = [];
+        if (!farFwd) L.push('AL');
+        L.push(standing);
+        if (!up) L.push(lifted);
+        L.push('T');
+        if (up) L.push(lifted);
+        if (farFwd) L.push('AL');
+        L.push('AR');
+        return L;
+      },
+      pose: function (p) {
+        var J = {};
+        var sw = Math.sin(TAU * p);                     // + : right knee up, left arm forward
+        var half = p < 0.5 ? 0 : 1, q = (p - half * 0.5) * 2;
+        var lift = Math.pow(Math.sin(Math.PI * q), o.shape);
+        var y = o.base + o.bounce * Math.sin(Math.PI * q);
+        var rot = o.rot * sw * DEG;
+        var R = rot === 0 ? Z : norm([-Math.sin(rot), 0, Math.cos(rot)]);
+        var Rp = norm([Math.sin(rot * 0.4), 0, Math.cos(rot * 0.4)]);
+        torso(J, [0.0, y, 0], lean(o.lean), lean(o.lean - 1), lean(o.lean - 4), R, Rp, 0.006 * Math.abs(sw));
+        var swingS = half ? 'L' : 'R';
+        for (var i = 0; i < 2; i++) {
+          var s = SIDES[i][0], sg = SIDES[i][1], z = 0.082 * sg;
+          // stance foot: toe planted; heel lifts as needed (on the ball of the foot when quick)
+          var hip = J['hip' + s];
+          var chord = (B.thigh + B.shin) * o.stance;
+          var ay = Math.max(B.ankleH, hip[1] - Math.sqrt(Math.max(0, chord * chord - 0.0004)));
+          var toe = [0.1095, 0.012, z * 1.06];
+          var hb = Math.asin(clamp((Math.max(ay, B.ankleH + o.toe) - 0.012) / B.foot, 0.3, 0.98));
+          var sAnk = [toe[0] - B.foot * Math.cos(hb), toe[1] + B.foot * Math.sin(hb), z];
+          if (s !== swingS || lift <= 0) {
+            var r = ik(hip, sAnk, B.thigh, B.shin, [1, 0, 0.12 * sg]);
+            J['kn' + s] = r[0]; J['an' + s] = r[1]; J['to' + s] = toe;
+          } else {
+            // swing: knee drives up to o.knee, shin folds back; lands where it took off
+            var th = o.knee * lift * DEG, ph = o.shin * lift * DEG;
+            var kn = addS(hip, [Math.sin(th), -Math.cos(th), 0.03 * sg], B.thigh);
+            var fk = addS(kn, [-Math.sin(ph), -Math.cos(ph), 0.01 * sg], B.shin);
+            var w = clamp(lift * 1.6, 0, 1); w = w * w * (3 - 2 * w);
+            var tgt = lerp3(sAnk, fk, w);
+            tgt[1] = Math.max(tgt[1], sAnk[1]);
+            var wf = w * w * w; // toes point only once the foot is clear of the floor
+            var fd = norm(lerp3(sub(toe, sAnk), [Math.cos(-o.point * DEG), Math.sin(-o.point * DEG), 0], wf));
+            var ty = tgt[1] + fd[1] * B.foot;
+            if (ty < 0.012) { fd[1] = (0.012 - tgt[1]) / B.foot; fd = norm(fd); }
+            legIK(J, s, tgt, [1, 0, 0.08 * sg], fd);
+          }
+          // arms: contralateral swing, elbow ~90 deg, fists
+          var a = (o.arm[0] + o.arm[1] * sw * -sg) * DEG, ea = a + (o.elbow + o.elbowFwd * Math.max(0, sw * -sg)) * DEG;
+          armFK(J, s, [Math.sin(a), -Math.cos(a), 0.14 * sg], [Math.sin(ea), -Math.cos(ea), 0.05 * sg],
+            [Math.sin(ea + 0.2), -Math.cos(ea + 0.2), -0.05 * sg]);
+        }
+        return J;
+      }
+    };
+  }
+  EX['jog-slow'] = jogEx(0.75, { knee: 32, shin: 52, shape: 0.9, arm: [4, 24], elbow: 92, elbowFwd: -16, lean: 3, rot: 5,
+    base: 0.506, bounce: 0.012, stance: 0.965, toe: 0, point: 32 });
+  EX['jog-quick'] = jogEx(0.45, { knee: 66, shin: 6, shape: 0.75, arm: [8, 44], elbow: 90, elbowFwd: -22, lean: 6, rot: 9,
+    base: 0.52, bounce: 0.022, stance: 0.975, toe: 0.03, point: 48 });
+
+  // Standing pectoral stretch: hands clasped behind the lower back, arms long, shoulder
+  // blades squeezed, chest lifted; the clasped hands rise a little on a slow breath.
+  EX.pecstretch = {
+    period: 4.0, cam: { yaw: -10, pitch: 7 }, far: { L: 1, R: 0 }, order: SIDE_ORDER, center: true,
+    emit: [HAL, HAR],
+    pose: function (p) {
+      var J = {};
+      var b = 0.5 - 0.5 * Math.cos(TAU * p);
+      torso(J, [-0.006 * b, 0.528 - 0.002 * b, 0], lean(-3 - b), lean(-11 - 4 * b), lean(-4 - 2 * b), Z, Z, -0.008);
+      var F = J.F;
+      for (var i = 0; i < 2; i++) {
+        var s = SIDES[i][0], sg = SIDES[i][1];
+        J['sh' + s] = add(J['sh' + s], add(mul(F, -0.024 - 0.006 * b), mul(Z, -0.008 * sg))); // retracted
+        legIK(J, s, [0, B.ankleH, 0.11 * sg], [1, 0, 0.2 * sg], [0.1095, -0.035, 0.025 * sg]);
+      }
+      // clasp point behind the low back, arms nearly straight (~10 deg of elbow bend)
+      var ext = (21 + 14 * b) * DEG, mid = mul(add(J.shL, J.shR), 0.5);
+      var dv = [-Math.sin(ext), -Math.cos(ext), 0];
+      for (i = 0; i < 2; i++) {
+        s = SIDES[i][0]; sg = SIDES[i][1];
+        var sh = J['sh' + s], lat = sh[2] - 0.024 * sg, reach = Math.sqrt(Math.max(0.01, 0.329 * 0.329 - lat * lat));
+        var wr = addS(addS(mid, dv, reach), Z, 0.024 * sg);
+        armIK(J, s, wr, [-0.3, 0.2, sg], [-0.25, -0.35, -sg]);
+      }
+      return J;
+    }
+  };
+
+  // Standing hamstring stretch: stretched leg forward (heel down, toes up, knee long),
+  // support knee soft, flat-back hip hinge, hands resting on the support thigh.
+  function hamEx(stretch) {
+    var m = stretch === 'L', fs = stretch, bs = m ? 'R' : 'L', fg = m ? -1 : 1;
+    var px = -0.02, py = 0.5, zf = 0.075 * fg, zb = -zf;
+    var hipF = [px, py, 0.055 * fg], xf = px + Math.sqrt(0.484 * 0.484 - (py - 0.05) * (py - 0.05) - 0.0004);
+    return {
+      period: 4.0, cam: sideCam(m, 10, 6), far: sideFar(m), order: m ? SIDE_ORDER_M : SIDE_ORDER,
+      emit: [m ? TOL : TOR],
+      pose: function (p) {
+        var J = {};
+        var b = 0.5 - 0.5 * Math.cos(TAU * p);                 // exhale: hinge a little deeper
+        var hinge = 46 + 7 * b;
+        torso(J, [px, py - 0.01 * b, 0], lean(hinge), lean(hinge - 2), lean(hinge - 10), Z, Z, 0);
+        // stretched leg: heel on the floor, toes pulled up
+        legIK(J, fs, [xf, 0.05, zf], [1, 0.15, 0.1 * fg], [Math.cos(38 * DEG), Math.sin(38 * DEG), 0]);
+        // support leg: foot flat under/behind the hips, knee soft
+        legIK(J, bs, [px - 0.115, B.ankleH, zb], [1, 0, -0.15 * fg], [0.1095, -0.035, -0.02 * fg]);
+        // hands rest on the support thigh, just above the knee
+        var hp = J['hip' + bs], kn = J['kn' + bs], td = norm(sub(kn, hp));
+        var front = norm(sub([1, 0, 0], mul(td, td[0])));
+        var pt = addS(lerp3(hp, kn, 0.56), front, 0.058);
+        for (var i = 0; i < 2; i++) {
+          var s = SIDES[i][0], sg = SIDES[i][1];
+          var wr = add(addS(addS(pt, Z, 0.032 * sg), td, -0.035), mul(front, 0.012));
+          armIK(J, s, wr, [-0.2, 0.3, sg], norm(add(td, mul(front, -0.25))));
+        }
+        return J;
+      }
+    };
+  }
+  EX['hamstring-l'] = hamEx('L');
+  EX['hamstring-r'] = hamEx('R');
+
+  // Standing calf stretch against an implied wall: back leg long with the heel down
+  // (the stretched calf), front knee bent, body in one line leaning in; hands on the wall.
+  function calfEx(stretch) {
+    var m = stretch === 'L', bs = stretch, fs = m ? 'R' : 'L', bg = m ? -1 : 1;
+    var xb = -0.2, zb = 0.085 * bg, zf = -zb, xw = xb + 0.54;
+    return {
+      period: 4.0, cam: sideCam(m, 10, 6), far: sideFar(m), order: m ? SIDE_ORDER_M : SIDE_ORDER,
+      emit: [HEAD],
+      pose: function (p) {
+        var J = {};
+        var b = 0.5 - 0.5 * Math.cos(TAU * p);                 // lean into the wall
+        var phi = (23 + 5 * b) * DEG, L = B.thigh + B.shin - 0.006;
+        var P = [xb + L * Math.sin(phi), B.ankleH + L * Math.cos(phi), 0];
+        torso(J, P, lean(13 + 3 * b), lean(11 + 3 * b), lean(4 + b), Z, Z, 0.004);
+        legIK(J, bs, [xb, B.ankleH, zb], [1, 0, 0.1 * bg], [0.1095, -0.035, 0.01 * bg]);
+        legIK(J, fs, [xb + 0.38, B.ankleH, zf], [1, 0, -0.1 * bg], [0.1095, -0.035, -0.01 * bg]);
+        for (var i = 0; i < 2; i++) {
+          var s = SIDES[i][0], sg = SIDES[i][1];
+          armIK(J, s, [xw, 0.8, 0.135 * sg], [-0.2, -1, 0.7 * sg], [0.12, 1, 0.08 * sg]);
+        }
+        return J;
+      }
+    };
+  }
+  EX['calf-l'] = calfEx('L');
+  EX['calf-r'] = calfEx('R');
+
   // studio (opaque) draw order where it differs from the neon one
   EX.jacks.sorder = ['LL', 'LR', 'T', 'AL', 'AR'];
   EX.rest.sorder = ['AL', 'LL', 'LR', 'T', 'AR'];
   for (var exk in EX) if (EX.hasOwnProperty(exk)) EX[exk].id = exk;
   function getEx(id) { return (typeof id === 'string' && EX.hasOwnProperty(id)) ? EX[id] : EX.rest; }
   function exId(ex) { return (ex && ex.id) || 'rest'; }
+
+  // Draw order of an exercise's limb groups (some vary with the phase, e.g. a lifted knee
+  // or a forward-swung arm passing in front of the torso).
+  function orderOf(ex, p, studio) {
+    if (ex.orderAt) return ex.orderAt(p);
+    return studio ? (ex.sorder || ex.order) : ex.order;
+  }
+  function phaseOf(ex, t) { return ((t / ex.period) % 1 + 1) % 1; }
 
   var FALLBACK_POSE = null;
   function safePose(ex, p, t) {
@@ -454,7 +673,7 @@
     }
     // Standing movements: frame symmetrically around the standing pose so the
     // athlete starts (and rests) in the centre, not offset by the step/hip hinge.
-    if (ex.id === 'squat' || ex.id === 'lunge' || ex.id === 'jacks' || ex.id === 'rest') {
+    if (ex.id === 'squat' || ex.id === 'lunge' || ex.id === 'jacks' || ex.id === 'rest' || ex.center) {
       var hx = 0;
       for (var m = 0; m < 24; m++) { project(safePose(ex, m / 24, m / 24 * ex.period), ex, TMPV); hx += TMPV[PELVIS * 3] / 24; }
       var half = Math.max(hx - x0, x1 - hx);
@@ -850,7 +1069,7 @@
     var breath = 1 + 0.07 * Math.sin(this.rt * 2.2);
     var glowI = (0.55 + 0.45 * en) * breath * (1 + 1.3 * fl);
     var G = this._grads(ctx, P, c1, c2, fl);
-    var order = (this.morphT < 0.5 && this.fromOrder) ? this.fromOrder : this.ex.order;
+    var order = (this.morphT < 0.5 && this.fromEx) ? orderOf(this.fromEx, this.fromP, false) : orderOf(this.ex, phaseOf(this.ex, this.time), false);
 
     if (!low) this._drawReflection(ctx, P, m, G, order, glowI);
     this._drawFloor(ctx, P, m, c1, c2, glowI);
@@ -1586,7 +1805,7 @@
     var P = this.cur, m = this.meta, low = this.low, mat = this.mat;
     var M = this._stState();
     var ex = (this.morphT < 0.5 && this.fromEx) ? this.fromEx : this.ex;
-    var order = ex.sorder || ex.order;
+    var order = orderOf(ex, ex === this.ex ? phaseOf(ex, this.time) : this.fromP, true);
     for (var gi = 0; gi < order.length; gi++) {
       var g = order[gi], far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
       if (!low && gi > 0) this._stOcclude(ctx, g, P, M);
@@ -2064,7 +2283,7 @@
       this.from = new Float32Array(this.cur);
       this.fromMeta = { floorY: this.meta.floorY, sc: this.meta.sc, farL: this.meta.farL, farR: this.meta.farR, flat: this.meta.flat };
       this.fromGnd = this.studio ? new Float32Array(this.gnd) : null;
-      this.fromOrder = this.ex.order; this.fromEx = this.ex;
+      this.fromOrder = this.ex.order; this.fromEx = this.ex; this.fromP = phaseOf(this.ex, this.time);
       this.morphT = 0;
     } else {
       this.morphT = 1;
