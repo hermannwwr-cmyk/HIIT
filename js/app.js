@@ -1912,7 +1912,9 @@
   }
   // The voice coach depends on the browser's speech engine. Some in-app viewers
   // don't have one (or drop every line): say so instead of staying silent.
-  var VOICE_HELP = 'The voice coach can\u2019t play in this viewer. Open the link in Safari or Chrome to hear it. Beeps still work.';
+  var ANDROID = /Android/i.test(navigator.userAgent);
+  var VOICE_HELP = 'The voice coach can\u2019t play in this viewer. Open the link in ' +
+    (ANDROID ? 'Chrome' : /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'Safari' : 'Safari or Chrome') + ' to hear it. Beeps still work.';
   A.onVoiceProblem(function () { if (A.get('voice')) notice(VOICE_HELP); });
 
   // A browser / system "back" mid-workout asks before leaving instead of dropping the session.

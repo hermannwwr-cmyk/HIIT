@@ -32,6 +32,7 @@
         u.volume = 0; u.lang = 'en-US';
         var started = false;
         u.onstart = function () { started = true; voice.ok = true; };
+        hold(u);
         try { window.speechSynthesis.resume(); } catch (e) { /* ignore */ }
         window.speechSynthesis.speak(u);
         voice.unlocked = true;
@@ -141,8 +142,10 @@
     if (voiceCache !== null) return voiceCache;
     try {
       var voices = window.speechSynthesis.getVoices() || [];
+      if (!voices.length) return null; // not loaded yet (Android): leave the engine's default, try again next time
       var en = voices.filter(function (v) { return /^en(-|_|$)/i.test(v.lang); });
-      voiceCache = en.filter(function (v) { return /Google|Samantha|Daniel|Natural|Neural|Aria|Jenny/i.test(v.name); })[0] || en[0] || null;
+      var local = en.filter(function (v) { return v.localService; });
+      voiceCache = en.filter(function (v) { return /Google|Samantha|Daniel|Natural|Neural|Aria|Jenny/i.test(v.name); })[0] || local[0] || en[0] || null;
     } catch (e) { voiceCache = null; }
     return voiceCache;
   }
@@ -157,6 +160,15 @@
    * actually start playing, onProblem() is called once so the app can say so.
    */
   var voice = { ok: false, unlocked: false, misses: 0, seq: 0, told: false, onProblem: null };
+  // Chrome on Android can garbage-collect an utterance while it is queued or
+  // speaking (the line is cut or never plays): keep a reference until it ends.
+  var live = [];
+  function hold(u) {
+    live.push(u);
+    if (live.length > 12) live.shift();
+    var drop = function () { var i = live.indexOf(u); if (i >= 0) live.splice(i, 1); };
+    u.onend = drop; u.onerror = drop;
+  }
   function speakNow(text) {
     var s = window.speechSynthesis;
     var u = new SpeechSynthesisUtterance(text);
@@ -165,6 +177,7 @@
     u.rate = 1.05; u.pitch = 1; u.volume = 1;
     var started = false, id = ++voice.seq;
     u.onstart = function () { started = true; voice.ok = true; voice.misses = 0; };
+    hold(u);
     try { s.resume(); } catch (e) { /* ignore */ }
     s.speak(u);
     // nothing started within 2.5 s and no newer line replaced it: that line was lost
