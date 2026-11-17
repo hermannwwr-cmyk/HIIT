@@ -1256,10 +1256,10 @@
     if (seg.type === 'warmup') {
       var pv = run.tl.segments[seg.index - 1];
       var first = !pv || pv.type !== 'warmup';
-      if (first) { A.play(seg.lead ? 'click' : 'go'); buzz(40); A.say('Warm up. ' + warmSpoken(seg)); }
-      else if (pv.move === seg.move && pv.side !== seg.side) { A.play('click'); buzz(40); A.say('Switch to your ' + seg.side + ' leg.'); }
+      if (first) { A.play(seg.lead ? 'halfway' : 'go'); buzz(40); A.say('Warm up. ' + warmSpoken(seg)); }
+      else if (pv.move === seg.move && pv.side !== seg.side) { A.play('halfway'); buzz(40); A.say('Switch to your ' + seg.side + ' leg.'); }
       else if (pv.move === seg.move) { A.play('halfway'); A.say(warmSpoken(seg)); }
-      else { A.play('click'); buzz(40); A.say(warmSpoken(seg)); }
+      else { A.play('halfway'); buzz(40); A.say(warmSpoken(seg)); }
       return;
     }
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
@@ -1270,9 +1270,9 @@
     var nextName = seg.next ? spoken(seg.next) : '';
     if (seg.type === 'prep') A.say('Get ready. First up, ' + spoken(seg.exercise) + '.');
     else if (seg.type === 'work') sayLater((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!', 350);
-    else if (seg.type === 'rest') A.say('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''));
+    else if (seg.type === 'rest') sayLater('Rest. ' + (nextName ? 'Next up, ' + nextName + '.' : ''), 350);
     else if (seg.type === 'jacks') A.say('Jumping jacks! ' + (seg.setBreak ? 'Then a five minute break.' : nextName ? 'Next up, ' + nextName + '.' : 'Last one, finish strong!'));
-    else if (seg.type === 'setrest') A.say('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.');
+    else if (seg.type === 'setrest') sayLater('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.', 350);
   }
 
   /** Exercise names are never cut off: shrink to fit one line, wrap only below a floor. */
@@ -1459,13 +1459,14 @@
     if (!natural) return;
     if (beat === seg.beats) {
       A.play('beatAccent');
-      A.say(COUNT_WORDS[count - 1]);
       bg.beatNow(0.5); ring.beat = 1;
       pulseDigits('tick');
     } else {
       A.play('beat');
       bg.beatNow(0.2);
     }
+    // phone speech starts 0.2–0.6 s late: ask for the count word just before its beat
+    if (beat === seg.beats - 1) sayLater(COUNT_WORDS[count - 1], Math.max(0, seg.beat * 1000 - 300));
   }
 
   function update() {
@@ -1573,6 +1574,8 @@
     }
     // GO's wipe covers the screen for ~0.64 s, then opens exactly as the count begins
     if (!w.flashed && run.playing && t >= leadEnd - 0.64) { w.flashed = true; flash('GO', warmName(seg), false, PHASE.warmup.colors); }
+    // beeps off: the coach's "Go!" is asked for early so it lands on beat 1
+    if (!w.said && run.playing && !A.get('sfx') && t >= leadEnd - 0.3) { w.said = true; A.say('Go!'); }
     return t;
   }
   /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
@@ -1582,7 +1585,8 @@
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
     if (!loud) return;
-    if (A.get('sfx')) A.play('start'); else A.say('Go!');
+    if (A.get('sfx')) A.play('start');
+    else if (!(run.warm && run.warm.said)) A.say('Go!');
     buzz([90, 50, 180]);
     ring.shock(1); ring.hot = 1;
   }
