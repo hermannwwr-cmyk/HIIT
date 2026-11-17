@@ -1077,7 +1077,7 @@
   var WELCOME = 'Welcome to today\u2019s hit session!';
   // how the coach names a warm-up move, and one short form cue (kept brief: the countdown follows)
   var WARM_SAY = { jog: 'jogging on the spot', pecstretch: 'chest stretch' };
-  var WARM_CUE = { pecstretch: 'Hands behind, chest up.', squat: 'Chest up, sit back.', hamstring: 'Flat back.', calf: 'Heel down.' };
+  var WARM_CUE = { pecstretch: 'Hands behind, chest up.', squat: 'Chest up, sit back.', hamstring: 'Flat back.', calf: 'Back heel down.' };
   /** Was most of the warm-up actually done (not skipped)? */
   function warmedUp() {
     var segs = run.tl.segments, done = 0;
@@ -1582,7 +1582,8 @@
     wk.classList.add('wu-lead');
     // the screen greets you while the coach does, then gives the instruction
     var title = run.welcomeIdx === seg.index && t - seg.start < 3.5 ? 'Welcome' : 'Get ready';
-    var startsIn = 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6));
+    // whole seconds: a half-second lead shows its first number for a full second
+    var startsIn = 'Starts in ' + Math.max(1, Math.min(Math.floor(seg.lead), Math.ceil(leadEnd - t - 1e-6)));
     box.classList.remove('listen');
     if (t < hp) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     if (!w.counting) {
