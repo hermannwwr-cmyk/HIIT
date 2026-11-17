@@ -902,6 +902,7 @@
     if (!run || !run.playing) return;
     run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
     A.stopVoice();
+    if (run.warm && !run.warm.go) run.warm.said = false; // a cut "Begin!": the start signal carries it on resume
     A.sleep();
     if (workFig) workFig.setPlaying(false);
     if (nextFig) nextFig.setPlaying(false);
