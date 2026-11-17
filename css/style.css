@@ -1293,3 +1293,7 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 .w-tag { flex-wrap: nowrap; }
 .w-tag .chip { flex: none; }
 .w-ex { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* after a rest, the readout and tip rise in instead of appearing in one frame */
+.workout[data-mode="active"] .w-readout, .workout[data-mode="active"] .coach { animation: lowerIn .18s ease-out; }
+@keyframes lowerIn { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .workout[data-mode="active"] .w-readout, .workout[data-mode="active"] .coach { animation: none; } }

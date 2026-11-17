@@ -565,7 +565,8 @@
     st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
     st.style.setProperty('--fh', px(regionH));
     st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));
-    $('fig').style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
+    // on the stage, so the swipe preview's figure gets exactly the same size and place
+    st.style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
     sizeUpNext();
   };
   /** The up-next card overlays the readout's space; its demo tile fills that height. */
@@ -1661,7 +1662,7 @@
     function set(k, dir, over) {
       var th = threshold(), D = travel(), kk = Math.min(1, k), e = easeOut(kk), extra = (over || 0) * 0.06;
       stage.style.setProperty('--sx', (-dir * (kk * th + extra)).toFixed(1) + 'px');
-      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.45).toFixed(3));
+      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.35).toFixed(3));
       stage.style.setProperty('--ss', (1 - 0.06 * kk).toFixed(4));
       stage.style.setProperty('--px', (dir * 0.35 * D * (1 - e) - dir * extra).toFixed(1) + 'px');
       stage.style.setProperty('--po', easeOut(Math.max(0, (kk - 0.25) / 0.75)).toFixed(3));
