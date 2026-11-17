@@ -62,6 +62,16 @@
     }
   };
   var htmlEl = document.documentElement;
+  // lookPref is what the user picked ('auto' unless they chose one); look is what's on screen.
+  var LOOK_PREF_RE = /^(auto|neon|studio-dark|studio-light)$/;
+  var lookPref = LOOK_PREF_RE.test(htmlEl.getAttribute('data-look-pref')) ? htmlEl.getAttribute('data-look-pref') : 'auto';
+  var schemeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function systemScheme() {
+    var t = htmlEl.getAttribute('data-theme'); // a host page may pin light/dark explicitly
+    if (t === 'dark' || t === 'light') return t;
+    return schemeMQ && schemeMQ.matches ? 'dark' : 'light';
+  }
+  function resolveLook(pref) { return pref === 'auto' ? 'studio-' + systemScheme() : pref; }
   var look = htmlEl.getAttribute('data-look') === 'studio' ? 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark') : 'neon';
   function isStudio() { return LOOKS[look].style === 'studio'; }
   function applyPalette() {
@@ -79,7 +89,7 @@
   function savePrefs() {
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
-        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), look: look,
+        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -87,6 +97,8 @@
   }
 
   var prefs = loadPrefs();
+  // Only an explicit menu choice is remembered (a ?look= link doesn't stick).
+  var savedLookPref = LOOK_PREF_RE.test(prefs.lookPref) ? prefs.lookPref : 'auto';
   var state = {
     level: Object.prototype.hasOwnProperty.call(H.LEVELS, prefs.level) ? prefs.level : 'easy',
     ids: H.randomPick(H.DEFAULT_COUNT),
@@ -1617,7 +1629,24 @@
   }
 
   // ================================================================ LOOK SWITCH
-  function setLook(name) {
+  /** The user picked a look from the menu (or 'auto'). */
+  function setLook(pref) {
+    if (!LOOK_PREF_RE.test(pref)) return;
+    lookPref = savedLookPref = pref;
+    htmlEl.setAttribute('data-look-pref', pref);
+    applyLook(resolveLook(pref));
+    syncLookMenu();
+    savePrefs();
+  }
+  /** Follow the phone's light/dark setting while on Automatic. */
+  function followSystem() { if (lookPref === 'auto') applyLook(resolveLook('auto')); }
+  if (schemeMQ) {
+    if (schemeMQ.addEventListener) schemeMQ.addEventListener('change', followSystem);
+    else if (schemeMQ.addListener) schemeMQ.addListener(followSystem);
+  }
+  if (window.MutationObserver) new MutationObserver(followSystem).observe(htmlEl, { attributes: true, attributeFilter: ['data-theme'] });
+
+  function applyLook(name) {
     if (!LOOKS[name] || name === look) return;
     look = name;
     htmlEl.classList.add('look-switching');
@@ -1659,7 +1688,7 @@
 
   function syncLookMenu() {
     document.querySelectorAll('#lookList [data-look]').forEach(function (b) {
-      b.setAttribute('aria-checked', b.dataset.look === look ? 'true' : 'false');
+      b.setAttribute('aria-checked', b.dataset.look === lookPref ? 'true' : 'false');
     });
   }
   function openLookMenu(open) {

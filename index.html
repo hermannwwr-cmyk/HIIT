@@ -12,15 +12,21 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/studio.css">
 <script>
-  // Pick the look before first paint: ?look=studio-dark|studio-light|neon, else the saved choice.
+  // Pick the look before first paint. Preference: ?look=auto|studio-dark|studio-light|neon,
+  // else the user's saved choice, else "auto" = Studio in the system's light/dark setting.
   (function () {
-    var look = 'neon';
+    var ok = /^(auto|neon|studio-dark|studio-light)$/, pref = 'auto';
     try {
-      var saved = JSON.parse(localStorage.getItem('overdrive-hiit:v1') || '{}').look;
+      var saved = JSON.parse(localStorage.getItem('overdrive-hiit:v1') || '{}').lookPref;
       var q = new URLSearchParams(location.search).get('look');
-      look = /^(neon|studio-dark|studio-light)$/.test(q) ? q : /^(neon|studio-dark|studio-light)$/.test(saved) ? saved : 'neon';
-    } catch (e) { /* storage blocked: default look */ }
+      pref = ok.test(q) ? q : ok.test(saved) ? saved : 'auto';
+    } catch (e) { /* storage blocked: automatic */ }
     var d = document.documentElement;
+    var t = d.getAttribute('data-theme');
+    var sys = t === 'dark' || t === 'light' ? t
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var look = pref === 'auto' ? 'studio-' + sys : pref;
+    d.setAttribute('data-look-pref', pref);
     d.setAttribute('data-look', look === 'neon' ? 'neon' : 'studio');
     d.setAttribute('data-scheme', look === 'studio-light' ? 'light' : 'dark');
     var meta = document.querySelector('meta[name="theme-color"]');
@@ -68,9 +74,10 @@
           <svg aria-hidden="true"><use href="#i-look"/></svg>
         </button>
         <div class="look-list" id="lookList" role="menu" aria-label="Appearance" hidden>
-          <button type="button" role="menuitemradio" aria-checked="false" data-look="neon"><span class="sw sw-neon" aria-hidden="true"></span>Neon</button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-look="auto"><span class="sw sw-auto" aria-hidden="true"></span><span class="look-txt">Automatic<small>Studio, matches your phone</small></span></button>
           <button type="button" role="menuitemradio" aria-checked="false" data-look="studio-dark"><span class="sw sw-dark" aria-hidden="true"></span>Studio dark</button>
           <button type="button" role="menuitemradio" aria-checked="false" data-look="studio-light"><span class="sw sw-light" aria-hidden="true"></span>Studio light</button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-look="neon"><span class="sw sw-neon" aria-hidden="true"></span>Neon</button>
         </div>
       </div>
       <button id="sfxToggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">

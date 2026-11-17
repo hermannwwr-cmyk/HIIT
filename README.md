@@ -10,7 +10,7 @@ npm run serve        # python3 -m http.server 8080, then open http://localhost:8
 
 ## Looks
 
-Pick a look from the appearance button (◐) in the top bar. The choice is remembered on the device, and `?look=neon|studio-dark|studio-light` in the URL overrides it.
+The default is **Automatic**: the Studio look in light or dark to match the phone's system theme, switching live if the phone changes (even mid-workout). Pick a fixed look from the appearance button (◐) in the top bar; that choice is remembered on the device. `?look=auto|studio-dark|studio-light|neon` in the URL overrides it for that visit only.
 
 - **Neon:** a warp-tunnel backdrop, glowing light-trail athlete, sparks and glitch type.
 - **Studio dark / Studio light:** clean and quiet.

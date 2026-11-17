@@ -980,10 +980,11 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 }
 
 /* ---------- appearance menu (both looks) ---------- */
-.look-menu { position: relative; }
+.toggles { position: relative; }
+.look-menu { position: static; }
 .look-list {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 70;
-  display: grid; gap: 2px; min-width: 196px; padding: 6px;
+  display: grid; gap: 2px; min-width: 236px; padding: 6px;
   border-radius: 16px;
   background: rgba(16, 7, 34, .97);
   border: 1px solid var(--line-hi);
@@ -1003,6 +1004,10 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .sw-neon { background: conic-gradient(#ff2bd6, #22e5ff, #c6ff1a, #ff2bd6); }
 .sw-dark { background: radial-gradient(circle at 35% 30%, #3a3f4b, #0b0c10 70%); }
 .sw-light { background: radial-gradient(circle at 35% 30%, #ffffff, #e6e3dc 70%); }
+.sw-auto { background: linear-gradient(135deg, #f4f3ef 0 50%, #15171d 50% 100%); }
+.look-txt { display: grid; gap: 3px; text-align: left; }
+.look-txt small { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--mute); white-space: nowrap; }
+.look-list button:has(.look-txt) { min-height: 54px; }
 
 /* finish ring (Studio only) */
 .done-figwrap { position: relative; display: grid; place-items: center; }
