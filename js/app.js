@@ -681,7 +681,7 @@
     ctx.lineWidth = th;
     if (this.dashed) {
       // jumping jacks: a dotted ring (non-colour cue)
-      ctx.setLineDash([0.01, th * 0.9]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.3;
+      ctx.setLineDash([0.01, TAU * R / 60]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.3;
     }
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
     ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.lineWidth = th;
@@ -696,8 +696,9 @@
         grad.addColorStop(1, rgba(ca, 1));
       } else grad = rgba(ca, 1);
       // tail cap in the tail colour, butt-ended arc, then the head cap: no seams
+      var capR = this.dashed ? th * 0.31 : th / 2;
       ctx.fillStyle = rgba(cb, 1);
-      ctx.beginPath(); ctx.arc(cx + Math.cos(A0) * R, cy + Math.sin(A0) * R, th / 2, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + Math.cos(A0) * R, cy + Math.sin(A0) * R, capR, 0, TAU); ctx.fill();
       if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th * 1.2; }
       ctx.strokeStyle = grad;
       ctx.lineWidth = th;
@@ -714,16 +715,18 @@
       var hx = cx + Math.cos(a1) * R, hy = cy + Math.sin(a1) * R;
       var tx = -Math.sin(a1), ty = Math.cos(a1);
       var sx = hx + tx * th * 0.3, sy = hy + ty * th * 0.3;
-      ctx.save();
-      ctx.beginPath(); ctx.arc(cx, cy, R + th / 2, 0, TAU); ctx.arc(cx, cy, R - th / 2, 0, TAU, true); ctx.clip();
-      var sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, th * 0.7);
-      sg.addColorStop(0, light ? 'rgba(17,19,24,0.10)' : 'rgba(0,0,0,0.30)');
-      sg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = sg;
-      ctx.beginPath(); ctx.arc(sx, sy, th * 0.7, 0, TAU); ctx.fill();
-      ctx.restore();
+      if (!this.dashed) {
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx, cy, R + th / 2, 0, TAU); ctx.arc(cx, cy, R - th / 2, 0, TAU, true); ctx.clip();
+        var sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, th * 0.7);
+        sg.addColorStop(0, light ? 'rgba(17,19,24,0.10)' : 'rgba(0,0,0,0.30)');
+        sg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = sg;
+        ctx.beginPath(); ctx.arc(sx, sy, th * 0.7, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
       ctx.fillStyle = rgba(ca, 1);
-      ctx.beginPath(); ctx.arc(hx, hy, th / 2, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, hy, this.dashed ? th * 0.4 : capR, 0, TAU); ctx.fill();
     }
 
     // phase-change ripple: one thin ring easing outward
