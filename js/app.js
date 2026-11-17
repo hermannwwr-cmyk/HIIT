@@ -55,10 +55,10 @@
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
         setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
-        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#d97706', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
+        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#bd6b00', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
         done: [['#d4380f', '#c76a0a'], 0.5]
       },
-      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#c76a0a', '#b45309'], rest: ['#0a84ff', '#2563eb'] }
+      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'] }
     }
   };
   var htmlEl = document.documentElement;
