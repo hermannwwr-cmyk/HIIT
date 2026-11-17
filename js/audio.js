@@ -59,12 +59,12 @@
   var sounds = {
     // last 3 seconds: loud, bright beeps that carry on a phone speaker (1–2.5 kHz)
     tick: function (t) {
-      tone(988, t, 0.18, { type: 'square', vol: 0.34, filter: 3200 });
-      tone(1976, t, 0.09, { type: 'triangle', vol: 0.2 });
+      tone(988, t, 0.26, { type: 'square', vol: 0.62, filter: 3600 });
+      tone(1976, t, 0.14, { type: 'triangle', vol: 0.3 });
     },
     tickLast: function (t) {
-      tone(1319, t, 0.26, { type: 'square', vol: 0.4, filter: 3800 });
-      tone(2637, t, 0.12, { type: 'triangle', vol: 0.22 });
+      tone(1319, t, 0.38, { type: 'square', vol: 0.7, filter: 4200 });
+      tone(2637, t, 0.18, { type: 'triangle', vol: 0.34 });
     },
     // 10 seconds left: a two-note chime, clearly different from the ticks
     alert10: function (t) {
@@ -75,8 +75,8 @@
     },
     // 9 … 4: a short wood-block tick each second
     tickSoft: function (t) {
-      tone(1568, t, 0.05, { type: 'triangle', vol: 0.3 });
-      tone(784, t, 0.04, { type: 'sine', vol: 0.12 });
+      tone(1568, t, 0.08, { type: 'triangle', vol: 0.5 });
+      tone(784, t, 0.07, { type: 'sine', vol: 0.2 });
     },
     // warm-up: "ready…" (two rising beeps) then a loud start signal before the count begins
     ready: function (t) {
@@ -85,9 +85,9 @@
     },
     start: function (t) {
       [783.99, 987.77, 1174.66, 1567.98].forEach(function (f, i) {
-        tone(f, t + i * 0.035, 0.55, { type: 'sawtooth', vol: 0.2, filter: 4200 });
+        tone(f, t + i * 0.035, 0.6, { type: 'sawtooth', vol: 0.26, filter: 4200 });
       });
-      tone(2093, t + 0.12, 0.35, { type: 'triangle', vol: 0.22, to: 2637 });
+      tone(2093, t + 0.12, 0.4, { type: 'triangle', vol: 0.3, to: 2637 });
       tone(120, t, 0.32, { type: 'sine', to: 60, vol: 0.65 });
     },
     go: function (t) {
