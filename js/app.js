@@ -45,20 +45,20 @@
     'studio-dark': {
       style: 'studio', scheme: 'dark', meta: '#0b0c10', fps: 30,
       phase: {
-        setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#aab3c5', '#5b7cff'], 0.3], work: [['#ff5a36', '#ff2d55'], 0.7],
-        rest: [['#2fb8ff', '#5b7cff'], 0.2], jacks: [['#ffb020', '#ff7a1a'], 0.6], setrest: [['#34d399', '#2fb8ff'], 0.1],
+        setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#c3c9d4', '#8790a3'], 0.3], work: [['#ff5a36', '#ff3b30'], 0.7],
+        rest: [['#2fb8ff', '#3b82f6'], 0.2], jacks: [['#ffc23d', '#ff9f0a'], 0.6], setrest: [['#34d399', '#14b8a6'], 0.1],
         done: [['#ff5a36', '#ffb020'], 0.5]
       },
-      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffb020', '#ff7a1a'], rest: ['#2fb8ff', '#5b7cff'] }
+      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'] }
     },
     'studio-light': {
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
-        setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3d6bff'], 0.3], work: [['#f0441f', '#e11d48'], 0.7],
-        rest: [['#0a84ff', '#4f46e5'], 0.2], jacks: [['#f59e0b', '#ea580c'], 0.6], setrest: [['#10b981', '#0a84ff'], 0.1],
+        setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
+        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#f59e0b', '#ea580c'], 0.6], setrest: [['#10b981', '#0d9488'], 0.1],
         done: [['#f0441f', '#f59e0b'], 0.5]
       },
-      group: { upper: ['#ea580c', '#f0441f'], abs: ['#0284c7', '#2563eb'], legs: ['#d97706', '#b45309'], cardio: ['#f59e0b', '#ea580c'], rest: ['#0a84ff', '#4f46e5'] }
+      group: { upper: ['#ea580c', '#f0441f'], abs: ['#0284c7', '#2563eb'], legs: ['#d97706', '#b45309'], cardio: ['#f59e0b', '#ea580c'], rest: ['#0a84ff', '#2563eb'] }
     }
   };
   var htmlEl = document.documentElement;
@@ -214,6 +214,7 @@
   }
 
   function renderMe() {
+    $('me').hidden = state.hist.completed === 0;
     $('meCount').textContent = String(state.hist.completed);
     $('meMinutes').textContent = String(Math.round(state.hist.seconds / 60));
     $('meStreak').textContent = String(liveStreak());
@@ -254,7 +255,7 @@
     hint.classList.toggle('warn', !v.ok);
     if (!v.ok) hint.textContent = v.reason;
     else if (!hint.querySelector('svg')) {
-      hint.innerHTML = 'Tap to add or remove. They run in the numbered order. Tap <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> for the trainer’s guide.';
+      hint.innerHTML = 'Add or remove exercises. They run in the numbered order. <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> opens the trainer’s guide.';
     }
 
     $('start').disabled = !v.ok;
@@ -651,7 +652,7 @@
   /** Studio ring: one thick gradient arc with a shaded end cap, nothing else. */
   Ring.prototype.drawStudio = function (ctx, w, h, dt) {
     var light = LOOKS[look].scheme === 'light';
-    var S = Math.min(w, h), cx = w / 2, cy = h / 2;
+    var S = Math.min(w, h), cx = Math.round(w / 2), cy = Math.round(h / 2);
     var th = Math.max(9, S * 0.05);
     var R = S * 0.44 - th * 0.5;
     var A0 = -Math.PI / 2;
@@ -659,41 +660,40 @@
     var a1 = A0 + TAU * prog;
     var ca = this.a, cb = this.b;
     var ink = light ? [17, 19, 24] : [244, 245, 247];
-    ctx.lineCap = 'round';
+    var breathing = this.breathe != null;
 
-    // breathing pacer (set break): a soft disc that fills and empties
-    if (this.breathe != null) {
+    // breathing pacer (set break): a soft glow that fills and empties
+    if (breathing) {
       var bt = this.breathe % 10;
       var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
-      var br = (R - th) * (0.5 + 0.48 * bv);
-      ctx.fillStyle = rgba(ca, (light ? 0.07 : 0.06) + 0.06 * bv);
+      var br = (R - th) * (0.55 + 0.42 * bv);
+      var pg = ctx.createRadialGradient(cx, cy, br * 0.15, cx, cy, br);
+      pg.addColorStop(0, rgba(ca, 0));
+      pg.addColorStop(0.7, rgba(ca, (light ? 0.08 : 0.07) + 0.07 * bv));
+      pg.addColorStop(1, rgba(ca, 0));
+      ctx.fillStyle = pg;
       ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
-      ctx.strokeStyle = rgba(ca, 0.35 + 0.3 * bv);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.stroke();
     }
 
     // track
+    ctx.lineCap = 'butt';
     ctx.strokeStyle = rgba(ca, light ? 0.13 : 0.16);
     ctx.lineWidth = th;
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
 
-    // whole-session progress: hairline inside the ring
-    var ri = R - th * 1.15;
-    var tp = Math.max(0, Math.min(1, this.total || 0));
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = rgba(ink, light ? 0.08 : 0.09);
-    ctx.beginPath(); ctx.arc(cx, cy, ri, 0, TAU); ctx.stroke();
-    if (tp > 0.002) {
-      ctx.strokeStyle = rgba(ink, light ? 0.55 : 0.6);
-      ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + TAU * tp); ctx.stroke();
-    }
-
-    // last-seconds halo
-    if (this.hot > 0.01) {
-      ctx.strokeStyle = rgba(ca, this.hot * (light ? 0.18 : 0.22));
-      ctx.lineWidth = th * (1.6 + this.hot);
-      ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    // (whole-session progress lives in the bar under the ring in this look)
+    if (false) {
+      var ri = R - th * 1.15;
+      var tp = Math.max(0, Math.min(1, this.total || 0));
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = rgba(ink, light ? 0.08 : 0.09);
+      ctx.beginPath(); ctx.arc(cx, cy, ri, 0, TAU); ctx.stroke();
+      if (tp > 0.002) {
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = rgba(ink, light ? 0.5 : 0.55);
+        ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + TAU * tp); ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
     }
 
     if (prog > 0.001) {
@@ -705,22 +705,29 @@
         grad.addColorStop(Math.min(1, prog + 0.001), rgba(ca, 1));
         grad.addColorStop(1, rgba(ca, 1));
       } else grad = rgba(ca, 1);
+      // tail cap in the tail colour, butt-ended arc, then the head cap: no seams
+      ctx.fillStyle = rgba(cb, 1);
+      ctx.beginPath(); ctx.arc(cx + Math.cos(A0) * R, cy + Math.sin(A0) * R, th / 2, 0, TAU); ctx.fill();
+      if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th * 1.2; }
       ctx.strokeStyle = grad;
       ctx.lineWidth = th;
       ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
+      ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
 
-      // shaded end cap: a soft shadow ahead of the cap gives the ring depth
+      // head cap with a soft shadow ahead of it, kept inside the ring band
       var hx = cx + Math.cos(a1) * R, hy = cy + Math.sin(a1) * R;
       var tx = -Math.sin(a1), ty = Math.cos(a1);
-      var sg = ctx.createRadialGradient(hx + tx * th * 0.28, hy + ty * th * 0.28, 0, hx + tx * th * 0.28, hy + ty * th * 0.28, th * 0.95);
-      sg.addColorStop(0, light ? 'rgba(17,19,24,0.22)' : 'rgba(0,0,0,0.55)');
+      var sx = hx + tx * th * 0.3, sy = hy + ty * th * 0.3;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, R + th / 2, 0, TAU); ctx.arc(cx, cy, R - th / 2, 0, TAU, true); ctx.clip();
+      var sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, th * 0.7);
+      sg.addColorStop(0, light ? 'rgba(17,19,24,0.10)' : 'rgba(0,0,0,0.30)');
       sg.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = sg;
-      ctx.beginPath(); ctx.arc(hx + tx * th * 0.28, hy + ty * th * 0.28, th * 0.95, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx, sy, th * 0.7, 0, TAU); ctx.fill();
+      ctx.restore();
       ctx.fillStyle = rgba(ca, 1);
       ctx.beginPath(); ctx.arc(hx, hy, th / 2, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      ctx.beginPath(); ctx.arc(hx - Math.cos(a1) * th * 0.12, hy - Math.sin(a1) * th * 0.12, th * 0.16, 0, TAU); ctx.fill();
     }
 
     // phase-change ripple: one thin ring easing outward
@@ -764,7 +771,7 @@
     confetti: function (colors) {
       if (reduced) return;
       var W = window.innerWidth, Hh = window.innerHeight;
-      var n = isStudio() ? 70 : 180;
+      var n = isStudio() ? 40 : 180;
       for (var i = 0; i < n; i++) {
         var fromLeft = i % 2 === 0;
         var a = fromLeft ? -Math.PI / 3 - Math.random() * 0.5 : -2 * Math.PI / 3 + Math.random() * 0.5;
@@ -1079,7 +1086,7 @@
       : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + name + '.'
       : seg.type === 'setrest' ? 'Set ' + seg.set + ' complete. Break, ' + mins + '.'
       : 'Get ready. First up: ' + name + '.';
-    $('howToLabel').textContent = seg.type === 'setrest' ? 'How to: ' + exName(guideTarget(seg)) : 'How to';
+    $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
     var skipLabel = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
@@ -1135,6 +1142,8 @@
     t.textContent = text;
     t.dataset.text = text;
     t.style.setProperty('--n', Math.max(3, text.length));
+    var st = $('stage').getBoundingClientRect();
+    if (st.width) { el.style.setProperty('--fx', Math.round(st.left + st.width / 2) + 'px'); el.style.setProperty('--fy', Math.round(st.top + st.height / 2) + 'px'); }
     $('flashSub').textContent = sub || '';
     el.classList.remove('show', 'count');
     void el.offsetWidth;
@@ -1349,13 +1358,14 @@
     else { doneFig.setExercise('jacks'); doneFig.setPlaying(true); }
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
-    fx.confetti(['#ffd23f', '#ff2bd6', '#22e5ff', '#c6ff1a', '#ffffff']);
+    if (isStudio()) { if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? '#111318' : '#ffffff']); }
+    else fx.confetti(['#ffd23f', '#ff2bd6', '#22e5ff', '#c6ff1a', '#ffffff']);
     setTimeout(function () {
       var r = $('doneFig').getBoundingClientRect();
       fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6', '#ffffff'], 140, 1.2);
       fx.wave(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6'], 1);
     }, 200);
-    setTimeout(function () { $('again').focus(); }, 400);
+    setTimeout(function () { $('again').focus({ preventScroll: true }); }, 400);
   }
 
   function setDoneTitle(counted) {
@@ -1366,7 +1376,7 @@
       el.dataset.text = lines[i];
       el.firstElementChild.textContent = lines[i];
     });
-    $('doneEyebrow').textContent = counted ? 'Session complete' : 'Skipped past most of the work';
+    $('doneEyebrow').textContent = counted ? 'Session complete' : 'Less than half done';
     $('doneNote').hidden = counted;
   }
 

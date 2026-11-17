@@ -119,16 +119,19 @@
     ' float n=.75+.5*(noise(p*1.4+T*.025)*.65+noise(p*3.1-T*.02)*.35);',
     ' float b1=exp(-dot(p-c1,p-c1)*1.5)*n;',
     ' float b2=exp(-dot(p-c2,p-c2)*1.8)*n;',
-    ' float w=.045+.05*uEnergy+.025*uBeat;',
-    ' vec3 addD=(uA*b1+uB*b2*.7)*w;',
+    ' float w=.03+.03*uEnergy+.008*uBeat;',
+    ' vec3 tA=mix(vec3(dot(uA,vec3(.3,.59,.11))),uA,.5);',
+    ' vec3 tB=mix(vec3(dot(uB,vec3(.3,.59,.11))),uB,.5);',
+    ' vec3 addD=(tA*b1+tB*b2*.7)*w;',
     ' vec3 lit=col+addD;',
-    ' vec3 tinted=mix(mix(col,uA,b1*w*.9),uB,b2*w*.6);',
+    ' vec3 tinted=mix(mix(col,uA,b1*w*1.2),uB,b2*w*.8);',
     ' col=mix(lit,tinted,uLight);',
     // phase-change lift
     ' col+=mix(uA*.10,uA*.05,uLight)*uFlash*exp(-dot(q,q)*1.2);',
     // vignette
     ' float v=smoothstep(1.75,.3,length(p*vec2(.85,1.)));',
     ' col*=mix(.5+.5*v,.9+.1*v,uLight);',
+    ' col+=(h21(gl_FragCoord.xy)-.5)/255.;',
     ' gl_FragColor=vec4(col,1.);',
     '}'
   ].join('\n');

@@ -1278,13 +1278,13 @@
       body: [233, 235, 239], shade: [140, 147, 163], deepTo: [34, 38, 48], deepK: 0.45, lit: [250, 251, 252],
       spec: [255, 255, 255], specK: 0.45, shin: 16, rimK: 0.8, rimW: 0.15,
       far: [13, 15, 19], farK: 0.32, ao: [18, 21, 30], aoK: 0.42,
-      shadow: [0, 0, 0], shadowK: 1.25, floor: [255, 255, 255], floorK: 0.07, pool: 0.07, sweep: 0.5
+      shadow: [0, 0, 0], shadowK: 1.25, floor: [255, 255, 255], floorK: 0.03, pool: 0.07, sweep: 0.5
     },
     light: {
       body: [42, 45, 52], shade: [24, 26, 31], deepTo: [6, 7, 9], deepK: 0.5, lit: [107, 114, 128],
       spec: [170, 176, 188], specK: 0.55, shin: 14, rimK: 0.72, rimW: 0.08,
       far: [8, 9, 11], farK: 0.22, ao: [0, 0, 0], aoK: 0.5,
-      shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.07, pool: 0, sweep: 0.4
+      shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.03, pool: 0, sweep: 0.4
     }
   };
   function buildMat(scheme, o) {
