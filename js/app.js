@@ -1539,7 +1539,12 @@
       var inhale = (ring.breathe % 10) < 4;
       if (inhale !== run.inhale && remaining > 3) { run.inhale = inhale; $('dialSub').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
     }
-    ring.progress = remaining / seg.duration;
+    if (seg.type === 'warmup' && seg.lead) {
+      // two sweeps per warm-up step: the lead-in runs down to BEGIN, then the move itself
+      // (so the ring empties exactly with "Starts in", and again with the last count)
+      var le = seg.start + seg.lead;
+      ring.progress = t < le ? (le - t) / seg.lead : remaining / (seg.duration - seg.lead);
+    } else ring.progress = remaining / seg.duration;
     ring.total = t / tl.total;
     if (prog.live) {
       var pf = prog.live === prog.warm ? t / tl.warmupEnd : (t - seg.start) / seg.duration;
@@ -2403,6 +2408,7 @@
   window.__hiit = {
     state: state,
     get run() { return run; },
+    get ring() { return ring; },
     seek: function (t) { seek(t); },
     advance: function (sec) { if (run && !run.finished) { run.base += sec; update(); } },
     start: function () { startWorkout(state.ids); },
