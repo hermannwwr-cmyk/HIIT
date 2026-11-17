@@ -1070,24 +1070,22 @@
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
     return exName(seg.move) + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') : '');
   }
-  function warmSpoken(seg) {
-    if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog!' : 'Jog on the spot, nice and slow.';
-    var base = spoken(seg.move) + (seg.side ? ', ' + seg.side + ' leg' : '');
-    return base + (seg.counts ? '. ' + cap(COUNT_WORDS[seg.counts - 1]) + ' counts of ' + COUNT_WORDS[seg.beats - 1] + '.' : '.');
-  }
   // "HIIT" is said "hit"; spelt this way so no voice reads out the letters
-  var WELCOME = 'Welcome to today\u2019s hit session.';
+  var WELCOME = 'Welcome to today\u2019s hit session!';
+  // how the coach names a warm-up move, and one short form cue (kept brief: the countdown follows)
+  var WARM_SAY = { jog: 'jogging on the spot', pecstretch: 'chest stretch' };
+  var WARM_CUE = { pecstretch: 'Hands behind, chest up.', squat: 'Chest up, sit back.', hamstring: 'Flat back.', calf: 'Heel down.' };
   /** What the coach says as a warm-up step begins (before its 5, 4, 3, 2, 1). */
   function warmAnnounce(seg, pv) {
     var first = !pv || pv.type !== 'warmup';
     if (first) {
-      var line = 'Let\u2019s warm up. First, jogging on the spot, nice and easy.';
-      if (run.welcome) { run.welcome = false; return WELCOME + ' ' + line; }
-      return line;
+      if (run.welcome) { run.welcome = false; return WELCOME + ' Let\u2019s warm up, jogging on the spot, nice and easy.'; }
+      return 'Warm-up. Jogging on the spot, nice and easy.';
     }
     if (pv.move === seg.move && pv.side !== seg.side) return 'Switch to your ' + seg.side + ' leg.';
-    if (pv.move === seg.move) return warmSpoken(seg); // jog pace change, no countdown
-    return 'Next warm-up: ' + warmSpoken(seg);
+    if (pv.move === seg.move) return seg.pace === 'quick' ? 'Quick jog!' : 'Back to an easy jog.'; // pace change, no countdown
+    return 'Next warm-up: ' + (WARM_SAY[seg.move] || spoken(seg.move)) + (seg.side ? ', ' + seg.side + ' leg.' : '.') +
+      (WARM_CUE[seg.move] ? ' ' + WARM_CUE[seg.move] : '');
   }
   var WARM_WORD = { jacks: 'JACKS', squat: 'SQUATS', pecstretch: 'STRETCH', hamstring: 'STRETCH', calf: 'STRETCH', jog: 'JOG' };
 
@@ -1552,23 +1550,27 @@
   /**
    * Warm-up lead-in. The coach names the move ("Next warm-up: squats…") while
    * the screen says "Get ready · Starts in N". The countdown never starts over
-   * the coach (the clock holds, up to 4 s: "Listen…"). Then a spoken
-   * "5, 4, 3, 2, 1" with a big number and a tick each second, and "Begin!"
-   * as the BEGIN wipe opens on the first beat: only then the count.
+   * the coach (the clock holds, up to 4 s: "Listen…") and a breath of silence
+   * comes first. Then a spoken "5, 4, 3, 2, 1" (3, 2, 1 for a leg switch) with
+   * a big number each second, and "Begin!" as the BEGIN wipe opens on the
+   * first beat: only then the count. While the coach is counting there are no
+   * ticks over the numbers; if the voice can't play, ticks carry it instead.
    */
-  var CD = 5;        // countdown seconds
   var VLEAD = 0.3;   // phone speech starts late: each number is asked for this early
-  var CD_WORDS = ['Five', 'Four', 'Three', 'Two', 'One'];
+  var GAP = 0.8;     // silence between the coach's line and the first number
+  var CD_WORDS = ['One', 'Two', 'Three', 'Four', 'Five'];
   function warmLead(seg, t) {
+    var cd = seg.countdown || 5;
     var leadEnd = seg.start + seg.lead, now = performance.now();
-    var cs = leadEnd - CD, hp = cs - VLEAD - 0.05; // countdown start; hold point, just before "Five"
+    var cs = leadEnd - cd, hp = cs - VLEAD - GAP; // countdown start; hold point
     var w = run.warm;
     if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, counting: false, go: false, flashed: false, holdSince: 0, k: -1, vk: -1, said: false };
     if (w.go) return t;
     var wk = $('workout'), box = $('wlBox');
     wk.classList.add('wu-lead');
-    var first = seg.index === 0;
-    if (t < hp) { box.classList.remove('runway'); leadText(first ? 'Welcome' : 'Get ready', 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6))); return t; }
+    var title = seg.index === 0 ? 'Welcome' : 'Get ready';
+    var startsIn = 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6));
+    if (t < hp) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     if (!w.counting) {
       if (t - hp > 0.6 || !run.playing) w.counting = true; // jumped in, or paused: no hold
       else {
@@ -1577,38 +1579,36 @@
           run.base = hp - 0.001; run.anchor = now; // hold: let the coach finish
           box.classList.remove('runway');
           // only a real wait says so (a line ending right on time doesn't flicker "Listen…")
-          if (now - w.holdSince > 300) leadText(first ? 'Welcome' : 'Get ready', 'Listen\u2026');
+          if (now - w.holdSince > 700) leadText(title, 'Listen\u2026');
           return run.base;
         }
         w.counting = true;
       }
     }
     if (t >= leadEnd) { w.go = true; startMove(seg, t - leadEnd < 0.6 && run.playing); return t; }
-    // the voice: each number asked for VLEAD early so it lands on its tick; then "Begin!"
+    // the voice: each number asked for VLEAD early so it lands on its second; then "Begin!"
     var vk = Math.floor(t - cs + VLEAD + 1e-6);
     if (vk !== w.vk) {
       var vnat = vk === w.vk + 1;
       w.vk = vk;
       if (vk >= 0 && vnat && run.playing) {
-        if (vk < CD) A.say(CD_WORDS[vk]);
+        if (vk < cd) A.say(CD_WORDS[cd - 1 - vk]);
         else { w.said = true; A.say('Begin!'); }
       }
     }
-    if (t < cs) { leadText(first ? 'Welcome' : 'Get ready', 'Starts in ' + CD); return t; }
+    if (t < cs) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     // the numbers: big, pulsing, one per second; 3-2-1 also pulse the screen edge
-    var k = Math.min(CD - 1, Math.floor(t - cs + 1e-6));
+    var k = Math.min(cd - 1, Math.floor(t - cs + 1e-6));
     if (k !== w.k) {
       var natural = k === w.k + 1;
       w.k = k;
-      var n = CD - k;
+      var n = cd - k;
       box.classList.add('runway');
       leadText(String(n), 'Starts in');
       box.classList.remove('pulse'); void box.offsetWidth; box.classList.add('pulse');
       if (run.playing && natural) {
-        if (A.get('sfx')) {
-          // under a working voice the ticks stay light; without it they carry the countdown
-          A.play(A.voiceWorks() || n > 3 ? 'tickSoft' : n === 1 ? 'tickLast' : 'tick');
-        }
+        // the coach's numbers are the countdown; without a voice the ticks carry it (louder for 3, 2, 1)
+        if (A.get('sfx') && !A.voiceWorks()) A.play(n > 3 ? 'tickSoft' : n === 1 ? 'tickLast' : 'tick');
         if (n <= 3) {
           wk.classList.remove('beat'); void wk.offsetWidth; wk.classList.add('beat');
           ring.shock(0.6); ring.hot = Math.max(ring.hot, 0.7);
@@ -1616,8 +1616,8 @@
         } else bg.beatNow(0.3);
       }
     }
-    // BEGIN's wipe covers the screen for ~0.64 s, then opens exactly as the count begins
-    if (!w.flashed && run.playing && t >= leadEnd - 0.64) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
+    // BEGIN's wipe: after "One" has had its moment, and it opens as the count begins
+    if (!w.flashed && run.playing && t >= leadEnd - 0.45) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
     return t;
   }
   /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
@@ -1627,7 +1627,8 @@
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
     if (!loud) return;
-    if (A.get('sfx')) A.play('start');
+    // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
+    if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
     else if (!(run.warm && run.warm.said)) A.say('Begin!');
     buzz([90, 50, 180]);
     ring.shock(1); ring.hot = 1;

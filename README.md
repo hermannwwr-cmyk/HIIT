@@ -43,7 +43,7 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 
 ### Warm-up
 
-When a workout starts, the coach welcomes you ("Welcome to today's HIIT session") and a 4:06 SAF-style warm-up runs first:
+When a workout starts, the coach welcomes you ("Welcome to today's HIIT session") and a 4:05 SAF-style warm-up runs first:
 
 | Step | How long |
 | --- | --- |
@@ -54,7 +54,7 @@ When a workout starts, the coach welcomes you ("Welcome to today's HIIT session"
 | Hamstring stretch, left then right | 5 counts of 4 each |
 | Calf stretch, left then right | 5 counts of 4 each |
 
-Each new move starts with a short **Get ready**: the coach names it ("Next warm-up: squats. Five counts of four.") while the demo waits, dimmed, and nothing starts while the coach is still talking (the screen says *Listen…* and the clock waits). Then the coach counts down "5, 4, 3, 2, 1" with a big number and a tick each second (3, 2, 1 also pulse the screen edge and vibrate), says "Begin!" as a full-screen **BEGIN** opens with a loud start signal, and only then the first count. A leg switch gets the same countdown; a change of jogging pace runs straight on. If the voice can't play, the ticks get louder for 3, 2, 1 and carry the countdown on their own. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
+Each new move starts with a short **Get ready**: the coach names it with one form cue ("Next warm-up: squats. Chest up, sit back.") while the demo waits, dimmed, and nothing starts while the coach is still talking (the screen says *Listen…* and the clock waits). After a breath, the coach counts down "5, 4, 3, 2, 1" with a big number each second (3, 2, 1 also pulse the screen edge and vibrate) and says "Begin!" as a full-screen **BEGIN** opens, and only then the first count. A leg switch counts down "3, 2, 1"; a change of jogging pace runs straight on. If the voice can't play, ticks carry the countdown instead (louder for 3, 2, 1) and a loud start signal marks the beginning. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
 
 ### Intensity
 

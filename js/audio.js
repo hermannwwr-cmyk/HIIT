@@ -86,7 +86,9 @@
       tone(1568, t, 0.08, { type: 'triangle', vol: 0.5 });
       tone(784, t, 0.07, { type: 'sine', vol: 0.2 });
     },
-    // warm-up: a loud start signal on "Begin!", before the count begins
+    // warm-up "Begin!" under a working voice: just the low thump, so the word stays clear
+    thump: function (t) { tone(120, t, 0.32, { type: 'sine', to: 60, vol: 0.65 }); },
+    // warm-up "Begin!" without a voice: a loud start signal before the count begins
     start: function (t) {
       [783.99, 987.77, 1174.66, 1567.98].forEach(function (f, i) {
         tone(f, t + i * 0.035, 0.6, { type: 'sawtooth', vol: 0.26, filter: 4200 });
