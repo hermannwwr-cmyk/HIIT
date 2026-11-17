@@ -1161,6 +1161,8 @@
     run.inhale = null;
     run.lastBeat = null;
     run.getSet = false;
+    run.warm = null;
+    $('workout').classList.remove('final10', 'final3', 'beat', 'wu-lead');
     document.body.dataset.phase = seg.type;
     var prevSeg = tl.segments[idx - 1];
     var c = ph.colors;
@@ -1198,8 +1200,9 @@
     $('phaseChip').textContent = hd.chip;
     $('wEx').innerHTML = hd.ex;
     var name = hd.name, label = hd.label, sub;
+    if (seg.type === 'warmup' && seg.lead) label = 'Get ready';
     var flashWord = ph.flash;
-    $('beats').hidden = !(seg.type === 'warmup' && seg.counts);
+    $('beats').hidden = !(seg.type === 'warmup' && seg.counts && !seg.lead);
     if (seg.type === 'warmup') {
       sub = warmName(seg);
       if (prevSeg && prevSeg.type === 'warmup') {
@@ -1253,8 +1256,8 @@
     if (seg.type === 'warmup') {
       var pv = run.tl.segments[seg.index - 1];
       var first = !pv || pv.type !== 'warmup';
-      if (first) { A.play('go'); buzz([60, 40, 60]); A.say('Warm up. ' + warmSpoken(seg)); }
-      else if (pv.move === seg.move && pv.side !== seg.side) { A.play('click'); A.say('Switch. ' + seg.side + ' leg.'); }
+      if (first) { A.play(seg.lead ? 'click' : 'go'); buzz(40); A.say('Warm up. ' + warmSpoken(seg)); }
+      else if (pv.move === seg.move && pv.side !== seg.side) { A.play('click'); buzz(40); A.say('Switch to your ' + seg.side + ' leg.'); }
       else if (pv.move === seg.move) { A.play('halfway'); A.say(warmSpoken(seg)); }
       else { A.play('click'); buzz(40); A.say(warmSpoken(seg)); }
       return;
@@ -1341,11 +1344,15 @@
   /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
     if (seg.type === 'warmup') {
-      if (!seg.counts) setDigits(String(whole), whole + ' seconds left');
+      if (!seg.counts && moving(seg)) setDigits(String(whole), whole + ' seconds left');
       return;
     }
     var long = whole >= 60;
     setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
+    // the last 10 seconds look different: phase-coloured digits that pulse each second
+    var wk = $('workout');
+    wk.classList.toggle('final10', whole <= 10);
+    wk.classList.toggle('final3', whole <= 3);
     var natural = prev != null && whole < prev && prev - whole <= 2 && run.playing;
     if (!natural) return;
     if (whole <= 3) {
@@ -1354,7 +1361,15 @@
       bg.beatNow(1);
       ring.shock(0.7);
       ring.hot = Math.max(ring.hot, 0.8);
-      buzz(35);
+      wk.classList.remove('beat'); void wk.offsetWidth; wk.classList.add('beat'); // edge pulse
+      buzz(whole === 1 ? [40, 40, 40] : 35);
+    } else if (whole <= 10) {
+      // 10: a chime you can't miss; 9…4: a tick each second
+      A.play(whole === 10 ? 'alert10' : 'tickSoft');
+      if (whole === 10) buzz([30, 60, 30]);
+      pulseDigits('tick');
+      bg.beatNow(0.35);
+      ring.hot = Math.max(ring.hot, 0.45);
     } else {
       pulseDigits('tick');
       bg.beatNow(seg.type === 'work' ? 0.45 : 0.2);
@@ -1390,10 +1405,6 @@
     if (i === run.coachIdx) return;
     run.coachIdx = i;
     var item = plan.items[i];
-    $('coachK').textContent = item.k;
-    var v = $('coachV');
-    v.textContent = item.v;
-    v.classList.remove('swap'); void v.offsetWidth; v.classList.add('swap');
     var tip = $('unTip');
     tip.innerHTML = '<b>' + esc(item.k) + '</b> ' + esc(item.v);
     tip.classList.remove('swap'); void tip.offsetWidth; tip.classList.add('swap');
@@ -1454,6 +1465,7 @@
     if (idx >= tl.segments.length) { finish(); return; }
     if (idx !== run.segIdx) enterSegment(idx);
     var seg = tl.segments[idx];
+    if (seg.type === 'warmup' && seg.lead) t = warmLead(seg, t); // may hold the clock while the coach talks
     var remaining = Math.max(0, seg.end - t);
     var whole = Math.max(1, Math.ceil(remaining - 1e-6));
     if (whole !== run.lastWhole) {
@@ -1464,8 +1476,8 @@
       wn.innerHTML = nl;
       wn.hidden = !nl;
     }
-    if (seg.type === 'warmup' && seg.counts) {
-      var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start) / seg.beat + 1e-6)));
+    if (seg.type === 'warmup' && seg.counts && moving(seg)) {
+      var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start - seg.lead) / seg.beat + 1e-6)));
       if (bi !== run.lastBeat) { var pb = run.lastBeat; run.lastBeat = bi; onBeat(seg, bi, pb); }
     }
     updateCoach(seg, t);
@@ -1496,6 +1508,49 @@
       $('hElapsed').textContent = H.formatTime(Math.floor(t));
       $('hLeft').textContent = clock(tl.total - t);
     }
+  }
+
+  /** A warm-up step is moving (its lead-in is over). */
+  function moving(seg) { return !seg.lead || !!(run.warm && run.warm.idx === seg.index && run.warm.go); }
+  /**
+   * Warm-up lead-in: "Get ready" with a countdown while the coach explains the
+   * move. The count never starts while the coach is still talking (the clock
+   * holds, up to 4 s); then "ready…" and a loud start signal, and only then 1.
+   */
+  function warmLead(seg, t) {
+    var leadEnd = seg.start + seg.lead, now = performance.now();
+    var w = run.warm;
+    if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, ready: false, go: false, holdSince: 0, readyAt: 0, left: null };
+    if (w.go) return t;
+    $('workout').classList.add('wu-lead');
+    if (t < leadEnd) {
+      var left = Math.max(1, Math.ceil(leadEnd - t - 1e-6));
+      if (left !== w.left) { w.left = left; setDigits(String(left), 'Starts in ' + left + ' seconds'); }
+      if (!w.ready && t >= leadEnd - 1 && run.playing && !A.speaking()) { w.ready = true; w.readyAt = now; A.play('ready'); }
+      return t;
+    }
+    if (t - leadEnd > 0.6 || !run.playing) { w.go = true; startMove(seg, false); return t; } // jumped in: no fanfare
+    if (!w.holdSince) w.holdSince = now;
+    var talking = A.speaking();
+    if (!w.ready && !talking) { w.ready = true; w.readyAt = now; A.play('ready'); }
+    if ((talking || !w.ready || now - w.readyAt < 800) && now - w.holdSince < 4000) {
+      run.base = leadEnd - 0.001; run.anchor = now; // hold: let the coach finish
+      return run.base;
+    }
+    w.go = true; startMove(seg, true);
+    return t;
+  }
+  /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
+  function startMove(seg, loud) {
+    $('workout').classList.remove('wu-lead');
+    $('dLabel').textContent = seg.counts ? 'Count' : 'Time left';
+    $('beats').hidden = !seg.counts;
+    run.lastWhole = null; run.lastBeat = null;
+    if (!loud) return;
+    A.play('start');
+    buzz([90, 50, 180]);
+    flash('GO', warmName(seg), false, PHASE.warmup.colors);
+    ring.shock(1); ring.hot = 1;
   }
 
   function skip() {

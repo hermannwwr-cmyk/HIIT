@@ -43,7 +43,7 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 
 ### Warm-up
 
-When a workout starts, a 2:52 SAF-style warm-up runs first:
+When a workout starts, a 3:22 SAF-style warm-up runs first:
 
 | Step | How long |
 | --- | --- |
@@ -54,7 +54,7 @@ When a workout starts, a 2:52 SAF-style warm-up runs first:
 | Hamstring stretch, left then right | 5 counts of 4 each |
 | Calf stretch, left then right | 5 counts of 4 each |
 
-Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
+Each new move starts with a short **Get ready**: the coach explains the move, and the count never begins while the coach is still talking (it waits for the coach to finish). Then a "ready" double beep and a loud start signal with **GO** on screen and a vibration, and only then the first count. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
 
 ### Intensity
 
@@ -68,7 +68,7 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 ### Personal trainer
 
 - **Trainer's guide** for every exercise (tap ⓘ on a card, the preview label, or **How to** mid-workout): live animated demo, numbered steps, breathing, mistakes to avoid, and easier / harder versions. The workout timer pauses while the guide is open.
-- **On-screen coaching** rotates form cues during each exercise and walks you through the next exercise's steps while you rest.
+- **Form cues** are spoken by the voice coach during each exercise (the screen keeps just the countdown and **How to**); while you rest, the Up next card walks you through the next exercise's steps.
 - **Rest screen** looks different from exercise: the page turns the rest colour, the countdown moves inside the ring, and an **Up next** card shows a live demo of the next exercise with its steps, **How to** and **Start now**. In the last 3 seconds it says *Get set*.
 - **Voice coach** announces each exercise, gives a form cue at 20 s left, calls out 10 seconds, and says what's next. During the set break it checks in at 4, 3, 2 and 1 minute, 30 s and 10 s.
 - **Set break** shows a breathing pacer (4 s in, 6 s out), recovery tips, and previews the first exercise of the next set.
@@ -80,7 +80,7 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 - Big countdown labelled for what it counts down to: *Time left*, *Crunches in*, *Set 2 in*. The warm-up shows counts as *2/5*.
 - *Next: Squats in 0:58* line during every exercise, so you always know what's coming and when.
 - **Start now** (or **Start set 2**) on the Up next card jumps straight to the next exercise; **Skip warm-up** sits in the progress strip. Every skip or back can be undone for 8 seconds.
-- The ring shows the current interval. The last three seconds of every interval beep.
+- The ring shows the current interval. **The last 10 seconds are unmistakable:** a two-note chime at 10, a tick every second from 9 to 4, louder beeps on 3, 2, 1 with a glow around the screen edge, and the digits turn the phase colour and pulse each second.
 - The finish screen shows total time, time spent on each exercise, and your workouts and day streak on this device.
 
 ### Controls

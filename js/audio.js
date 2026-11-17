@@ -57,8 +57,39 @@
   }
 
   var sounds = {
-    tick: function (t) { tone(880, t, 0.12, { type: 'triangle', vol: 0.45 }); tone(1760, t, 0.05, { vol: 0.12 }); },
-    tickLast: function (t) { tone(1175, t, 0.16, { type: 'triangle', vol: 0.5 }); tone(2350, t, 0.06, { vol: 0.15 }); },
+    // last 3 seconds: loud, bright beeps that carry on a phone speaker (1–2.5 kHz)
+    tick: function (t) {
+      tone(988, t, 0.18, { type: 'square', vol: 0.34, filter: 3200 });
+      tone(1976, t, 0.09, { type: 'triangle', vol: 0.2 });
+    },
+    tickLast: function (t) {
+      tone(1319, t, 0.26, { type: 'square', vol: 0.4, filter: 3800 });
+      tone(2637, t, 0.12, { type: 'triangle', vol: 0.22 });
+    },
+    // 10 seconds left: a two-note chime, clearly different from the ticks
+    alert10: function (t) {
+      [[1319, 0], [1760, 0.16]].forEach(function (n) {
+        tone(n[0], t + n[1], 0.5, { type: 'triangle', vol: 0.42 });
+        tone(n[0] * 2, t + n[1], 0.22, { type: 'sine', vol: 0.12 });
+      });
+    },
+    // 9 … 4: a short wood-block tick each second
+    tickSoft: function (t) {
+      tone(1568, t, 0.05, { type: 'triangle', vol: 0.3 });
+      tone(784, t, 0.04, { type: 'sine', vol: 0.12 });
+    },
+    // warm-up: "ready…" (two rising beeps) then a loud start signal before the count begins
+    ready: function (t) {
+      tone(880, t, 0.12, { type: 'square', vol: 0.26, filter: 3000 });
+      tone(1175, t + 0.18, 0.14, { type: 'square', vol: 0.3, filter: 3200 });
+    },
+    start: function (t) {
+      [783.99, 987.77, 1174.66, 1567.98].forEach(function (f, i) {
+        tone(f, t + i * 0.035, 0.55, { type: 'sawtooth', vol: 0.2, filter: 4200 });
+      });
+      tone(2093, t + 0.12, 0.35, { type: 'triangle', vol: 0.22, to: 2637 });
+      tone(120, t, 0.32, { type: 'sine', to: 60, vol: 0.65 });
+    },
     go: function (t) {
       [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) {
         tone(f, t + i * 0.055, 0.42 - i * 0.05, { type: 'sawtooth', vol: 0.18, filter: 3200 });
@@ -125,6 +156,11 @@
     } catch (e) { /* ignore */ }
   }
 
+  /** Is the coach still talking? (Used to let an instruction finish before a move starts.) */
+  function speaking() {
+    try { return !!(settings.voice && window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)); } catch (e) { return false; }
+  }
+
   function stopVoice() { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
 
   /** Let the audio hardware idle (paused / finished). play() wakes it again. */
@@ -135,7 +171,7 @@
   }
 
   window.HIITAudio = {
-    unlock: unlock, play: play, say: say, stopVoice: stopVoice, sleep: sleep,
+    unlock: unlock, play: play, say: say, stopVoice: stopVoice, sleep: sleep, speaking: speaking,
     set: function (k, v) { settings[k] = !!v; if (k === 'voice' && !v) stopVoice(); },
     get: function (k) { return settings[k]; },
     voiceSupported: function () { return !!window.speechSynthesis; }
