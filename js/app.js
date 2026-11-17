@@ -677,26 +677,11 @@
 
     // track (dashed during jumping jacks so the phase reads without colour)
     ctx.lineCap = 'butt';
-    ctx.strokeStyle = rgba(ca, light ? 0.22 : 0.24);
+    ctx.strokeStyle = rgba(ca, light ? 0.2 : 0.24);
     ctx.lineWidth = th;
     if (this.dashed) { var seg = TAU * R / 60; ctx.setLineDash([seg * 0.55, seg * 0.45]); }
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
     ctx.setLineDash([]);
-
-    // (whole-session progress lives in the bar under the ring in this look)
-    if (false) {
-      var ri = R - th * 1.15;
-      var tp = Math.max(0, Math.min(1, this.total || 0));
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = rgba(ink, light ? 0.08 : 0.09);
-      ctx.beginPath(); ctx.arc(cx, cy, ri, 0, TAU); ctx.stroke();
-      if (tp > 0.002) {
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = rgba(ink, light ? 0.5 : 0.55);
-        ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + TAU * tp); ctx.stroke();
-        ctx.lineCap = 'butt';
-      }
-    }
 
     if (prog > 0.001) {
       var grad;
@@ -713,7 +698,9 @@
       if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th * 1.2; }
       ctx.strokeStyle = grad;
       ctx.lineWidth = th;
+      if (this.dashed) { var dseg = TAU * R / 60; ctx.setLineDash([dseg * 0.55, dseg * 0.45]); }
       ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
+      ctx.setLineDash([]);
       ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
 
       // head cap with a soft shadow ahead of it, kept inside the ring band

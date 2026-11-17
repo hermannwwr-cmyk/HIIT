@@ -561,3 +561,4 @@
 
 /* switching looks: no cross-fading of the old look's glows */
 .look-switching, .look-switching *, .look-switching *::before, .look-switching *::after { transition: none !important; }
+[data-look="studio"][data-scheme="light"] .digits.final .d { color: var(--accent); }
