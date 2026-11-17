@@ -225,8 +225,6 @@
   // phase-wash strength and vignette depth.
   var DARK_STAGES = {
     graphite: { d0: [.062, .061, .062], d1: [.100, .098, .099], pool: [.07, .069, .069], wash: .9, vig: .3, tint: 0 },
-    midnight: { d0: [.012, .018, .036], d1: [.045, .064, .112], pool: [.055, .075, .13], wash: .9, vig: .55 },
-    oled: { d0: [0, 0, 0], d1: [.022, .022, .026], pool: [.05, .05, .056], wash: .75, vig: .7 },
     charcoal: { d0: [.040, .037, .034], d1: [.094, .088, .082], pool: [.085, .079, .072], wash: 1.0, vig: .4, tint: .03 }
   };
   Backdrop.prototype.setDark = function (name) {

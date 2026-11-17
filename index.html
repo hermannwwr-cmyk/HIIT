@@ -27,17 +27,17 @@
       : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     var look = pref === 'auto' ? 'studio-' + sys : pref;
     d.setAttribute('data-look-pref', pref);
-    // Dark-scheme direction (design exploration): ?dark=graphite|midnight|oled|charcoal
+    // Dark scheme: Charcoal+ by default; ?dark=graphite shows the neutral alternative
     var dv = 'charcoal'; // the dark scheme's default direction
     try {
       var qd = new URLSearchParams(location.search).get('dark');
-      if (/^(graphite|midnight|oled|charcoal)$/.test(qd)) dv = qd;
+      if (/^(graphite|charcoal)$/.test(qd)) dv = qd;
     } catch (e) { /* keep the default */ }
     d.setAttribute('data-dark', dv);
     d.setAttribute('data-look', look === 'neon' ? 'neon' : 'studio');
     d.setAttribute('data-scheme', look === 'studio-light' ? 'light' : 'dark');
     var meta = document.querySelector('meta[name="theme-color"]');
-    var darkMeta = { graphite: '#151516', midnight: '#060a13', oled: '#000000', charcoal: '#100f0e' }[dv];
+    var darkMeta = { graphite: '#151516', charcoal: '#1a1918' }[dv];
     if (meta) meta.setAttribute('content', { neon: '#07020f', 'studio-dark': darkMeta, 'studio-light': '#f4f3ef' }[look]);
   })();
 </script>

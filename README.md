@@ -14,8 +14,9 @@ The default is **Automatic**: the Studio look in light or dark to match the phon
 
 - **Neon:** a warp-tunnel backdrop, glowing light-trail athlete, sparks and glitch type.
 - **Studio dark / Studio light:** clean and quiet.
-  - **Backdrop:** a graphite or warm-paper studio with a soft spotlight.
-  - **Athlete:** a matte 3D mannequin with contact shadows.
+  - **Backdrop:** warm paper (light) or warm charcoal (dark) with a soft spotlight that picks up the phase colour.
+  - **Athlete:** a satin 3D mannequin with contact shadows: graphite on light, warm stone on dark.
+  - **Dark scheme:** cards and panels sit lighter than the stage, the same structure as light. `?dark=graphite` shows a neutral alternative with a titanium mannequin.
   - **Type:** Geist, with one coral accent.
   - **Timer:** an Apple-style ring with thin oversized digits.
   - **Phase colour:** appears only on the ring, the phase chip and the progress bar. During jumping jacks the ring turns into beads, so the phase reads without colour.
