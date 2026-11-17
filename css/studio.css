@@ -732,13 +732,8 @@
   [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 0; }
 }
 
-/* swipe wheel + first-run tip (Studio) */
-[data-look="studio"] .tp-rail i { color: var(--text); }
-[data-look="studio"] .tp-lens { background: var(--text); }
-[data-look="studio"][data-scheme="dark"][data-dark="charcoal"] .tp-lens { background: #ece6de; }
-[data-look="studio"] .tp-lens .tp-rail i { color: var(--ink); }
-[data-look="studio"] .transport.armed .tp-lens { background: var(--c1); }
-[data-look="studio"] .transport.armed .tp-lens .tp-rail i { color: #fff; }
-[data-look="studio"] .tp-bubble { font: 600 14px/1 var(--ui); letter-spacing: 0; background: var(--surface-solid, var(--surface)); border-color: var(--line); box-shadow: var(--shadow-1); }
-[data-look="studio"] .transport.armed .tp-bubble { color: #fff; background: var(--c1); }
+/* swipe carousel + first-run tip (Studio) */
+[data-look="studio"] .pk-k { font: 600 15px/1.2 var(--ui); letter-spacing: 0; color: color-mix(in srgb, var(--dc, var(--c1)) 80%, var(--text)); }
+[data-look="studio"] .pk-name { font-weight: 600; letter-spacing: -.03em; }
+[data-look="studio"] .pk-t { font-weight: 200; }
 [data-look="studio"] .wp-tip { font-weight: 500; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }

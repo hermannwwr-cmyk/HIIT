@@ -205,7 +205,7 @@
   </header>
 
   <div class="w-prog" id="wProg">
-    <div class="wp-meta"><span class="wp-set" id="wpSet">Set 1 of 3</span><span class="wp-left" id="wpLeft"></span><button id="wpSkip" class="wp-skip" type="button" hidden>Skip warm-up<svg aria-hidden="true"><use href="#i-next"/></svg></button><span class="wp-undo" id="toast" hidden role="status"><span id="toastText"></span><button id="toastUndo" class="wp-undo-btn" type="button">Undo</button></span><span class="wp-tip" id="wpTip" hidden>Tip: swipe ← → to skip</span></div>
+    <div class="wp-meta"><span class="wp-set" id="wpSet">Set 1 of 3</span><span class="wp-left" id="wpLeft"></span><button id="wpSkip" class="wp-skip" type="button" hidden>Skip warm-up<svg aria-hidden="true"><use href="#i-next"/></svg></button><span class="wp-undo" id="toast" hidden role="status"><span id="toastText"></span><button id="toastUndo" class="wp-undo-btn" type="button">Undo</button></span><span class="wp-tip" id="wpTip" hidden>Swipe ← or tap ⏭ for next</span></div>
     <div class="wp-track" id="wpTrack" aria-hidden="true"></div>
   </div>
 
@@ -216,17 +216,24 @@
     </div>
     <div class="w-stage" id="stage">
       <canvas id="ring" class="ring" aria-hidden="true"></canvas>
-      <canvas id="fig" class="fig" aria-hidden="true"></canvas>
-      <div class="dial" id="dial" aria-hidden="true">
-        <p class="dial-k" id="dialK">Next in</p>
-        <div class="digits dial-digits" id="dialDigits"></div>
-        <p class="dial-sub" id="dialSub"></p>
+      <!-- inside the ring, clipped to it: what's on now, and (while swiping) where you're going -->
+      <div class="ring-in" id="ringIn">
+        <div class="ri-cur" id="riCur">
+          <canvas id="fig" class="fig" aria-hidden="true"></canvas>
+          <div class="dial" id="dial" aria-hidden="true">
+            <p class="dial-k" id="dialK">Next in</p>
+            <div class="digits dial-digits" id="dialDigits"></div>
+            <p class="dial-sub" id="dialSub"></p>
+          </div>
+        </div>
+        <div class="ri-peek" id="riPeek" aria-hidden="true">
+          <p class="pk-k" id="pkK">Next</p>
+          <p class="pk-name" id="pkName"></p>
+          <canvas id="peekFig" class="pk-fig"></canvas>
+          <p class="pk-t" id="pkT"></p>
+        </div>
       </div>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">
-        <!-- swipe wheel: the icon row slides with the finger; whatever lands in the centre circle happens -->
-        <div class="tp-layer tp-base" aria-hidden="true"><div class="tp-rail"><i class="tp-s"><svg><use href="#i-prev"/></svg></i><i class="tp-m"><svg><use href="#i-pause"/></svg></i><i class="tp-s"><svg><use href="#i-next"/></svg></i></div></div>
-        <div class="tp-layer tp-lens" aria-hidden="true"><div class="tp-rail"><i class="tp-s"><svg><use href="#i-prev"/></svg></i><i class="tp-m"><svg><use href="#i-pause"/></svg></i><i class="tp-s"><svg><use href="#i-next"/></svg></i></div></div>
-        <span class="tp-bubble" id="tpBubble" aria-hidden="true"></span>
         <button id="prev" class="ctl" type="button" aria-label="Previous interval"><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
         <button id="pause" class="ctl ctl-main" type="button" aria-label="Pause"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
         <button id="skip" class="ctl ctl-skip" type="button" aria-label="Next interval"><svg aria-hidden="true"><use href="#i-next"/></svg></button>
