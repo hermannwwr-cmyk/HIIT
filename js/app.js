@@ -195,9 +195,22 @@
   var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', energy: 0.7 });
   var hero = { hover: null, shown: null };
 
+  var groupLists = {};
   function buildGrid() {
-    var grid = $('exGrid');
+    var wrap = $('exGrid');
+    H.GROUP_ORDER.forEach(function (g) {
+      var sec = document.createElement('section');
+      sec.className = 'ex-sec';
+      sec.dataset.group = g;
+      sec.setAttribute('aria-labelledby', 'exsec-' + g);
+      sec.innerHTML = '<h3 class="ex-sec-h" id="exsec-' + g + '"><span class="ex-sec-dot" aria-hidden="true"></span>' +
+        '<span class="ex-sec-name"></span><span class="ex-sec-n" id="exsec-n-' + g + '"></span></h3><ul class="ex-grid"></ul>';
+      sec.querySelector('.ex-sec-name').textContent = H.GROUPS[g].label;
+      wrap.appendChild(sec);
+      groupLists[g] = sec.querySelector('ul');
+    });
     H.EXERCISES.forEach(function (ex) {
+      var grid = groupLists[ex.group];
       var li = document.createElement('li');
       li.className = 'ex-item';
       var btn = document.createElement('button');
@@ -279,6 +292,13 @@
       thumbs[ex.id].setEnergy(pos >= 0 ? 0.7 : 0.15);
     });
 
+    H.GROUP_ORDER.forEach(function (g) {
+      var total = H.EXERCISES.filter(function (e) { return e.group === g; }).length;
+      var picked = ids.filter(function (id) { return H.get(id).group === g; }).length;
+      var n = $('exsec-n-' + g);
+      n.textContent = picked ? picked + ' of ' + total + ' picked' : 'none picked';
+      n.classList.toggle('none', !picked);
+    });
     $('count').textContent = String(ids.length);
     $('minus').disabled = ids.length <= H.MIN_EXERCISES;
     $('plus').disabled = ids.length >= H.MAX_EXERCISES;

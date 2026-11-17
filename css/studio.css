@@ -653,3 +653,14 @@
 [data-look="studio"] .switch { background: color-mix(in srgb, var(--text) 14%, transparent); border-color: var(--line-hi); }
 [data-look="studio"] .switch[aria-checked="true"] { background: var(--btn-bg, var(--accent)); }
 [data-look="studio"] .beats i { border-color: color-mix(in srgb, var(--c1) 50%, transparent); }
+
+/* exercise picker sections (Studio) */
+[data-look="studio"] .ex-groups { gap: 18px; }
+[data-look="studio"] .ex-sec-h { font: 600 13px/1 var(--ui); letter-spacing: 0; text-transform: none; color: var(--text); }
+[data-look="studio"] .ex-sec-dot { box-shadow: none; }
+[data-look="studio"] .ex-sec-n { font: 500 12px/1 var(--ui); letter-spacing: 0; color: var(--mute); }
+[data-look="studio"] .ex-sec-n.none { color: var(--danger); }
+[data-look="studio"] .ex-groups .ex-group { display: none; }
+@media (max-width: 360px) {
+  [data-look="studio"] .ex-grid { grid-template-columns: minmax(0, 1fr); }
+}

@@ -13,9 +13,11 @@ function seeded(seed) {
   };
 }
 
-test('catalogue has the 8 exercises (incl. shoulder taps) in 3 groups', () => {
+test('catalogue: 8 exercises grouped upper body, abs, legs', () => {
   assert.deepEqual(H.EXERCISES.map(e => e.id),
-    ['pushup', 'shouldertap', 'crunch', 'legraise', 'squat', 'lunge', 'flutter', 'twist']);
+    ['pushup', 'shouldertap', 'crunch', 'legraise', 'flutter', 'twist', 'squat', 'lunge']);
+  // listed upper body, then abs, then legs
+  assert.deepEqual([...new Set(H.EXERCISES.map(e => e.group))], ['upper', 'abs', 'legs']);
   assert.equal(H.get('shouldertap').group, 'upper');
   assert.equal(H.MAX_EXERCISES, 8);
   for (const g of ['upper', 'abs', 'legs']) {

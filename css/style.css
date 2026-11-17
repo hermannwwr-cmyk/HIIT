@@ -1043,3 +1043,20 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .beats i.now { transform: scale(1.3); }
 .beats i:last-child { width: 16px; height: 16px; margin-top: -2px; }
 @media (min-aspect-ratio: 5/4) and (min-width: 560px) { .beats { justify-content: flex-start; } }
+
+/* ---------- exercise picker grouped by body area ---------- */
+.ex-groups { display: grid; gap: 16px; }
+.ex-sec { display: grid; gap: 10px; }
+.ex-sec[data-group="upper"] { --gc: var(--g-upper); }
+.ex-sec[data-group="abs"] { --gc: var(--g-abs); }
+.ex-sec[data-group="legs"] { --gc: var(--g-legs); }
+.ex-sec-h { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 12px/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--gc); }
+.ex-sec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gc); box-shadow: 0 0 10px var(--gc); }
+.ex-sec-n { margin-left: auto; font: 600 12px/1 var(--ui); letter-spacing: .04em; text-transform: none; color: var(--mute); }
+.ex-sec-n.none { color: #ffb3c1; }
+.ex-groups .ex-group { display: none; }
+.ex-groups .ex-text { align-self: center; }
+@media (max-width: 400px) {
+  .toggles { gap: 6px; }
+  .brand { gap: 8px; }
+}
