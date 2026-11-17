@@ -86,6 +86,53 @@
     '}'
   ].join('\n');
 
+  // Studio look: a quiet photographic backdrop. Graphite (or warm paper) with a
+  // soft spotlight pool where the athlete stands, two slow phase-tinted light
+  // washes, and a gentle vignette. Grain is a static CSS layer (cheaper, and it
+  // dithers the smooth gradients).
+  var FRAG_STUDIO = [
+    'precision highp float;',
+    'uniform vec2 uRes;uniform float uTime;uniform vec3 uA;uniform vec3 uB;',
+    'uniform float uEnergy;uniform float uBeat;uniform vec2 uFocus;uniform float uFlash;uniform float uLight;',
+    'float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
+    'float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);',
+    ' return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}',
+    'void main(){',
+    ' vec2 p=(gl_FragCoord.xy-.5*uRes)/min(uRes.x,uRes.y);',
+    ' vec2 q=p-uFocus;',
+    ' float T=uTime;',
+    ' float gy=clamp(gl_FragCoord.y/uRes.y,0.,1.);',
+    // base gradient: lighter at the top like a cyclorama
+    ' vec3 dark=mix(vec3(.028,.030,.038),vec3(.078,.083,.100),gy);',
+    ' vec3 light=mix(vec3(.905,.900,.885),vec3(.972,.968,.955),gy);',
+    ' vec3 col=mix(dark,light,uLight);',
+    // spotlight pool around the athlete
+    ' vec2 sp=q*vec2(.9,1.35);',
+    ' float pool=exp(-dot(sp,sp)*2.4);',
+    ' col+=mix(vec3(.085,.09,.105),vec3(.03,.03,.026),uLight)*pool;',
+    // soft top key light falling on the stage
+    ' float beam=exp(-pow(abs(q.x)*1.6,2.))*smoothstep(-.6,1.2,q.y)*.5;',
+    ' col+=mix(vec3(.035,.037,.045),vec3(.012,.012,.01),uLight)*beam;',
+    // two slow phase-coloured light washes with a little organic texture
+    ' vec2 c1=uFocus+vec2(-.62+.07*sin(T*.11),.42+.05*cos(T*.13));',
+    ' vec2 c2=uFocus+vec2(.66+.06*cos(T*.09),-.30+.05*sin(T*.12));',
+    ' float n=.75+.5*(noise(p*1.4+T*.025)*.65+noise(p*3.1-T*.02)*.35);',
+    ' float b1=exp(-dot(p-c1,p-c1)*1.5)*n;',
+    ' float b2=exp(-dot(p-c2,p-c2)*1.8)*n;',
+    ' float w=.045+.05*uEnergy+.025*uBeat;',
+    ' vec3 addD=(uA*b1+uB*b2*.7)*w;',
+    ' vec3 lit=col+addD;',
+    ' vec3 tinted=mix(mix(col,uA,b1*w*.9),uB,b2*w*.6);',
+    ' col=mix(lit,tinted,uLight);',
+    // phase-change lift
+    ' col+=mix(uA*.10,uA*.05,uLight)*uFlash*exp(-dot(q,q)*1.2);',
+    // vignette
+    ' float v=smoothstep(1.75,.3,length(p*vec2(.85,1.)));',
+    ' col*=mix(.5+.5*v,.9+.1*v,uLight);',
+    ' gl_FragColor=vec4(col,1.);',
+    '}'
+  ].join('\n');
+
   function hexToRgb(hex) {
     var h = hex.replace('#', '');
     if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
@@ -106,6 +153,9 @@
     this.frameTimes = [];
     this.running = true;
     this.reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var root = document.documentElement;
+    this.style = root.getAttribute('data-look') === 'studio' ? 'studio' : 'neon';
+    this.light = root.getAttribute('data-scheme') === 'light' ? 1 : 0;
     try { this._init(); } catch (e) { this.ok = false; }
     if (!this.ok) document.documentElement.classList.add('no-webgl');
     this._loop = this._loop.bind(this);
@@ -123,22 +173,25 @@
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
       return s;
     }
-    var prog = gl.createProgram();
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-    gl.useProgram(prog);
+    function program(frag) {
+      var prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, frag));
+      gl.bindAttribLocation(prog, 0, 'p');
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      var u = {};
+      ['uRes', 'uTime', 'uTravel', 'uA', 'uB', 'uEnergy', 'uBeat', 'uFocus', 'uFlash', 'uLight'].forEach(function (n) { u[n] = gl.getUniformLocation(prog, n); });
+      return { prog: prog, u: u };
+    }
     var buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    var loc = gl.getAttribLocation(prog, 'p');
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    this.u = {};
-    var names = ['uRes', 'uTime', 'uTravel', 'uA', 'uB', 'uEnergy', 'uBeat', 'uFocus', 'uFlash'];
-    for (var i = 0; i < names.length; i++) this.u[names[i]] = gl.getUniformLocation(prog, names[i]);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    this.programs = { neon: program(FRAG), studio: program(FRAG_STUDIO) };
     this.gl = gl;
+    this._useStyle();
     var self = this;
     this.canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); self.ok = false; }, false);
     this.canvas.addEventListener('webglcontextrestored', function () { try { self._init(); } catch (err) { /* stay on CSS fallback */ } }, false);
@@ -154,6 +207,20 @@
       this.canvas.width = w; this.canvas.height = h;
       this.gl.viewport(0, 0, w, h);
     }
+  };
+
+  Backdrop.prototype._useStyle = function () {
+    if (!this.gl) return;
+    var pr = this.programs[this.style] || this.programs.neon;
+    this.gl.useProgram(pr.prog);
+    this.u = pr.u;
+  };
+  /** Switch between the neon tunnel and the studio backdrop. */
+  Backdrop.prototype.setStyle = function (style, scheme) {
+    this.style = style === 'studio' ? 'studio' : 'neon';
+    this.light = scheme === 'light' ? 1 : 0;
+    this._useStyle();
+    this._drewStill = false;
   };
 
   /** Smoothly retarget colours / energy. */
@@ -218,6 +285,7 @@
     gl.uniform1f(u.uBeat, this.beat);
     gl.uniform1f(u.uFlash, this.flash);
     gl.uniform2f(u.uFocus, this.focus[0], this.focus[1]);
+    if (u.uLight) gl.uniform1f(u.uLight, this.light);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 

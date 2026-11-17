@@ -29,6 +29,48 @@
     rest: ['#22e5ff', '#4a6bff']
   };
 
+  // ---------------------------------------------------------------- looks
+  // Each look swaps the colour palette (and energy) used by the backdrop,
+  // ring and figures; CSS handles the rest via html[data-look][data-scheme].
+  var LOOKS = {
+    neon: {
+      style: 'neon', scheme: 'dark', meta: '#07020f', fps: null,
+      phase: {
+        setup: [['#9b5cff', '#22e5ff'], 0.22], prep: [['#b9a8ff', '#5a6bff'], 0.45], work: [['#ff2bd6', '#ff8a1f'], 1.0],
+        rest: [['#22e5ff', '#4a6bff'], 0.18], jacks: [['#c6ff1a', '#ffe14a'], 0.8], setrest: [['#36ffc0', '#9b5cff'], 0.1],
+        done: [['#ffd23f', '#ff2bd6'], 0.55]
+      },
+      group: { upper: ['#ff4fd8', '#ff8a1f'], abs: ['#2ee6ff', '#4a6bff'], legs: ['#ffb21f', '#ff4f6a'], cardio: ['#c6ff1a', '#ffe14a'], rest: ['#22e5ff', '#4a6bff'] }
+    },
+    'studio-dark': {
+      style: 'studio', scheme: 'dark', meta: '#0b0c10', fps: 30,
+      phase: {
+        setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#aab3c5', '#5b7cff'], 0.3], work: [['#ff5a36', '#ff2d55'], 0.7],
+        rest: [['#2fb8ff', '#5b7cff'], 0.2], jacks: [['#ffb020', '#ff7a1a'], 0.6], setrest: [['#34d399', '#2fb8ff'], 0.1],
+        done: [['#ff5a36', '#ffb020'], 0.5]
+      },
+      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffb020', '#ff7a1a'], rest: ['#2fb8ff', '#5b7cff'] }
+    },
+    'studio-light': {
+      style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
+      phase: {
+        setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3d6bff'], 0.3], work: [['#f0441f', '#e11d48'], 0.7],
+        rest: [['#0a84ff', '#4f46e5'], 0.2], jacks: [['#f59e0b', '#ea580c'], 0.6], setrest: [['#10b981', '#0a84ff'], 0.1],
+        done: [['#f0441f', '#f59e0b'], 0.5]
+      },
+      group: { upper: ['#ea580c', '#f0441f'], abs: ['#0284c7', '#2563eb'], legs: ['#d97706', '#b45309'], cardio: ['#f59e0b', '#ea580c'], rest: ['#0a84ff', '#4f46e5'] }
+    }
+  };
+  var htmlEl = document.documentElement;
+  var look = htmlEl.getAttribute('data-look') === 'studio' ? 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark') : 'neon';
+  function isStudio() { return LOOKS[look].style === 'studio'; }
+  function applyPalette() {
+    var L = LOOKS[look];
+    Object.keys(L.phase).forEach(function (k) { PHASE[k].colors = L.phase[k][0]; PHASE[k].energy = L.phase[k][1]; });
+    Object.keys(L.group).forEach(function (k) { GROUP_COLORS[k] = L.group[k]; });
+  }
+  applyPalette();
+
   // ---------------------------------------------------------------- storage
   var STORE_KEY = 'overdrive-hiit:v1';
   function loadPrefs() {
@@ -37,7 +79,7 @@
   function savePrefs() {
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
-        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'),
+        level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), look: look,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -77,16 +119,22 @@
   }
 
   // ---------------------------------------------------------------- figures
-  var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop };
+  var stubFig = { setExercise: noop, setColors: noop, setPlaying: noop, setEnergy: noop, pulse: noop, destroy: noop, setSuspended: noop, setStyle: noop };
   function noop() {}
+  var figs = [];
   function makeFig(canvas, opts) {
-    try { return (window.HIITFigure && window.HIITFigure.create(canvas, opts)) || stubFig; } catch (e) { return stubFig; }
+    opts.style = LOOKS[look].style;
+    opts.scheme = LOOKS[look].scheme;
+    var f;
+    try { f = (window.HIITFigure && window.HIITFigure.create(canvas, opts)) || stubFig; } catch (e) { f = stubFig; }
+    if (f !== stubFig) figs.push(f);
+    return f;
   }
 
   // ---------------------------------------------------------------- backdrop
   var bg;
   try { bg = new window.HIITBackdrop($('bg')); } catch (e) {
-    bg = { setMood: noop, setFocus: noop, beatNow: noop, flashNow: noop, setRunning: noop, setFrameRate: noop };
+    bg = { setMood: noop, setFocus: noop, beatNow: noop, flashNow: noop, setRunning: noop, setFrameRate: noop, setStyle: noop };
   }
 
   function focusOn(el) {
@@ -355,7 +403,7 @@
     currentScreen = name;
     ['setup', 'workout', 'done'].forEach(function (s) { $(s).hidden = s !== name; });
     document.body.dataset.screen = name;
-    bg.setFrameRate(name === 'workout' ? 0 : 30);
+    bg.setFrameRate(LOOKS[look].fps || (name === 'workout' ? 0 : 30));
     if (name === 'setup') {
       document.body.dataset.phase = 'setup';
       bg.setMood(PHASE.setup.colors[0], PHASE.setup.colors[1], PHASE.setup.energy);
@@ -427,6 +475,7 @@
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    if (isStudio()) { this.drawStudio(ctx, w, h, dt); return; }
     var S = Math.min(w, h);
     var cx = w / 2, cy = h / 2;
     var R = S * 0.405;
@@ -599,11 +648,99 @@
     ctx.globalCompositeOperation = 'source-over';
   };
 
+  /** Studio ring: one thick gradient arc with a shaded end cap, nothing else. */
+  Ring.prototype.drawStudio = function (ctx, w, h, dt) {
+    var light = LOOKS[look].scheme === 'light';
+    var S = Math.min(w, h), cx = w / 2, cy = h / 2;
+    var th = Math.max(9, S * 0.05);
+    var R = S * 0.44 - th * 0.5;
+    var A0 = -Math.PI / 2;
+    var prog = Math.max(0, Math.min(1, this.progress));
+    var a1 = A0 + TAU * prog;
+    var ca = this.a, cb = this.b;
+    var ink = light ? [17, 19, 24] : [244, 245, 247];
+    ctx.lineCap = 'round';
+
+    // breathing pacer (set break): a soft disc that fills and empties
+    if (this.breathe != null) {
+      var bt = this.breathe % 10;
+      var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
+      var br = (R - th) * (0.5 + 0.48 * bv);
+      ctx.fillStyle = rgba(ca, (light ? 0.07 : 0.06) + 0.06 * bv);
+      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
+      ctx.strokeStyle = rgba(ca, 0.35 + 0.3 * bv);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.stroke();
+    }
+
+    // track
+    ctx.strokeStyle = rgba(ca, light ? 0.13 : 0.16);
+    ctx.lineWidth = th;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+
+    // whole-session progress: hairline inside the ring
+    var ri = R - th * 1.15;
+    var tp = Math.max(0, Math.min(1, this.total || 0));
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = rgba(ink, light ? 0.08 : 0.09);
+    ctx.beginPath(); ctx.arc(cx, cy, ri, 0, TAU); ctx.stroke();
+    if (tp > 0.002) {
+      ctx.strokeStyle = rgba(ink, light ? 0.55 : 0.6);
+      ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + TAU * tp); ctx.stroke();
+    }
+
+    // last-seconds halo
+    if (this.hot > 0.01) {
+      ctx.strokeStyle = rgba(ca, this.hot * (light ? 0.18 : 0.22));
+      ctx.lineWidth = th * (1.6 + this.hot);
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    }
+
+    if (prog > 0.001) {
+      var grad;
+      if (ctx.createConicGradient) {
+        grad = ctx.createConicGradient(A0, cx, cy);
+        grad.addColorStop(0, rgba(cb, 1));
+        grad.addColorStop(Math.max(0.001, prog), rgba(ca, 1));
+        grad.addColorStop(Math.min(1, prog + 0.001), rgba(ca, 1));
+        grad.addColorStop(1, rgba(ca, 1));
+      } else grad = rgba(ca, 1);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = th;
+      ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
+
+      // shaded end cap: a soft shadow ahead of the cap gives the ring depth
+      var hx = cx + Math.cos(a1) * R, hy = cy + Math.sin(a1) * R;
+      var tx = -Math.sin(a1), ty = Math.cos(a1);
+      var sg = ctx.createRadialGradient(hx + tx * th * 0.28, hy + ty * th * 0.28, 0, hx + tx * th * 0.28, hy + ty * th * 0.28, th * 0.95);
+      sg.addColorStop(0, light ? 'rgba(17,19,24,0.22)' : 'rgba(0,0,0,0.55)');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath(); ctx.arc(hx + tx * th * 0.28, hy + ty * th * 0.28, th * 0.95, 0, TAU); ctx.fill();
+      ctx.fillStyle = rgba(ca, 1);
+      ctx.beginPath(); ctx.arc(hx, hy, th / 2, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath(); ctx.arc(hx - Math.cos(a1) * th * 0.12, hy - Math.sin(a1) * th * 0.12, th * 0.16, 0, TAU); ctx.fill();
+    }
+
+    // phase-change ripple: one thin ring easing outward
+    for (var i = this.shocks.length - 1; i >= 0; i--) {
+      var s = this.shocks[i];
+      s.t += dt * 1.4;
+      if (s.t >= 1) { this.shocks.splice(i, 1); continue; }
+      var e = 1 - Math.pow(1 - s.t, 3);
+      ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.45 * s.s);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cx, cy, R + th * 0.6 + e * S * 0.05, 0, TAU); ctx.stroke();
+    }
+    this.sparks.length = 0;
+  };
+
   // ================================================================ FX
   var fx = {
     c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], waves: [], w: 0, h: 0, dpr: 1, dirty: false,
     wave: function (x, y, colors, strength) {
-      if (reduced) return;
+      if (reduced || isStudio()) return;
       this.waves.push({ x: x, y: y, c: hexRgb(colors[0]), c2: hexRgb(colors[1] || colors[0]), s: strength || 1, t: 0 });
     },
     resize: function () {
@@ -615,7 +752,7 @@
       }
     },
     burst: function (x, y, colors, count, power) {
-      if (reduced) return;
+      if (reduced || isStudio()) return;
       var m = Math.min(window.innerWidth, window.innerHeight);
       for (var i = 0; i < count; i++) {
         var a = Math.random() * TAU;
@@ -627,7 +764,8 @@
     confetti: function (colors) {
       if (reduced) return;
       var W = window.innerWidth, Hh = window.innerHeight;
-      for (var i = 0; i < 180; i++) {
+      var n = isStudio() ? 70 : 180;
+      for (var i = 0; i < n; i++) {
         var fromLeft = i % 2 === 0;
         var a = fromLeft ? -Math.PI / 3 - Math.random() * 0.5 : -2 * Math.PI / 3 + Math.random() * 0.5;
         var sp = Hh * (0.9 + Math.random() * 0.9);
@@ -648,7 +786,7 @@
       var ctx = this.ctx;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.clearRect(0, 0, this.w, this.h);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = isStudio() ? 'source-over' : 'lighter';
       var reach = Math.hypot(this.w, this.h) * 0.8;
       for (var wi = this.waves.length - 1; wi >= 0; wi--) {
         var wv = this.waves[wi];
@@ -963,7 +1101,7 @@
     var scx = stage.left + stage.width / 2, scy = stage.top + stage.height / 2;
     fx.burst(scx, scy, c.concat(['#ffffff']), seg.type === 'work' ? 110 : 50, seg.type === 'work' ? 1.1 : 0.6);
     fx.wave(scx, scy, c, seg.type === 'work' ? 1 : 0.6);
-    if (seg.type === 'setrest') fx.confetti([c[0], c[1], '#ffffff', '#c6ff1a']);
+    if (seg.type === 'setrest' && !isStudio()) fx.confetti([c[0], c[1], '#ffffff', '#c6ff1a']);
     var wb = document.querySelector('.w-body');
     wb.classList.remove('punch');
     if (!reduced) { void wb.offsetWidth; wb.classList.add('punch'); }
@@ -1038,7 +1176,7 @@
       dg.classList.add('final');
       A.play(whole === 1 ? 'tickLast' : 'tick');
       bg.beatNow(1);
-      if (!reduced) flash(String(whole), '', true);
+      if (!reduced && !isStudio()) flash(String(whole), '', true);
       var edge = $('edge');
       edge.classList.remove('on'); void edge.offsetWidth; edge.classList.add('on');
       var sr = $('stage').getBoundingClientRect();
@@ -1440,9 +1578,91 @@
     window.addEventListener('resize', refocus);
   }
 
+  // ================================================================ LOOK SWITCH
+  function setLook(name) {
+    if (!LOOKS[name] || name === look) return;
+    look = name;
+    var L = LOOKS[look];
+    htmlEl.setAttribute('data-look', L.style);
+    htmlEl.setAttribute('data-scheme', L.scheme);
+    applyPalette();
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', L.meta);
+    bg.setStyle(L.style, L.scheme);
+    bg.setFrameRate(L.fps || (currentScreen === 'workout' ? 0 : 30));
+    figs.forEach(function (f) { if (f.setStyle) f.setStyle(L.style, L.scheme); });
+    H.EXERCISES.forEach(function (ex) { var gc = GROUP_COLORS[ex.group]; thumbs[ex.id].setColors(gc[0], gc[1]); });
+    if (hero.shown) showHero(hero.shown);
+    if (run && !run.finished && currentScreen === 'workout') {
+      var seg = run.tl.segments[run.segIdx];
+      if (seg) {
+        var c = PHASE[seg.type].colors;
+        bg.setMood(c[0], c[1], PHASE[seg.type].energy);
+        ring.setColors(c[0], c[1]); ring.a = ring.ta.slice(); ring.b = ring.tb.slice();
+        if (workFig) workFig.setColors(c[0], c[1]);
+      }
+    }
+    if (currentScreen === 'done') {
+      bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy);
+      if (doneFig) doneFig.setColors(PHASE.done.colors[0], PHASE.done.colors[1]);
+    }
+    if (guide.fig && guide.id) {
+      var ex = H.get(guide.id), gc2 = GROUP_COLORS[ex.group] || PHASE.work.colors;
+      guide.fig.setColors(gc2[0], gc2[1]);
+      $('coachSheet').style.setProperty('--gc', gc2[0]);
+      $('coachSheet').style.setProperty('--gc2', gc2[1]);
+    }
+    ring.needs = 2;
+    syncLookMenu();
+    savePrefs();
+  }
+
+  function syncLookMenu() {
+    document.querySelectorAll('#lookList [data-look]').forEach(function (b) {
+      b.setAttribute('aria-checked', b.dataset.look === look ? 'true' : 'false');
+    });
+  }
+  function openLookMenu(open) {
+    var list = $('lookList'), btn = $('lookBtn');
+    list.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      var cur = list.querySelector('[aria-checked="true"]') || list.querySelector('[data-look]');
+      cur.focus();
+    }
+  }
+  function bindLookMenu() {
+    var list = $('lookList'), btn = $('lookBtn');
+    btn.addEventListener('click', function () { openLookMenu(list.hidden); });
+    list.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-look]');
+      if (!b) return;
+      setLook(b.dataset.look);
+      openLookMenu(false);
+      btn.focus();
+    });
+    list.addEventListener('keydown', function (e) {
+      var items = Array.prototype.slice.call(list.querySelectorAll('[data-look]'));
+      var i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+      } else if (e.key === 'Escape' || e.key === 'Tab') {
+        if (e.key === 'Escape') e.preventDefault();
+        openLookMenu(false);
+        if (e.key === 'Escape') btn.focus();
+      }
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (!list.hidden && !e.target.closest('.look-menu')) openLookMenu(false);
+    });
+    syncLookMenu();
+  }
+
   // ================================================================ BOOT
   buildGrid();
   bind();
+  bindLookMenu();
   syncToggles();
   showScreen('setup');
   showHero(state.ids[0]);
@@ -1457,6 +1677,7 @@
     advance: function (sec) { if (run && !run.finished) { run.base += sec; update(); } },
     start: function () { startWorkout(state.ids); },
     finish: function () { if (run) seek(run.tl.total); },
-    guide: function (id) { openGuide(id, run ? 'workout' : 'setup'); }
+    guide: function (id) { openGuide(id, run ? 'workout' : 'setup'); },
+    look: function (name) { setLook(name); }
   };
 })();

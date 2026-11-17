@@ -8,8 +8,23 @@
 <meta name="theme-color" content="#07020f">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Unbounded:wght@500;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Unbounded:wght@500;700;900&family=Geist:wght@200;300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/studio.css">
+<script>
+  // Pick the look before first paint: ?look=studio-dark|studio-light|neon, else the saved choice.
+  (function () {
+    var look = 'neon';
+    try {
+      var saved = JSON.parse(localStorage.getItem('overdrive-hiit:v1') || '{}').look;
+      var q = new URLSearchParams(location.search).get('look');
+      look = /^(neon|studio-dark|studio-light)$/.test(q) ? q : /^(neon|studio-dark|studio-light)$/.test(saved) ? saved : 'neon';
+    } catch (e) { /* storage blocked: default look */ }
+    var d = document.documentElement;
+    d.setAttribute('data-look', look === 'neon' ? 'neon' : 'studio');
+    d.setAttribute('data-scheme', look === 'studio-light' ? 'light' : 'dark');
+  })();
+</script>
 </head>
 <body data-screen="setup" data-phase="setup">
 
@@ -32,6 +47,7 @@
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.5 2.5L5 13.5h6l-1 8 8.5-11h-6z"/></symbol>
+  <symbol id="i-look" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></symbol>
   <symbol id="i-whistle" viewBox="0 0 24 24"><path d="M9.5 9H21v3.5l-4 1.2A6.5 6.5 0 1 1 9.5 9z"/><circle cx="9" cy="15.5" r="1.6"/><path d="M5 6l1.5 1.5M9 3.5V6M2.5 9.5H5"/></symbol>
 </svg>
@@ -45,6 +61,16 @@
       <span class="brand-tag">HIIT</span>
     </div>
     <div class="toggles">
+      <div class="look-menu">
+        <button id="lookBtn" class="icon-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="lookList" aria-label="Appearance">
+          <svg aria-hidden="true"><use href="#i-look"/></svg>
+        </button>
+        <div class="look-list" id="lookList" role="menu" aria-label="Appearance" hidden>
+          <button type="button" role="menuitemradio" aria-checked="false" data-look="neon"><span class="sw sw-neon" aria-hidden="true"></span>Neon</button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-look="studio-dark"><span class="sw sw-dark" aria-hidden="true"></span>Studio dark</button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-look="studio-light"><span class="sw sw-light" aria-hidden="true"></span>Studio light</button>
+        </div>
+      </div>
       <button id="sfxToggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">
         <svg aria-hidden="true"><use href="#i-sound"/></svg>
       </button>

@@ -978,3 +978,28 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .hud-v { font-size: 15px; }
   .icon-btn { width: 40px; height: 40px; }
 }
+
+/* ---------- appearance menu (both looks) ---------- */
+.look-menu { position: relative; }
+.look-list {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 70;
+  display: grid; gap: 2px; min-width: 196px; padding: 6px;
+  border-radius: 16px;
+  background: rgba(16, 7, 34, .97);
+  border: 1px solid var(--line-hi);
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,.8);
+  animation: menuIn .18s ease-out;
+}
+@keyframes menuIn { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+.look-list button {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text);
+  font: 600 14px/1 var(--ui); letter-spacing: .02em; text-align: left; cursor: pointer;
+}
+.look-list button:hover, .look-list button:focus-visible { background: rgba(255,255,255,.07); outline: none; }
+.look-list button[aria-checked="true"]::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--c2); box-shadow: 0 0 10px var(--c2); }
+.sw { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,.18) inset; }
+.sw-neon { background: conic-gradient(#ff2bd6, #22e5ff, #c6ff1a, #ff2bd6); }
+.sw-dark { background: radial-gradient(circle at 35% 30%, #3a3f4b, #0b0c10 70%); }
+.sw-light { background: radial-gradient(circle at 35% 30%, #ffffff, #e6e3dc 70%); }
