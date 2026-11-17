@@ -94,6 +94,7 @@
     'precision highp float;',
     'uniform vec2 uRes;uniform float uTime;uniform vec3 uA;uniform vec3 uB;',
     'uniform float uEnergy;uniform float uBeat;uniform vec2 uFocus;uniform float uFlash;uniform float uLight;',
+    'uniform vec3 uD0;uniform vec3 uD1;uniform vec3 uDPool;uniform float uDWash;uniform float uDVig;',
     'float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}',
     'float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);',
     ' return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}',
@@ -103,13 +104,13 @@
     ' float T=uTime;',
     ' float gy=clamp(gl_FragCoord.y/uRes.y,0.,1.);',
     // base gradient: lighter at the top like a cyclorama
-    ' vec3 dark=mix(vec3(.028,.030,.038),vec3(.078,.083,.100),gy);',
+    ' vec3 dark=mix(uD0,uD1,gy);',
     ' vec3 light=mix(vec3(.905,.900,.885),vec3(.972,.968,.955),gy);',
     ' vec3 col=mix(dark,light,uLight);',
     // spotlight pool around the athlete
     ' vec2 sp=q*vec2(.9,1.35);',
     ' float pool=exp(-dot(sp,sp)*2.4);',
-    ' col+=mix(vec3(.085,.09,.105),vec3(.03,.03,.026),uLight)*pool;',
+    ' col+=mix(uDPool,vec3(.03,.03,.026),uLight)*pool;',
     // soft top key light falling on the stage
     ' float beam=exp(-pow(abs(q.x)*1.6,2.))*smoothstep(-.6,1.2,q.y)*.5;',
     ' col+=mix(vec3(.035,.037,.045),vec3(.012,.012,.01),uLight)*beam;',
@@ -119,7 +120,7 @@
     ' float n=.75+.5*(noise(p*1.4+T*.025)*.65+noise(p*3.1-T*.02)*.35);',
     ' float b1=exp(-dot(p-c1,p-c1)*1.5)*n;',
     ' float b2=exp(-dot(p-c2,p-c2)*1.8)*n;',
-    ' float w=.03+.03*uEnergy+.008*uBeat;',
+    ' float w=(.03+.03*uEnergy+.008*uBeat)*mix(uDWash,1.,uLight);',
     ' vec3 tA=mix(vec3(dot(uA,vec3(.3,.59,.11))),uA,.5);',
     ' vec3 tB=mix(vec3(dot(uB,vec3(.3,.59,.11))),uB,.5);',
     ' vec3 addD=(tA*b1+tB*b2*.7)*w;',
@@ -130,7 +131,7 @@
     ' col+=mix(uA*.10,uA*.05,uLight)*uFlash*exp(-dot(q,q)*1.2);',
     // vignette
     ' float v=smoothstep(1.75,.3,length(p*vec2(.85,1.)));',
-    ' col*=mix(.5+.5*v,.9+.1*v,uLight);',
+    ' col*=mix(1.-uDVig+uDVig*v,.9+.1*v,uLight);',
     ' col+=(h21(gl_FragCoord.xy)-.5)/255.;',
     ' gl_FragColor=vec4(col,1.);',
     '}'
@@ -159,6 +160,7 @@
     var root = document.documentElement;
     this.style = root.getAttribute('data-look') === 'studio' ? 'studio' : 'neon';
     this.light = root.getAttribute('data-scheme') === 'light' ? 1 : 0;
+    this.dark = DARK_STAGES[root.getAttribute('data-dark')] || DARK_STAGES.graphite;
     try { this._init(); } catch (e) { this.ok = false; }
     if (!this.ok) document.documentElement.classList.add('no-webgl');
     this._loop = this._loop.bind(this);
@@ -184,7 +186,7 @@
       gl.linkProgram(prog);
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
       var u = {};
-      ['uRes', 'uTime', 'uTravel', 'uA', 'uB', 'uEnergy', 'uBeat', 'uFocus', 'uFlash', 'uLight'].forEach(function (n) { u[n] = gl.getUniformLocation(prog, n); });
+      ['uRes', 'uTime', 'uTravel', 'uA', 'uB', 'uEnergy', 'uBeat', 'uFocus', 'uFlash', 'uLight', 'uD0', 'uD1', 'uDPool', 'uDWash', 'uDVig'].forEach(function (n) { u[n] = gl.getUniformLocation(prog, n); });
       return { prog: prog, u: u };
     }
     var buf = gl.createBuffer();
@@ -218,6 +220,19 @@
     this.gl.useProgram(pr.prog);
     this.u = pr.u;
   };
+  // Dark-stage directions for the studio backdrop: bottom/top colour, spotlight pool,
+  // phase-wash strength and vignette depth.
+  var DARK_STAGES = {
+    graphite: { d0: [.028, .030, .038], d1: [.078, .083, .100], pool: [.085, .09, .105], wash: 1, vig: .5 },
+    midnight: { d0: [.012, .018, .036], d1: [.045, .064, .112], pool: [.055, .075, .13], wash: .9, vig: .55 },
+    oled: { d0: [0, 0, 0], d1: [.022, .022, .026], pool: [.05, .05, .056], wash: .75, vig: .7 },
+    charcoal: { d0: [.034, .030, .027], d1: [.092, .083, .074], pool: [.095, .085, .072], wash: .8, vig: .5 }
+  };
+  Backdrop.prototype.setDark = function (name) {
+    this.dark = DARK_STAGES[name] || DARK_STAGES.graphite;
+    this._drewStill = false;
+  };
+
   /** Switch between the neon tunnel and the studio backdrop. */
   Backdrop.prototype.setStyle = function (style, scheme) {
     this.style = style === 'studio' ? 'studio' : 'neon';
@@ -289,6 +304,11 @@
     gl.uniform1f(u.uFlash, this.flash);
     gl.uniform2f(u.uFocus, this.focus[0], this.focus[1]);
     if (u.uLight) gl.uniform1f(u.uLight, this.light);
+    if (u.uD0) {
+      var D = this.dark;
+      gl.uniform3fv(u.uD0, D.d0); gl.uniform3fv(u.uD1, D.d1); gl.uniform3fv(u.uDPool, D.pool);
+      gl.uniform1f(u.uDWash, D.wash); gl.uniform1f(u.uDVig, D.vig);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 

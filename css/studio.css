@@ -114,12 +114,12 @@
 
 [data-look="studio"] .start {
   min-height: 60px; padding: 0 10px 0 26px;
-  background: var(--accent); color: var(--accent-ink);
+  background: var(--btn-bg, var(--accent)); color: var(--btn-ink, var(--accent-ink));
   font: 600 17px/1 var(--ui); letter-spacing: -.01em; text-transform: none;
-  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 14px 30px -14px color-mix(in srgb, var(--accent) 80%, transparent);
+  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 14px 30px -14px color-mix(in srgb, var(--btn-bg, var(--accent)) 80%, transparent);
 }
 [data-look="studio"] .start::before { display: none; }
-[data-look="studio"] .start:hover { filter: none; background: color-mix(in srgb, var(--accent) 88%, #fff); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 16px 34px -14px color-mix(in srgb, var(--accent) 90%, transparent); }
+[data-look="studio"] .start:hover { filter: none; background: color-mix(in srgb, var(--btn-bg, var(--accent)) 88%, #fff); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 16px 34px -14px color-mix(in srgb, var(--btn-bg, var(--accent)) 90%, transparent); }
 [data-look="studio"] .start:disabled { filter: none; background: var(--surface-2); color: var(--mute); box-shadow: 0 0 0 1px var(--line) inset; }
 [data-look="studio"] .start-time {
   font: 500 15px/1 var(--ui); font-variant-numeric: tabular-nums;
@@ -590,7 +590,7 @@
   display: block; position: absolute; inset: 0; width: 100%; height: 100%;
   transform: rotate(-90deg); overflow: visible; pointer-events: none;
 }
-[data-look="studio"] .done-ring-track { fill: none; stroke: color-mix(in srgb, var(--gold-b) 28%, #0b0c10); stroke-width: 6; }
+[data-look="studio"] .done-ring-track { fill: none; stroke: color-mix(in srgb, var(--gold-b) 28%, var(--ink)); stroke-width: 6; }
 [data-look="studio"][data-scheme="light"] .done-ring-track { stroke: color-mix(in srgb, var(--gold-a) 18%, transparent); }
 [data-look="studio"] .done-ring-arc {
   fill: none; stroke: url(#doneGrad); stroke-width: 6; stroke-linecap: round;
@@ -613,4 +613,44 @@
 }
 @media (max-height: 760px) {
   [data-look="studio"] .done-figwrap { width: min(232px, 25vh); }
+}
+
+/* =====================================================================
+   DARK DIRECTIONS (exploration; pick with ?dark=midnight|oled|charcoal)
+   ===================================================================== */
+:root[data-look="studio"][data-scheme="dark"][data-dark="midnight"] {
+  --dock: #0d1424;
+  --ink: #060a13; --ink-2: #0c1324;
+  --surface: rgba(18, 26, 44, .9); --surface-2: rgba(27, 37, 61, .94); --surface-solid: #121b2e; --tile: #17213a;
+  --line: rgba(150, 175, 235, .12); --line-hi: rgba(150, 175, 235, .24);
+  --text: #edf1f9; --dim: #aab4c9; --mute: #8a95ad;
+  --accent: #ff6b4a; --accent-ink: #0a0f1c; --btn-bg: #eef2fa; --btn-ink: #0a0f1c;
+  --shadow-1: 0 1px 0 rgba(200, 215, 255, .06) inset, 0 24px 48px -28px rgba(0, 0, 0, .85);
+  --work-a: #ff6a4d; --work-b: #ff3d5a; --rest-a: #4cc3ff; --rest-b: #5b8cff; --jacks-a: #ffc94a; --jacks-b: #ffa630;
+  --prep-a: #b9c3d6; --prep-b: #7d88a3; --break-a: #3ee0a8; --break-b: #2fc4c4; --gold-a: #ff6a4d; --gold-b: #ffb547;
+  --setup-a: #ff6a4d; --setup-b: #5b8cff;
+}
+:root[data-look="studio"][data-scheme="dark"][data-dark="oled"] {
+  --dock: #0a0a0a;
+  --ink: #000000; --ink-2: #070707;
+  --surface: rgba(28, 28, 30, .94); --surface-2: rgba(44, 44, 46, .96); --surface-solid: #1c1c1e; --tile: #232325;
+  --line: rgba(255, 255, 255, .08); --line-hi: rgba(255, 255, 255, .17);
+  --text: #f5f5f7; --dim: #c7c7cc; --mute: #8e8e93;
+  --accent: #ff5a36; --accent-ink: #000000; --btn-bg: #ffffff; --btn-ink: #000000;
+  --shadow-1: none;
+  --work-a: #ff453a; --work-b: #ff2d55; --rest-a: #0a84ff; --rest-b: #5e5ce6; --jacks-a: #ffd60a; --jacks-b: #ff9f0a;
+  --prep-a: #98989d; --prep-b: #636366; --break-a: #30d158; --break-b: #64d2ff; --gold-a: #ff453a; --gold-b: #ff9f0a;
+  --setup-a: #ff453a; --setup-b: #0a84ff;
+}
+:root[data-look="studio"][data-scheme="dark"][data-dark="charcoal"] {
+  --dock: #1a1816;
+  --ink: #100f0e; --ink-2: #181614;
+  --surface: rgba(30, 28, 26, .92); --surface-2: rgba(42, 39, 36, .95); --surface-solid: #1e1c1a; --tile: #262321;
+  --line: rgba(255, 236, 214, .09); --line-hi: rgba(255, 236, 214, .18);
+  --text: #f6f2ec; --dim: #c2b9ad; --mute: #9b9186;
+  --accent: #ff6b3d; --accent-ink: #170d07; --btn-bg: #f6f2ec; --btn-ink: #171310;
+  --shadow-1: 0 1px 0 rgba(255, 240, 220, .05) inset, 0 24px 48px -28px rgba(0, 0, 0, .8);
+  --work-a: #ff6b3d; --work-b: #f04a2a; --rest-a: #5fb3e8; --rest-b: #6b8fd6; --jacks-a: #f2b544; --jacks-b: #e8873a;
+  --prep-a: #c9bfb2; --prep-b: #8f867b; --break-a: #5fcf9f; --break-b: #3fb3a0; --gold-a: #ff6b3d; --gold-b: #f2b544;
+  --setup-a: #ff6b3d; --setup-b: #6b8fd6;
 }

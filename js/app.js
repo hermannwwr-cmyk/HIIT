@@ -74,10 +74,39 @@
   function resolveLook(pref) { return pref === 'auto' ? 'studio-' + systemScheme() : pref; }
   var look = htmlEl.getAttribute('data-look') === 'studio' ? 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark') : 'neon';
   function isStudio() { return LOOKS[look].style === 'studio'; }
+  // Dark-scheme directions (design exploration via ?dark=): stage, palette and mannequin material.
+  var DARK_VARIANTS = {
+    graphite: { material: 'porcelain', meta: '#0b0c10' },
+    midnight: {
+      material: 'titanium', meta: '#060a13',
+      phase: { setup: ['#ff6a4d', '#5b8cff'], prep: ['#b9c3d6', '#7d88a3'], work: ['#ff6a4d', '#ff3d5a'], rest: ['#4cc3ff', '#5b8cff'],
+        jacks: ['#ffc94a', '#ffa630'], setrest: ['#3ee0a8', '#2fc4c4'], done: ['#ff6a4d', '#ffb547'] }
+    },
+    oled: {
+      material: 'titanium', meta: '#000000',
+      phase: { setup: ['#ff453a', '#0a84ff'], prep: ['#98989d', '#636366'], work: ['#ff453a', '#ff2d55'], rest: ['#0a84ff', '#5e5ce6'],
+        jacks: ['#ffd60a', '#ff9f0a'], setrest: ['#30d158', '#64d2ff'], done: ['#ff453a', '#ff9f0a'] }
+    },
+    charcoal: {
+      material: 'stone', meta: '#100f0e',
+      phase: { setup: ['#ff6b3d', '#6b8fd6'], prep: ['#c9bfb2', '#8f867b'], work: ['#ff6b3d', '#f04a2a'], rest: ['#5fb3e8', '#6b8fd6'],
+        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'] }
+    }
+  };
+  var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'graphite';
+  function figMaterial() {
+    if (LOOKS[look].style !== 'studio') return undefined;
+    return LOOKS[look].scheme === 'dark' ? DARK_VARIANTS[darkVariant].material : 'graphite';
+  }
   function applyPalette() {
     var L = LOOKS[look];
     Object.keys(L.phase).forEach(function (k) { PHASE[k].colors = L.phase[k][0]; PHASE[k].energy = L.phase[k][1]; });
     Object.keys(L.group).forEach(function (k) { GROUP_COLORS[k] = L.group[k]; });
+    var V = DARK_VARIANTS[darkVariant];
+    if (look === 'studio-dark' && V.phase) {
+      Object.keys(V.phase).forEach(function (k) { PHASE[k].colors = V.phase[k]; });
+      GROUP_COLORS.cardio = V.phase.jacks; GROUP_COLORS.rest = V.phase.rest;
+    }
   }
   applyPalette();
 
@@ -137,6 +166,7 @@
   function makeFig(canvas, opts) {
     opts.style = LOOKS[look].style;
     opts.scheme = LOOKS[look].scheme;
+    opts.material = figMaterial();
     var f;
     try { f = (window.HIITFigure && window.HIITFigure.create(canvas, opts)) || stubFig; } catch (e) { f = stubFig; }
     if (f !== stubFig) figs.push(f);
@@ -1656,10 +1686,13 @@
     htmlEl.setAttribute('data-scheme', L.scheme);
     applyPalette();
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', L.meta);
+    if (meta) meta.setAttribute('content', look === 'studio-dark' ? DARK_VARIANTS[darkVariant].meta : L.meta);
     bg.setStyle(L.style, L.scheme);
     bg.setFrameRate(L.fps || (currentScreen === 'workout' ? 0 : 30));
-    figs.forEach(function (f) { if (f.setStyle) f.setStyle(L.style, L.scheme); });
+    figs.forEach(function (f) {
+      if (f.setStyle) f.setStyle(L.style, L.scheme);
+      if (f.setMaterial && L.style === 'studio') f.setMaterial(figMaterial());
+    });
     H.EXERCISES.forEach(function (ex) { var gc = GROUP_COLORS[ex.group]; thumbs[ex.id].setColors(gc[0], gc[1]); });
     if (hero.shown) showHero(hero.shown);
     if (run && !run.finished && currentScreen === 'workout') {

@@ -27,6 +27,11 @@
       : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     var look = pref === 'auto' ? 'studio-' + sys : pref;
     d.setAttribute('data-look-pref', pref);
+    // Dark-scheme direction (design exploration): ?dark=graphite|midnight|oled|charcoal
+    try {
+      var dv = new URLSearchParams(location.search).get('dark');
+      if (/^(graphite|midnight|oled|charcoal)$/.test(dv)) d.setAttribute('data-dark', dv);
+    } catch (e) { /* keep the default */ }
     d.setAttribute('data-look', look === 'neon' ? 'neon' : 'studio');
     d.setAttribute('data-scheme', look === 'studio-light' ? 'light' : 'dark');
     var meta = document.querySelector('meta[name="theme-color"]');
