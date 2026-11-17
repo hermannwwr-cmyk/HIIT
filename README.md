@@ -68,7 +68,7 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 ### Personal trainer
 
 - **Trainer's guide** for every exercise (tap ⓘ on a card, the preview label, or **How to** mid-workout): live animated demo, numbered steps, breathing, mistakes to avoid, and easier / harder versions. The workout timer pauses while the guide is open.
-- **Form cues** are spoken by the voice coach during each exercise (the screen keeps just the countdown and **How to**); while you rest, the Up next card walks you through the next exercise's steps.
+- **On-screen coaching** rotates form cues during each exercise and walks you through the next exercise's steps while you rest.
 - **Rest screen** looks different from exercise: the page turns the rest colour, the countdown moves inside the ring, and an **Up next** card shows a live demo of the next exercise with its steps, **How to** and **Start now**. In the last 3 seconds it says *Get set*.
 - **Voice coach** announces each exercise, gives a form cue at 20 s left, calls out 10 seconds, and says what's next. During the set break it checks in at 4, 3, 2 and 1 minute, 30 s and 10 s.
 - **Set break** shows a breathing pacer (4 s in, 6 s out), recovery tips, and previews the first exercise of the next set.

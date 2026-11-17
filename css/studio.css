@@ -310,7 +310,7 @@
 }
 [data-look="studio"] .d-label { font: 500 13px/1 var(--ui); letter-spacing: .02em; text-transform: none; color: var(--mute); opacity: 1; text-shadow: none; margin: 0; }
 [data-look="studio"] .digits {
-  --dg: clamp(112px, 36vw, 210px);
+  --dg: clamp(100px, 30vw, 190px);
   font: 200 var(--dg)/.92 var(--ui); letter-spacing: -.05em;
   height: calc(var(--dg) * .92); align-items: center;
   font-variant-numeric: tabular-nums;
@@ -526,12 +526,12 @@
 
 /* ---------- compact layouts (Studio sizes win over the base media rules) ---------- */
 @media (max-height: 760px) and (max-aspect-ratio: 5/4) {
-  [data-look="studio"] .digits { --dg: clamp(80px, 28vw, 124px); }
+  [data-look="studio"] .digits { --dg: clamp(64px, 24vw, 104px); }
   [data-look="studio"] .hud-v { font-size: 16px; }
 }
 @media (max-height: 640px) and (max-aspect-ratio: 5/4) {
   [data-look="studio"] .w-name { font-size: clamp(22px, 6.5vw, 30px); }
-  [data-look="studio"] .digits { --dg: clamp(66px, 23vw, 96px); }
+  [data-look="studio"] .digits { --dg: clamp(60px, 20vw, 84px); }
 }
 @media (min-aspect-ratio: 5/4) and (min-width: 560px) {
   [data-look="studio"] .digits { --dg: clamp(110px, min(17vw, 28vh), 240px); justify-content: flex-start; }
@@ -735,9 +735,9 @@
 [data-look="studio"] .workout .w-head.pv-active .w-name { color: var(--text); }
 [data-look="studio"] .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 72%, var(--text)); }
 
-/* ---------- below the ring: just the countdown and "How to" ---------- */
-[data-look="studio"] .howto-btn { background: var(--surface); border: 1px solid var(--line-hi); box-shadow: var(--shadow-1); color: var(--text); font: 600 15px/1 var(--ui); letter-spacing: 0; text-transform: none; }
-[data-look="studio"] .howto-btn svg { color: var(--mute); }
+@media (min-height: 761px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .w-stage { margin-top: 8px; }
+}
 /* last 10 seconds: phase-coloured digits that pulse every second; 3-2-1 bigger, with an edge glow */
 [data-look="studio"] .workout.final10 .digits .d { color: color-mix(in srgb, var(--c1) 88%, var(--text)); }
 [data-look="studio"][data-scheme="light"] .workout.final10 .digits .d { color: color-mix(in srgb, var(--c1) 82%, #000); }

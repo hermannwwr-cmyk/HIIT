@@ -1300,17 +1300,6 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 @keyframes lowerIn { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { .workout[data-mode="active"] .w-readout, .workout[data-mode="active"] .coach { animation: none; } }
 
-/* ---- "How to" under the countdown (the tip box is gone: the voice coach gives the cues) */
-.howto-btn {
-  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  height: 44px; padding: 0 20px 0 16px; margin-top: 6px; border-radius: 999px;
-  border: 1px solid var(--line-hi); background: rgba(255,255,255,.06); color: var(--text);
-  font: 700 14px/1 var(--ui); letter-spacing: .06em; cursor: pointer;
-}
-.howto-btn svg { font-size: 18px; flex: none; }
-@media (max-height: 640px) and (max-aspect-ratio: 5/4) { .howto-btn { height: 40px; margin-top: 2px; } }
-@media (min-aspect-ratio: 5/4) and (max-height: 500px) { .howto-btn { height: 38px; margin-top: 0; } }
-
 /* ---- last 10 seconds: an unmistakable countdown */
 .workout.final10 .digits .d { color: var(--c1); }
 @keyframes fTick { from { transform: scale(1.08); } }

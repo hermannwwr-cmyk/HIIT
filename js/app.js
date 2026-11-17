@@ -548,8 +548,7 @@
       f = fit(S);
     }
     var r = f.r, p = f.p;
-    // spare height goes mostly below the controls: the ring sits close under the title
-    var cy = Math.max(0, h - (r.top + f.below)) * 0.3 + r.top;
+    var cy = Math.max(0, (h - (r.top + f.below)) / 2) + r.top;
     // inside the ring, above the pill: where the figure or the rest countdown goes
     var innerTop = cy - r.R + r.th * 0.5 + 4;
     var innerBot = cy + f.capY - p.ph / 2 - 4;
@@ -1414,6 +1413,10 @@
     if (i === run.coachIdx) return;
     run.coachIdx = i;
     var item = plan.items[i];
+    $('coachK').textContent = item.k;
+    var v = $('coachV');
+    v.textContent = item.v;
+    v.classList.remove('swap'); void v.offsetWidth; v.classList.add('swap');
     var tip = $('unTip');
     tip.innerHTML = '<b>' + esc(item.k) + '</b> ' + esc(item.v);
     tip.classList.remove('swap'); void tip.offsetWidth; tip.classList.add('swap');
