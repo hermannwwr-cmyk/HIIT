@@ -35,6 +35,20 @@
   .sheet canvas { width: 210px; height: 210px; display: block; border: 1px solid #1a1030; border-radius: 6px; }
   .sheet .colh { text-align: center; color: var(--dim); font-size: 11px; }
   @media (max-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* studio schemes: graphite with a soft spotlight / warm off-white */
+  html.studio-dark { background: #0d0f13; }
+  html.studio-light { background: #f4f3ef; }
+  body.studio-dark { --bg: #0d0f13; --fg: #e6e8ec; --dim: #7d8492; --line: #22262e;
+    background: radial-gradient(120% 900px at 50% 0%, #1c2028 0%, #0d0f13 70%) no-repeat #0d0f13; }
+  body.studio-light { --bg: #f4f3ef; --fg: #1d1f24; --dim: #7a7b80; --line: #dcdad3; background: #f4f3ef; }
+  body.studio-dark button { background: #171a20; border-color: #2c313b; }
+  body.studio-dark button.on { background: #2a303b; border-color: #8a93a6; }
+  body.studio-light button { background: #ffffff; color: #1d1f24; border-color: #d6d4cc; }
+  body.studio-light button.on { background: #1d1f24; color: #f4f3ef; border-color: #1d1f24; }
+  body.studio-dark .cell, body.studio-dark .thumb canvas, body.studio-dark .aspect canvas, body.studio-dark #main, body.studio-dark .sheet canvas {
+    background: radial-gradient(70% 60% at 50% 38%, #232832 0%, #13161c 55%, #0d0f13 100%); border-color: #1d2128; }
+  body.studio-light .cell, body.studio-light .thumb canvas, body.studio-light .aspect canvas, body.studio-light #main, body.studio-light .sheet canvas {
+    background: radial-gradient(80% 70% at 50% 35%, #fbfaf7 0%, #f4f3ef 60%, #eceae4 100%); border-color: #e2e0d9; }
 </style>
 </head>
 <body>
@@ -51,6 +65,16 @@
   };
   function palFor(id) { return id === 'rest' ? PAL.rest : id === 'jacks' ? PAL.jacks : PAL.work; }
   var qs = new URLSearchParams(location.search);
+  // ?style=neon|studio&scheme=dark|light
+  var style = qs.get('style') === 'studio' ? 'studio' : 'neon';
+  var scheme = qs.get('scheme') === 'light' ? 'light' : 'dark';
+  function applyTheme() {
+    [document.documentElement, document.body].forEach(function (n) {
+      n.classList.toggle('studio-dark', style === 'studio' && scheme === 'dark');
+      n.classList.toggle('studio-light', style === 'studio' && scheme === 'light');
+    });
+  }
+  applyTheme();
   var app = document.getElementById('app');
   var all = [];
   window.__figs = all;
@@ -66,7 +90,8 @@
   }
   function make(canvas, ex, q, pal) {
     pal = pal || palFor(ex);
-    var f = F.create(canvas, { exercise: ex, primary: pal[0], secondary: pal[1], quality: q, energy: ex === 'rest' ? 0.4 : 1 });
+    var f = F.create(canvas, { exercise: ex, primary: pal[0], secondary: pal[1], quality: q, energy: ex === 'rest' ? 0.4 : 1,
+      style: style, scheme: scheme });
     all.push(f);
     return f;
   }
@@ -125,6 +150,20 @@
     var b = el('button', '', colRow);
     b.innerHTML = '<i class="sw" style="background:linear-gradient(90deg,' + PAL[k][0] + ',' + PAL[k][1] + ')"></i>' + k.toUpperCase();
     b.onclick = function () { all.forEach(function (f) { f.setColors(PAL[k][0], PAL[k][1]); }); };
+  });
+
+  var styRow = el('div', 'row', ctr), styBtns = [];
+  [['neon', 'dark', 'Neon'], ['studio', 'dark', 'Studio dark'], ['studio', 'light', 'Studio light']].forEach(function (o) {
+    var b = el('button', '', styRow, o[2]);
+    b.classList.toggle('on', o[0] === style && (o[0] === 'neon' || o[1] === scheme));
+    b.onclick = function () {
+      style = o[0]; scheme = o[1]; applyTheme();
+      all.forEach(function (f) { f.setStyle(style, scheme); });
+      styBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('style', style); u.searchParams.set('scheme', scheme);
+      history.replaceState(null, '', u);
+    };
+    styBtns.push(b);
   });
 
   var actRow = el('div', 'row', ctr);

@@ -1,18 +1,25 @@
 /*!
- * HIIT neon athlete figure: Canvas-2D animated exercise demonstrator.
+ * HIIT athlete figure: Canvas-2D animated exercise demonstrator.
  * Classic script (no modules, no deps, works from file://).
  *
  *   window.HIITFigure = {
  *     EXERCISES: ['pushup','crunch','legraise','flutter','squat','lunge','twist','jacks','rest'],
+ *     STYLES: ['neon','studio'],
+ *     STUDIO: { dark: {body, shade, lit}, light: {...} },   // default studio materials (read-only info)
  *     create(canvas, opts) -> instance
  *   }
- *   opts: { exercise:'pushup', primary:'#ff2bd6', secondary:'#ffb000', quality:'high'|'low', energy:0..1 }
+ *   opts: { exercise:'pushup', primary:'#ff2bd6', secondary:'#ffb000', quality:'high'|'low', energy:0..1,
+ *           style:'neon'|'studio' (default neon; unknown -> neon), scheme:'dark'|'light' (studio only),
+ *           body, shade (studio material overrides: lit body colour, core-shadow colour) }
  *   instance.setExercise(id) / setColors(primary, secondary) / setPlaying(bool)
- *   instance.setEnergy(x) / pulse() / destroy()
+ *   instance.setEnergy(x) / pulse() / setSuspended(bool) / destroy()
+ *   instance.setStyle(style, scheme) - switch look live (theme toggle); repaints immediately
  *
  * The figure is a 3D skeleton (forward kinematics + 2-bone IK so planted
  * hands/feet never slide), projected with a per-exercise camera, auto-fitted
- * to the canvas, and rendered as additive neon tubes with a white-hot core.
+ * to the canvas, and rendered either as additive neon tubes with a white-hot
+ * core ('neon') or as a matte, softly lit 3D mannequin with contact shadows
+ * ('studio'). The canvas stays transparent; the page paints the backdrop.
  */
 (function (root) {
   'use strict';
@@ -378,6 +385,9 @@
     }
   };
 
+  // studio (opaque) draw order where it differs from the neon one
+  EX.jacks.sorder = ['LL', 'LR', 'T', 'AL', 'AR'];
+  EX.rest.sorder = ['AL', 'LL', 'LR', 'T', 'AR'];
   for (var exk in EX) if (EX.hasOwnProperty(exk)) EX[exk].id = exk;
   function getEx(id) { return (typeof id === 'string' && EX.hasOwnProperty(id)) ? EX[id] : EX.rest; }
   function exId(ex) { return (ex && ex.id) || 'rest'; }
@@ -441,6 +451,18 @@
     var fv = camSetup(ex).floorV;
     ex._box = { x0: x0 - 0.05, x1: x1 + 0.05, y0: Math.min(y0, fv) - 0.06, y1: y1 + 0.05 };
     return ex._box;
+  }
+  // Studio contact shadows: screen position of each joint dropped straight onto the
+  // floor (x, 0, z), plus its true height above the floor (body units).
+  function groundProject(J, ex, f, out) {
+    var o = camSetup(ex);
+    for (var i = 0; i < NJ; i++) {
+      var v = J[JN[i]], q = projectPt(o, [v[0], 0, v[2]]);
+      var s = PERSP / (PERSP - (q[2] - o.pd));
+      out[i * 3] = f.ox + (o.px + (q[0] - o.px) * s) * f.sc;
+      out[i * 3 + 1] = f.oy - (o.py + (q[1] - o.py) * s) * f.sc;
+      out[i * 3 + 2] = v[1];
+    }
   }
 
   /* --------------------------------------------------------------- colours */
@@ -574,12 +596,15 @@
     this.c1 = c1; this.c2 = c2; this.c1a = c1; this.c2a = c2; this.c1b = c1; this.c2b = c2; this.colT = 1;
     this.cur = new Float32Array(NJ * 3);
     this.view = new Float32Array(NJ * 3);
-    this.meta = { floorY: 0, sc: 1, farL: 0, farR: 0 };
+    this.gnd = new Float32Array(NJ * 3);
+    this.meta = { floorY: 0, sc: 1, farL: 0, farR: 0, flat: 0.2 };
+    this.matOpts = { body: opts.body, shade: opts.shade };
     this.hasPose = false;
     this.from = null; this.fromMeta = null; this.morphT = 1;
     this.hist = []; this.histPool = [];
     this.sparks = []; this.emitAcc = {};
     this.flash = 0; this.ring = -1; this.emberAcc = 0;
+    this._setStyle(opts.style, opts.scheme);
     this.W = 0; this.H = 0; this.dpr = 1;
     this.visible = true;
     this.dead = false;
@@ -661,7 +686,8 @@
   FP._computePose = function () {
     var ex = this.ex;
     var p = ((this.time / ex.period) % 1 + 1) % 1;
-    project(safePose(ex, p, this.time), ex, this.view);
+    var J = safePose(ex, p, this.time);
+    project(J, ex, this.view);
     var f = this._fit(ex), v = this.view, P = this.cur, m = this.meta;
     for (var i = 0; i < NJ; i++) {
       P[i * 3] = f.ox + v[i * 3] * f.sc;
@@ -669,11 +695,17 @@
       P[i * 3 + 2] = v[i * 3 + 2];
     }
     m.floorY = f.floorY; m.sc = f.sc; m.farL = ex.far.L; m.farR = ex.far.R;
+    if (this.studio) { groundProject(J, ex, f, this.gnd); m.flat = camSetup(ex).sp; }
     if (this.morphT < 1 && this.from) {
       var k = cubic(this.morphT), A = this.from, fm = this.fromMeta;
       for (i = 0; i < NJ * 3; i++) P[i] = lerp(A[i], P[i], k);
       m.floorY = lerp(fm.floorY, m.floorY, k); m.sc = lerp(fm.sc, m.sc, k);
       m.farL = lerp(fm.farL, m.farL, k); m.farR = lerp(fm.farR, m.farR, k);
+      if (this.studio && this.fromGnd) {
+        var G = this.gnd, Ag = this.fromGnd;
+        for (i = 0; i < NJ * 3; i++) G[i] = lerp(Ag[i], G[i], k);
+        m.flat = lerp(fm.flat === undefined ? m.flat : fm.flat, m.flat, k);
+      }
     }
     this.hasPose = true;
   };
@@ -690,7 +722,7 @@
       this.ring < 0 && !this.sparks.length && Math.abs(this.energyT - this.energy) < 0.01;
     this._acc = (this._acc || 0) + dt;
     if (settled) {
-      if (this.low || reducedMotion()) { if (this._still) return; }
+      if (this.low || this.studio || reducedMotion()) { if (this._still) return; }
       else if (this._acc < 1 / 8) return;
     } else if (this.low && this._acc < 1 / 30) return;
     var step = Math.min(0.1, this._acc);
@@ -713,7 +745,7 @@
       this.c1 = mix(this.c1a, this.c1b, k); this.c2 = mix(this.c2a, this.c2b, k);
     }
     this.flash *= Math.exp(-dt * 3.2);
-    if (this.flash < 0.002) this.flash = 0;
+    if (this.flash < (this.studio ? 0.03 : 0.002)) this.flash = 0;
     if (this.ring >= 0) { this.ring += dt / 0.8; if (this.ring > 1) this.ring = -1; }
     if (this._frozen) { this._computePose(); return; }
     if (this.morphT < 1) this.morphT = Math.min(1, this.morphT + dt / MORPH_S);
@@ -724,7 +756,7 @@
   };
 
   FP._record = function (dt, reduced) {
-    if (this.low || reduced) { this.hist.length = 0; return; }
+    if (this.low || reduced || this.studio) { this.hist.length = 0; return; }
     var H = this.hist, pool = this.histPool;
     while (H.length && (this.rt - H[0].t > HIST_AGE || H.length >= HIST_MAX)) pool.push(H.shift());
     var e = pool.pop() || { t: 0, P: new Float32Array(NJ * 3), sc: 1 };
@@ -750,7 +782,7 @@
       s.x += s.vx * dt; s.y += s.vy * dt;
       if (s.y > floorY && s.vy > 0) { s.y = floorY; s.vy *= -0.35; s.vx *= 0.75; }
     }
-    if (this.low || reduced || !this.playing || this.hist.length < 2) return;
+    if (this.low || reduced || this.studio || !this.playing || this.hist.length < 2) return;
     var H = this.hist, prev = H[H.length - 2], P = this.cur, pdt = Math.max(1e-3, this.rt - prev.t);
     var E = this.ex.emit || [], en = this.energy;
     var emit = [HAL, HAR, TOL, TOR, HEAD];
@@ -792,6 +824,7 @@
   };
 
   FP._draw = function () {
+    if (this.studio) { this._drawStudio(); return; }
     var ctx = this.ctx, W = this.W, H = this.H, dpr = this.dpr;
     var P = this.cur, m = this.meta, sc = m.sc, low = this.low;
     var reduced = reducedMotion();
@@ -1216,6 +1249,699 @@
     }
   };
 
+  /* ================================================================= STUDIO */
+  // A matte, softly lit 3D mannequin (source-over only: no glow, sparks, trails or
+  // reflection). Each limb is a tapered capsule shaded across its width from its 3D
+  // orientation: wrapped-Lambert key light (upper-left-front) + sky fill, a satin
+  // Blinn highlight and a phase-tinted rim light on the opposite edge. Tapers use a
+  // conic gradient centred on the cone apex, so the shading follows the taper
+  // exactly. The torso is lofted from elliptical cross-sections; the floor gets soft
+  // contact shadows scaled by each body part's true height above it.
+
+  var STYLES = ['neon', 'studio'];
+  function styleOf(s) { return s === 'studio' ? 'studio' : 'neon'; }
+  function schemeOf(s) { return s === 'light' ? 'light' : 'dark'; }
+
+  // Lights in camera space (x right, y up, z toward the viewer): every exercise is lit
+  // like the same product shot.
+  var KEY = norm([-0.46, 0.56, 0.69]);
+  var HALFV = norm([KEY[0], KEY[1], KEY[2] + 1]);
+  var RIMX = 0.94, RIMY = 0.34;
+  var KEY2 = (function () { var l = Math.sqrt(KEY[0] * KEY[0] + KEY[1] * KEY[1]); return [KEY[0] / l, KEY[1] / l]; })();
+  // samples across a limb's width: u = sin(phi), phi evenly spaced over the visible half
+  var SU = [-1, -0.924, -0.707, -0.383, 0, 0.383, 0.707, 0.924, 1];
+  var SUL = [-0.8, 0.15, 0.85];
+  var BLACK = [0, 0, 0];
+
+  var MATS = {
+    dark: {
+      body: [233, 235, 239], shade: [140, 147, 163], deepTo: [34, 38, 48], deepK: 0.45, lit: [250, 251, 252],
+      spec: [255, 255, 255], specK: 0.45, shin: 16, rimK: 0.8, rimW: 0.15,
+      far: [13, 15, 19], farK: 0.32, ao: [18, 21, 30], aoK: 0.42,
+      shadow: [0, 0, 0], shadowK: 1.25, floor: [255, 255, 255], floorK: 0.07, pool: 0.07, sweep: 0.5
+    },
+    light: {
+      body: [42, 45, 52], shade: [24, 26, 31], deepTo: [6, 7, 9], deepK: 0.5, lit: [107, 114, 128],
+      spec: [170, 176, 188], specK: 0.55, shin: 14, rimK: 0.72, rimW: 0.08,
+      far: [8, 9, 11], farK: 0.22, ao: [0, 0, 0], aoK: 0.5,
+      shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.07, pool: 0, sweep: 0.4
+    }
+  };
+  function buildMat(scheme, o) {
+    var b = MATS[scheme], m = {}, k;
+    for (k in b) if (b.hasOwnProperty(k)) m[k] = b[k];
+    o = o || {};
+    var body = parseColor(o.body, b.body), shade = parseColor(o.shade, b.shade);
+    var lit = o.body ? mix(body, scheme === 'dark' ? WHITE : b.lit, 0.4) : b.lit;
+    m.ramp = scheme === 'dark' ? [[0, mix(shade, b.deepTo, b.deepK)], [0.3, shade], [0.7, body], [1, lit]]
+      : [[0, mix(shade, b.deepTo, b.deepK)], [0.3, shade], [0.62, body], [1, lit]];
+    return m;
+  }
+
+  // Surface colour for camera-space unit normal (nx, ny, nz). M = per-frame state.
+  // acc: optional accent albedo (wristbands, soles) instead of the body ramp.
+  // ed: how close the sample is to the silhouette (|u| across a limb, 0 = no rim).
+  function stShade(M, nx, ny, nz, acc, ed) {
+    var ndl = nx * KEY[0] + ny * KEY[1] + nz * KEY[2];
+    var dif = clamp((ndl + 0.4) / 1.4, 0, 1);
+    var I = clamp((0.07 + 0.15 * (0.5 + 0.5 * ny) + 0.8 * dif * (0.5 + 0.5 * dif)) * M.dim, 0, 1);
+    var c, R = M.ramp;
+    if (acc) c = I < 0.6 ? mix(mix(acc, BLACK, 0.6), acc, I / 0.6) : mix(acc, mix(acc, WHITE, 0.3), (I - 0.6) / 0.4);
+    else if (I <= R[1][0]) c = mix(R[0][1], R[1][1], I / R[1][0]);
+    else if (I <= R[2][0]) c = mix(R[1][1], R[2][1], (I - R[1][0]) / (R[2][0] - R[1][0]));
+    else c = mix(R[2][1], R[3][1], (I - R[2][0]) / (R[3][0] - R[2][0]));
+    var nh = nx * HALFV[0] + ny * HALFV[1] + nz * HALFV[2];
+    if (nh > 0.5) {
+      var sp = Math.pow(nh, M.shin) * M.specK * M.dim;
+      if (sp > 0.003) c = mix(c, M.spec, clamp(sp, 0, 1));
+    }
+    if (ed > 0) {
+      var pl = Math.sqrt(nx * nx + ny * ny), rr = pl > 1e-4 ? (nx * RIMX + ny * RIMY) / pl : 0;
+      if (rr > 0) {
+        var e2 = ed * ed, e4 = e2 * e2, rim = rr * e4 * e4 * M.rimK;
+        if (rim > 0.003) c = mix(c, M.rimC, clamp(rim, 0, 1));
+      }
+    }
+    if (M.far > 0) c = mix(c, M.farC, M.far);
+    return c;
+  }
+
+  // Capsule piece: cap bit 1 = round start, bit 2 = round end (else a flat end).
+  function piece(ctx, x1, y1, r1, x2, y2, r2, cap) {
+    if (cap === 3) { capsule(ctx, x1, y1, r1, x2, y2, r2); return; }
+    var dx = x2 - x1, dy = y2 - y1, d = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+    var a = Math.atan2(dy, dx), nx = -dy / d, ny = dx / d, H = Math.PI / 2;
+    ctx.moveTo(x1 + nx * r1, y1 + ny * r1);
+    if (cap & 1) ctx.arc(x1, y1, r1, a + H, a + 3 * H, false); else ctx.lineTo(x1 - nx * r1, y1 - ny * r1);
+    ctx.lineTo(x2 - nx * r2, y2 - ny * r2);
+    if (cap & 2) ctx.arc(x2, y2, r2, a - H, a + H, false); else ctx.lineTo(x2 + nx * r2, y2 + ny * r2);
+    ctx.closePath();
+  }
+
+  // Shading gradient across a (tapered) cylinder from screen A(ax,ay) r=ra to B, with
+  // camera-space axis (vx,vy,vz). Returns a canvas gradient.
+  function cylGrad(ctx, M, ax, ay, ra, bx, by, rb, vx, vy, vz, acc) {
+    var vl = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+    vx /= vl; vy /= vl; vz /= vl;
+    var e1x = -vy, e1y = vx, el = Math.sqrt(e1x * e1x + e1y * e1y);
+    if (el < 1e-4) { e1x = 1; e1y = 0; } else { e1x /= el; e1y /= el; }
+    var e2x = -vz * e1y, e2y = vz * e1x, e2z = vx * e1y - vy * e1x; // a x e1 (faces the viewer)
+    var sx = e1x, sy = -e1y; // e1 on screen (y down)
+    var dx = bx - ax, dy = by - ay, d = Math.sqrt(dx * dx + dy * dy);
+    var rm = (ra + rb) / 2, mx = (ax + bx) / 2, my = (ay + by) / 2;
+    var U = M.low ? SUL : SU, n = U.length, g, i, u, cu, c;
+    if (!M.low && M.conic && d > Math.max(ra, rb) && Math.abs(ra - rb) > 0.03 * rm) {
+      var t = ra / (ra - rb), px = ax + dx * t, py = ay + dy * t;
+      var th0 = Math.atan2(my - py, mx - px) - Math.PI;
+      g = ctx.createConicGradient(th0, px, py);
+      for (i = 0; i < n; i++) {
+        u = U[i]; cu = Math.sqrt(Math.max(0, 1 - u * u));
+        c = stShade(M, u * e1x + cu * e2x, u * e1y + cu * e2y, cu * e2z, acc, Math.abs(u));
+        var th = Math.atan2(my + sy * u * rm - py, mx + sx * u * rm - px) - th0;
+        th = ((th % TAU) + TAU) % TAU;
+        g.addColorStop(th / TAU, rgba(c));
+      }
+      return g;
+    }
+    g = ctx.createLinearGradient(mx - sx * rm, my - sy * rm, mx + sx * rm, my + sy * rm);
+    for (i = 0; i < n; i++) {
+      u = U[i]; cu = Math.sqrt(Math.max(0, 1 - u * u));
+      c = stShade(M, u * e1x + cu * e2x, u * e1y + cu * e2y, cu * e2z, acc, Math.abs(u));
+      g.addColorStop((u + 1) / 2, rgba(c));
+    }
+    return g;
+  }
+
+  function sq(x) { return x * x; }
+  // Shading for a quadrilateral slab of a lofted body (edges L0-L1 and R0-R1), axis (vx,vy,vz).
+  function slabGrad(ctx, M, L0, L1, R0, R1, vx, vy, vz) {
+    var vl = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+    vx /= vl; vy /= vl; vz /= vl;
+    var e1x = -vy, e1y = vx, el = Math.sqrt(e1x * e1x + e1y * e1y);
+    if (el < 1e-4) { e1x = 1; e1y = 0; } else { e1x /= el; e1y /= el; }
+    var e2x = -vz * e1y, e2y = vz * e1x, e2z = vx * e1y - vy * e1x;
+    var lmx = (L0[0] + L1[0]) / 2, lmy = (L0[1] + L1[1]) / 2, rmx = (R0[0] + R1[0]) / 2, rmy = (R0[1] + R1[1]) / 2;
+    var mx = (lmx + rmx) / 2, my = (lmy + rmy) / 2;
+    // +u side is the one along e1 on screen
+    var flip = ((lmx - mx) * e1x + (lmy - my) * -e1y) < 0;
+    var px = flip ? rmx : lmx, py = flip ? rmy : lmy, hw = Math.sqrt(sq(px - mx) + sq(py - my)) || 1;
+    var Pa = flip ? R0 : L0, Pb = flip ? R1 : L1, Qa = flip ? L0 : R0, Qb = flip ? L1 : R1;
+    var d1x = Pb[0] - Pa[0], d1y = Pb[1] - Pa[1], d2x = Qb[0] - Qa[0], d2y = Qb[1] - Qa[1];
+    var den = d1x * d2y - d1y * d2x, U = SU, n = U.length, g, i, u, cu, c;
+    var conic = M.conic && Math.abs(den) > 1e-6, ax = 0, ay = 0, th0 = 0;
+    if (conic) {
+      var t = ((Qa[0] - Pa[0]) * d2y - (Qa[1] - Pa[1]) * d2x) / den;
+      ax = Pa[0] + d1x * t; ay = Pa[1] + d1y * t;
+      var dd = Math.sqrt(sq(ax - mx) + sq(ay - my));
+      conic = dd > 2.5 * hw && dd < 400 * hw;
+      th0 = Math.atan2(my - ay, mx - ax) - Math.PI;
+    }
+    g = conic ? ctx.createConicGradient(th0, ax, ay) : ctx.createLinearGradient(2 * mx - px, 2 * my - py, px, py);
+    for (i = 0; i < n; i++) {
+      u = U[i]; cu = Math.sqrt(Math.max(0, 1 - u * u));
+      c = rgba(stShade(M, u * e1x + cu * e2x, u * e1y + cu * e2y, cu * e2z, null, Math.abs(u)));
+      if (conic) {
+        var th = Math.atan2(my + (py - my) * u - ay, mx + (px - mx) * u - ax) - th0;
+        g.addColorStop((((th % TAU) + TAU) % TAU) / TAU, c);
+      } else g.addColorStop((u + 1) / 2, c);
+    }
+    return g;
+  }
+
+  // Studio body: radii in body units (start, end); per-group draw lists.
+  var ST_ARM = { up: [0.041, 0.0285], fore: [0.0285, 0.0205], hand: [0.0195, 0.016] };
+  var ST_LEG = { thigh: [0.056, 0.038], knee: 0.0375, calf: 0.0415, calfAt: 0.27, ankle: 0.0235 };
+  var TORSO = [ // anchor (0 pelvis+u1*o | 1 chest+u2*o), o, half-width (R), half-depth (F), forward, hips->shoulders blend
+    [0, 0.0, 0.092, 0.066, -0.008, 0],
+    [0, 0.08, 0.074, 0.054, 0.004, 0.4],
+    [1, 0.0, 0.093, 0.062, 0.012, 0.8],
+    [1, 0.064, 0.106, 0.067, 0.016, 1],
+    [1, 0.124, 0.109, 0.056, 0.006, 1],
+    [1, 0.158, 0.05, 0.042, 0.0, 1]
+  ];
+  // Occlusion silhouettes (rough) per group, for the soft shadow a near part casts on what is behind it.
+  var ST_OCC = {
+    T: [[PELVIS, CHEST, 0.075, 0.08], [CHEST, NECK, 0.085, 0.06], [NECK, HEAD, 0.03, 0.062]],
+    AL: [[SHL, ELL, 0.041, 0.029], [ELL, WRL, 0.029, 0.021], [WRL, HAL, 0.02, 0.016]],
+    AR: [[SHR, ELR, 0.041, 0.029], [ELR, WRR, 0.029, 0.021], [WRR, HAR, 0.02, 0.016]],
+    LL: [[HIPL, KNL, 0.056, 0.038], [KNL, ANL, 0.041, 0.024], [ANL, TOL, 0.025, 0.014]],
+    LR: [[HIPR, KNR, 0.056, 0.038], [KNR, ANR, 0.041, 0.024], [ANR, TOR, 0.025, 0.014]]
+  };
+  // Contact-shadow samples: [joint a, joint b, t, clearance radius]
+  var ST_SHADOW = [[HEAD, HEAD, 0, 0.062], [PELVIS, PELVIS, 0, 0.07], [PELVIS, CHEST, 0.5, 0.066], [CHEST, CHEST, 0, 0.07],
+    [CHEST, NECK, 0.6, 0.066], [NECK, HEAD, 0.4, 0.04]];
+  (function () {
+    var S = [[SHL, ELL, WRL, HAL, HIPL, KNL, ANL, TOL], [SHR, ELR, WRR, HAR, HIPR, KNR, ANR, TOR]];
+    for (var i = 0; i < 2; i++) {
+      var s = S[i];
+      ST_SHADOW.push([s[0], s[0], 0, 0.044], [s[0], s[1], 0.5, 0.037], [s[1], s[1], 0, 0.031], [s[1], s[2], 0.5, 0.026],
+        [s[2], s[2], 0, 0.022], [s[3], s[3], 0, 0.016], [s[4], s[5], 0.3, 0.058], [s[4], s[5], 0.7, 0.048],
+        [s[5], s[5], 0, 0.041], [s[5], s[6], 0.4, 0.04], [s[5], s[6], 0.75, 0.031], [s[6], s[6], 0, 0.045],
+        [s[6], s[7], 0.5, 0.025], [s[7], s[7], 0, 0.012]);
+    }
+  })();
+
+  // Screen ellipse (orthographic outline) of an ellipsoid with camera-space semi-axis vectors.
+  function projEllipse(axes, k) {
+    var sxx = 0, sxy = 0, syy = 0;
+    for (var i = 0; i < axes.length; i++) {
+      var vx = axes[i][0] * k, vy = -axes[i][1] * k;
+      sxx += vx * vx; sxy += vx * vy; syy += vy * vy;
+    }
+    var th = 0.5 * Math.atan2(2 * sxy, sxx - syy), mid = (sxx + syy) / 2;
+    var dd = Math.sqrt(Math.max(0, (sxx - syy) * (sxx - syy) / 4 + sxy * sxy));
+    return { th: th, rx: Math.sqrt(mid + dd), ry: Math.sqrt(Math.max(1e-6, mid - dd)) };
+  }
+
+  function unitShadow(ctx, col) {
+    var key = '__hiitSh' + col.join('_');
+    if (ctx[key]) return ctx[key];
+    var g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, rgba(col, 1)); g.addColorStop(0.22, rgba(col, 0.8)); g.addColorStop(0.45, rgba(col, 0.46));
+    g.addColorStop(0.7, rgba(col, 0.16)); g.addColorStop(0.86, rgba(col, 0.04)); g.addColorStop(1, rgba(col, 0));
+    try { ctx[key] = g; } catch (e) { /* ignore */ }
+    return g;
+  }
+
+  FP._stState = function () {
+    var M = this._M || (this._M = {}), mat = this.mat;
+    M.ramp = mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
+    M.rimC = mix(this.c1, WHITE, mat.rimW);
+    M.rimK = mat.rimK * (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash) * (this.low ? 0.45 : 1);
+    M.far = 0; M.farC = mat.far; M.dim = 1;
+    M.sc = this.meta.sc; M.low = this.low;
+    M.rk = M.sc * (this.low ? 1.12 : 1); // thumbnails: slightly thicker limbs so they read at ~56 px
+    M.conic = typeof this.ctx.createConicGradient === 'function';
+    M.zRef = this.cur[PELVIS * 3 + 2];
+    return M;
+  };
+
+  FP._drawStudio = function () {
+    var ctx = this.ctx, W = this.W, H = this.H, dpr = this.dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    if (!this.hasPose) return;
+    var P = this.cur, m = this.meta, low = this.low, mat = this.mat;
+    var M = this._stState();
+    var ex = (this.morphT < 0.5 && this.fromEx) ? this.fromEx : this.ex;
+    var order = ex.sorder || ex.order;
+    for (var gi = 0; gi < order.length; gi++) {
+      var g = order[gi], far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
+      if (!low && gi > 0) this._stOcclude(ctx, g, P, M);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      M.far = far * mat.farK; M.dim = 1 - 0.12 * far;
+      if (g === 'T') this._stTorso(ctx, P, M);
+      else if (g[0] === 'A') this._stArm(ctx, g[1], P, M);
+      else this._stLeg(ctx, g[1], P, M);
+    }
+    M.far = 0; M.dim = 1;
+    if (this.ring >= 0 && !low) this._stSweep(ctx, P, M);
+    ctx.globalCompositeOperation = 'destination-over';
+    this._stGround(ctx, P, M);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    try { ctx.imageSmoothingQuality = 'low'; } catch (e) { /* ignore */ } // the default (neon's bloom relies on it)
+  };
+
+  // depth-scaled radius (near parts slightly larger, as in the projection)
+  function rz(M, P, i, r) { return r * M.rk * (1 + (P[i * 3 + 2] - M.zRef) / PERSP); }
+
+  FP._stCap = function (ctx, M, ax, ay, az, ra, bx, by, bz, rb, cap, acc) {
+    var sc = M.sc;
+    ctx.fillStyle = cylGrad(ctx, M, ax, ay, ra, bx, by, rb, (bx - ax) / sc, -(by - ay) / sc, bz - az, acc);
+    ctx.beginPath();
+    piece(ctx, ax, ay, ra, bx, by, rb, cap);
+    ctx.fill();
+  };
+  // segment between joints i -> j with radii (body units)
+  FP._stBone = function (ctx, M, P, i, j, r1, r2) {
+    this._stCap(ctx, M, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], rz(M, P, i, r1), P[j * 3], P[j * 3 + 1], P[j * 3 + 2], rz(M, P, j, r2), 3);
+  };
+
+  FP._stArm = function (ctx, s, P, M) {
+    var sh = s === 'L' ? SHL : SHR, el = sh + 1, wr = sh + 2, ha = sh + 3;
+    this._stBone(ctx, M, P, sh, el, ST_ARM.up[0], ST_ARM.up[1]);
+    this._stBone(ctx, M, P, el, wr, ST_ARM.fore[0], ST_ARM.fore[1]);
+    this._stBone(ctx, M, P, wr, ha, ST_ARM.hand[0], ST_ARM.hand[1]);
+    if (M.low) return;
+    // accent wristband
+    var t0 = 0.74, t1 = 0.9, e = el * 3, w = wr * 3;
+    var x0 = lerp(P[e], P[w], t0), y0 = lerp(P[e + 1], P[w + 1], t0), z0 = lerp(P[e + 2], P[w + 2], t0);
+    var x1 = lerp(P[e], P[w], t1), y1 = lerp(P[e + 1], P[w + 1], t1), z1 = lerp(P[e + 2], P[w + 2], t1);
+    var r0 = rz(M, P, el, lerp(ST_ARM.fore[0], ST_ARM.fore[1], t0)) * 1.07, r1 = rz(M, P, wr, lerp(ST_ARM.fore[0], ST_ARM.fore[1], t1)) * 1.07;
+    this._stCap(ctx, M, x0, y0, z0, r0, x1, y1, z1, r1, 0, mix(this.c1, this.c2, 0.25));
+  };
+
+  FP._stLeg = function (ctx, s, P, M) {
+    var hip = s === 'L' ? HIPL : HIPR, kn = hip + 1, an = hip + 2, sc = M.sc;
+    this._stBone(ctx, M, P, hip, kn, ST_LEG.thigh[0], ST_LEG.thigh[1]);
+    // shin with a calf swell: two flat-joined pieces sharing the calf station
+    var k = kn * 3, a = an * 3, t = ST_LEG.calfAt;
+    var cx = lerp(P[k], P[a], t), cy = lerp(P[k + 1], P[a + 1], t);
+    var rk = rz(M, P, kn, ST_LEG.knee), rc = rz(M, P, kn, ST_LEG.calf), ra = rz(M, P, an, ST_LEG.ankle);
+    var dx = P[a] - P[k], dy = P[a + 1] - P[k + 1], dl = Math.sqrt(dx * dx + dy * dy) || 1, ov = 0.6 / dl;
+    if (dl > rc) {
+      var vx = dx / sc, vy = -dy / sc, vz = P[a + 2] - P[k + 2];
+      ctx.fillStyle = cylGrad(ctx, M, P[k], P[k + 1], rk, cx, cy, rc, vx, vy, vz);
+      ctx.beginPath(); piece(ctx, P[k], P[k + 1], rk, cx + dx * ov, cy + dy * ov, rc, 1); ctx.fill();
+      ctx.fillStyle = cylGrad(ctx, M, cx, cy, rc, P[a], P[a + 1], ra, vx, vy, vz);
+      ctx.beginPath(); piece(ctx, cx, cy, rc, P[a], P[a + 1], ra, 2); ctx.fill();
+    } else {
+      this._stBone(ctx, M, P, kn, an, ST_LEG.calf, ST_LEG.ankle);
+    }
+    this._stFoot(ctx, s, P, M);
+  };
+
+  // Sneaker-like foot: heel->toe capsule + instep, accent sole.
+  FP._stFoot = function (ctx, s, P, M) {
+    var kn = s === 'L' ? KNL : KNR, an = kn + 1, to = kn + 2, sc = M.sc;
+    var A = [P[an * 3] / sc, -P[an * 3 + 1] / sc, P[an * 3 + 2]];
+    var K = [P[kn * 3] / sc, -P[kn * 3 + 1] / sc, P[kn * 3 + 2]];
+    var T = [P[to * 3] / sc, -P[to * 3 + 1] / sc, P[to * 3 + 2]];
+    var f = norm(sub(T, A)), sd = norm(sub(A, K));
+    var fd = sub(sd, mul(f, dot(sd, f)));
+    fd = len(fd) > 1e-3 ? norm(fd) : [0, -1, 0];
+    var heel = addS(addS(A, f, -0.017), fd, 0.0295), toe = addS(addS(A, f, 0.104), fd, 0.002);
+    var ins0 = addS(A, fd, 0.004), ins1 = addS(addS(A, f, 0.062), fd, 0.011);
+    var z = 1 + (A[2] - M.zRef) / PERSP;
+    var self = this;
+    function cap(p, r, q, r2, acc) {
+      self._stCap(ctx, M, p[0] * sc, -p[1] * sc, p[2], r * M.rk * z, q[0] * sc, -q[1] * sc, q[2], r2 * M.rk * z, 3, acc);
+    }
+    cap(heel, 0.0225, toe, 0.0125);
+    cap(ins0, 0.024, ins1, 0.0185);
+    if (M.low) return;
+    cap(addS(heel, fd, 0.0155), 0.0072, addS(toe, fd, 0.0062), 0.0062, mix(this.c2, this.c1, 0.2));
+  };
+
+  FP._stTorso = function (ctx, P, M) {
+    var sc = M.sc, i;
+    function cam(j) { return [P[j * 3] / sc, -P[j * 3 + 1] / sc, P[j * 3 + 2]]; }
+    var pel = cam(PELVIS), che = cam(CHEST), nek = cam(NECK), hd = cam(HEAD);
+    var u1 = norm(sub(che, pel)), u2 = norm(sub(nek, che));
+    var Rh = norm(sub(cam(HIPR), cam(HIPL))), Rs = norm(sub(cam(SHR), cam(SHL)));
+    var n = TORSO.length, cx = [], cy = [], AX = [], AY = [], BX = [], BY = [], wmax = 0;
+    for (i = 0; i < n; i++) {
+      var st = TORSO[i], b = st[5];
+      var u = norm(add(mul(u1, 1 - b), mul(u2, b)));
+      var R = norm(add(mul(Rh, 1 - b), mul(Rs, b)));
+      var F = norm(cross(u, R)); R = cross(F, u);
+      var c = addS(st[0] ? addS(che, u2, st[1]) : addS(pel, u1, st[1]), F, st[4]);
+      cx.push(c[0] * sc); cy.push(-c[1] * sc);
+      AX.push(R[0] * st[2] * sc); AY.push(-R[1] * st[2] * sc); BX.push(F[0] * st[3] * sc); BY.push(-F[1] * st[3] * sc);
+    }
+    var V = [], tx, ty, tl;
+    var Lp = [], Rp = [];
+    for (i = 0; i < n; i++) {
+      var ia = Math.max(0, i - 1), ib = Math.min(n - 1, i + 1);
+      tx = cx[ib] - cx[ia]; ty = cy[ib] - cy[ia]; tl = Math.sqrt(tx * tx + ty * ty);
+      if (tl < 1e-6) { tx = 0; ty = -1; } else { tx /= tl; ty /= tl; }
+      var nx = -ty, ny = tx, p1 = AX[i] * nx + AY[i] * ny, p2 = BX[i] * nx + BY[i] * ny;
+      var w = Math.sqrt(p1 * p1 + p2 * p2); // (the torso sits at the depth reference)
+      if (i > 0 && i < n - 1) wmax = Math.max(wmax, w);
+      Lp.push([cx[i] + nx * w, cy[i] + ny * w]); Rp.push([cx[i] - nx * w, cy[i] - ny * w]);
+    }
+    for (i = 0; i < n; i++) V.push(Lp[i]);
+    for (i = n - 1; i >= 0; i--) V.push(Rp[i]);
+    // neck first (the torso's trapezius slope overlaps its base), then torso, then head
+    var nb = addS(nek, u2, -0.03);
+    var nt = add(nek, mul(sub(hd, nek), 0.55));
+    this._stCap(ctx, M, nb[0] * sc, -nb[1] * sc, nb[2], rz(M, P, NECK, 0.033), nt[0] * sc, -nt[1] * sc, nt[2], rz(M, P, NECK, 0.029), 3);
+    function outline() {
+      var N = V.length, q0 = V[N - 1], q1;
+      ctx.moveTo((q0[0] + V[0][0]) / 2, (q0[1] + V[0][1]) / 2);
+      for (var k = 0; k < N; k++) {
+        q0 = V[k]; q1 = V[(k + 1) % N];
+        ctx.quadraticCurveTo(q0[0], q0[1], (q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2);
+      }
+      ctx.closePath();
+    }
+    // pelvis: an ellipsoid, so hips and seat are rounded from every camera angle; the
+    // loft above it starts exactly at its widest section (station 0) and matches its shading
+    var Fh = norm(cross(u1, Rh)), Rh2 = cross(Fh, u1), zk = 1 + (pel[2] - M.zRef) / PERSP;
+    var pc = addS(addS(pel, Fh, -0.008), u1, 0.01);
+    var pe = projEllipse([mul(Rh2, 0.09), mul(Fh, 0.062), mul(u1, 0.058)], sc * zk * (M.low ? 1.06 : 1));
+    var pw = Math.sqrt(sq(Lp[0][0] - Rp[0][0]) + sq(Lp[0][1] - Rp[0][1])) / 2;
+    var ppx = pc[0] * sc, ppy = -pc[1] * sc, uu = sub(che, pel);
+    var ux = uu[0] * sc, uy = -uu[1] * sc, ul = Math.sqrt(ux * ux + uy * uy) || 1;
+    ux /= ul; uy /= ul;
+    var tx0 = sub(nek, pel);
+    ctx.fillStyle = cylGrad(ctx, M, ppx - ux * pw, ppy - uy * pw, pw, ppx + ux * pw, ppy + uy * pw, pw, tx0[0], tx0[1], tx0[2]);
+    ctx.beginPath();
+    ctx.ellipse(ppx, ppy, pe.rx, pe.ry, pe.th, 0, TAU);
+    ctx.fill();
+    if (M.low) {
+      var ax = sub(nek, pel), mx = 0, my = 0;
+      for (i = 1; i < n - 1; i++) { mx += cx[i]; my += cy[i]; }
+      mx /= (n - 2); my /= (n - 2);
+      var al = len(ax) || 1, sx2 = ax[0] / al * sc, sy2 = -ax[1] / al * sc, sl = Math.sqrt(sx2 * sx2 + sy2 * sy2) || 1;
+      var hl = Math.max(4, sl * al * 0.5);
+      ctx.fillStyle = cylGrad(ctx, M, mx - sx2 / sl * hl, my - sy2 / sl * hl, wmax, mx + sx2 / sl * hl, my + sy2 / sl * hl, wmax, ax[0], ax[1], ax[2]);
+      ctx.beginPath(); outline(); ctx.fill();
+    } else {
+      // loft: one slab per pair of stations (clipped), each shaded with a conic gradient
+      // centred where its two silhouette edges meet -> the shading follows the changing
+      // width and stays continuous across stations
+      var E = 4 * wmax + 10, tax = sub(nek, pel), lastG = null; // one axis for all slabs: no banding
+      for (i = 0; i < n - 1; i++) {
+        var j = i + 1, ov = 0.8;
+        var dxs = cx[j] - cx[i], dys = cy[j] - cy[i], dl = Math.sqrt(dxs * dxs + dys * dys) || 1;
+        var ex = dxs / dl, ey = dys / dl;
+        var b0 = i === 0 ? 0 : ov, b1 = j === n - 1 ? 2 * wmax : ov;
+        var nx0 = (Lp[i][0] - Rp[i][0]), ny0 = (Lp[i][1] - Rp[i][1]), nl0 = Math.sqrt(nx0 * nx0 + ny0 * ny0) || 1;
+        var nx1 = (Lp[j][0] - Rp[j][0]), ny1 = (Lp[j][1] - Rp[j][1]), nl1 = Math.sqrt(nx1 * nx1 + ny1 * ny1) || 1;
+        nx0 /= nl0; ny0 /= nl0; nx1 /= nl1; ny1 /= nl1;
+        var ax0 = cx[i] - ex * b0, ay0 = cy[i] - ey * b0, ax1 = cx[j] + ex * b1, ay1 = cy[j] + ey * b1;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(ax0 + nx0 * E, ay0 + ny0 * E); ctx.lineTo(ax1 + nx1 * E, ay1 + ny1 * E);
+        ctx.lineTo(ax1 - nx1 * E, ay1 - ny1 * E); ctx.lineTo(ax0 - nx0 * E, ay0 - ny0 * E);
+        ctx.closePath();
+        ctx.clip();
+        // the steep shoulder->neck slab just continues the chest shading (a separate
+        // gradient there would show a seam across the trapezius)
+        if (j < n - 1 || !lastG) lastG = slabGrad(ctx, M, Lp[i], Lp[j], Rp[i], Rp[j], tax[0], tax[1], tax[2]);
+        ctx.fillStyle = lastG;
+        ctx.beginPath(); outline(); ctx.fill();
+        ctx.restore();
+      }
+    }
+    this._stHead(ctx, P, M);
+  };
+
+  FP._stHead = function (ctx, P, M) {
+    var sc = M.sc, i;
+    function cam(j) { return [P[j * 3] / sc, -P[j * 3 + 1] / sc, P[j * 3 + 2]]; }
+    var hd = cam(HEAD), nk = cam(NECK), fc = cam(FACE);
+    var u3 = norm(sub(hd, nk)), F = sub(fc, hd);
+    F = sub(F, mul(u3, dot(F, u3)));
+    F = len(F) > 1e-4 ? norm(F) : norm(cross(u3, [0, 0, 1]));
+    var R = cross(F, u3);
+    var c = addS(addS(hd, u3, 0.006), F, 0.004), z = 1 + (hd[2] - M.zRef) / PERSP;
+    var e = projEllipse([mul(u3, 0.069), mul(F, 0.061), mul(R, 0.053)], sc * z);
+    var x = c[0] * sc, y = -c[1] * sc, th = e.th, rx = e.rx, ry = e.ry;
+    // work in the ellipse's unit-circle frame; screen directions mapped into it
+    var ct = Math.cos(th), st = Math.sin(th);
+    function local(dx, dy) {
+      var lx = (dx * ct + dy * st) / rx, ly = (-dx * st + dy * ct) / ry, l = Math.sqrt(lx * lx + ly * ly) || 1;
+      return [lx / l, ly / l];
+    }
+    var L = local(KEY2[0], -KEY2[1]);
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(th); ctx.scale(rx, ry);
+    // 1. diffuse along the light axis (lit edge -> dark edge)
+    var g = ctx.createLinearGradient(L[0], L[1], -L[0], -L[1]);
+    var S = M.low ? [1, 0.2, -0.8] : [1, 0.75, 0.45, 0.15, -0.15, -0.45, -0.75, -1];
+    var sk = M.specK; M.specK = 0;
+    for (i = 0; i < S.length; i++) {
+      var sv = S[i], cz = Math.sqrt(Math.max(0, 1 - sv * sv));
+      g.addColorStop((1 - sv) / 2, rgba(stShade(M, sv * KEY2[0], sv * KEY2[1], cz, null, 0)));
+    }
+    M.specK = sk;
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+    if (!M.low) {
+      // 2. silhouette fall-off, strongest away from the light (sphere, not cylinder)
+      var o = 0.28, ge = ctx.createRadialGradient(L[0] * o, L[1] * o, 0, L[0] * o, L[1] * o, 1 + o);
+      var dk = M.ramp[0][1];
+      ge.addColorStop(0, rgba(dk, 0)); ge.addColorStop(0.55, rgba(dk, 0)); ge.addColorStop(0.8, rgba(dk, 0.12));
+      ge.addColorStop(1, rgba(dk, 0.42));
+      ctx.fillStyle = ge;
+      ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      // 3. specular spot
+      var H = local(HALFV[0], -HALFV[1]), hl = Math.sqrt(HALFV[0] * HALFV[0] + HALFV[1] * HALFV[1]);
+      var hx = H[0] * hl, hy = H[1] * hl, gs = ctx.createRadialGradient(hx, hy, 0, hx, hy, 0.55);
+      gs.addColorStop(0, rgba(M.spec, clamp(0.75 * sk, 0, 1))); gs.addColorStop(0.4, rgba(M.spec, clamp(0.25 * sk, 0, 1)));
+      gs.addColorStop(1, rgba(M.spec, 0));
+      ctx.fillStyle = gs;
+      ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      // 4. rim crescent on the far edge
+      if (M.rimK > 0.01) {
+        var Rd = local(RIMX, -RIMY), ro = 0.22;
+        var gr = ctx.createRadialGradient(-Rd[0] * ro, -Rd[1] * ro, 0, -Rd[0] * ro, -Rd[1] * ro, 1 + ro);
+        gr.addColorStop(0, rgba(M.rimC, 0)); gr.addColorStop(0.84, rgba(M.rimC, 0));
+        gr.addColorStop(1, rgba(M.rimC, clamp(0.7 * M.rimK, 0, 1)));
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.restore();
+  };
+
+  // Soft shadow a near part casts on what is already drawn behind it. The part's silhouette
+  // is rasterised into a coarse buffer and composited upscaled (= blurred, no filter or
+  // shadowBlur needed) with source-atop, so only body pixels darken. Only its bounding
+  // box is touched.
+  FP._stOcclude = function (ctx, g, P, M) {
+    var L = ST_OCC[g], sc = M.sc, mat = this.mat, i;
+    var ob = this._buf('obuf');
+    if (!ob) return;
+    var cell = clamp(0.016 * sc, 2, 9), b = ob.c, bc = ob.x;
+    var bw = Math.ceil(this.W / cell) + 4, bh = Math.ceil(this.H / cell) + 4;
+    if (b.width < bw || b.height < bh) { b.width = Math.max(b.width, bw); b.height = Math.max(b.height, bh); }
+    var ox = -KEY2[0] * 0.012 * sc, oy = KEY2[1] * 0.012 * sc, grow = 0.006 * sc;
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (i = 0; i < L.length; i++) {
+      for (var e = 0; e < 2; e++) {
+        var j = L[i][e] * 3, r = L[i][2 + e] * sc * 1.1 + grow;
+        x0 = Math.min(x0, P[j] - r); x1 = Math.max(x1, P[j] + r); y0 = Math.min(y0, P[j + 1] - r); y1 = Math.max(y1, P[j + 1] + r);
+      }
+    }
+    // buffer origin sits 2 cells left/up of the canvas so nothing is clipped at the edges
+    var pad = 3 * cell, o2 = 2 * cell;
+    var bx0 = Math.max(0, Math.floor((x0 - pad + o2) / cell)), by0 = Math.max(0, Math.floor((y0 - pad + o2) / cell));
+    var bx1 = Math.min(b.width, Math.ceil((x1 + pad + o2) / cell)), by1 = Math.min(b.height, Math.ceil((y1 + pad + o2) / cell));
+    if (bx1 <= bx0 || by1 <= by0) return;
+    bc.setTransform(1, 0, 0, 1, 0, 0);
+    bc.clearRect(0, 0, b.width, b.height);
+    bc.setTransform(1 / cell, 0, 0, 1 / cell, 2, 2);
+    bc.fillStyle = rgba(mat.ao);
+    bc.beginPath();
+    for (i = 0; i < L.length; i++) {
+      var a = L[i][0] * 3, c = L[i][1] * 3;
+      capsule(bc, P[a], P[a + 1], rz(M, P, L[i][0], L[i][2]) + grow, P[c], P[c + 1], rz(M, P, L[i][1], L[i][3]) + grow);
+    }
+    if (g === 'T') {
+      capsule(bc, P[PELVIS * 3], P[PELVIS * 3 + 1], 0.085 * sc, P[NECK * 3], P[NECK * 3 + 1], 0.08 * sc);
+      circle(bc, P[HEAD * 3], P[HEAD * 3 + 1], 0.064 * sc);
+    }
+    bc.fill();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = mat.aoK;
+    ctx.imageSmoothingEnabled = true;
+    try { ctx.imageSmoothingQuality = 'high'; } catch (err) { /* ignore */ }
+    ctx.drawImage(b, bx0, by0, bx1 - bx0, by1 - by0, bx0 * cell - o2 + ox, by0 * cell - o2 + oy, (bx1 - bx0) * cell, (by1 - by0) * cell);
+    ctx.globalAlpha = 1;
+  };
+
+  // pulse(): a soft band of light sweeps across the body
+  FP._stSweep = function (ctx, P, M) {
+    var e = this.ring, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, i;
+    for (i = 0; i < NJ; i++) {
+      var x = P[i * 3], y = P[i * 3 + 1];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    var pad = 0.12 * M.sc; x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
+    var w = x1 - x0, h = y1 - y0, k = 1 - Math.pow(1 - e, 2);
+    var cx = lerp(x0 - 0.3 * w, x1 + 0.3 * w, k), cy = lerp(y0 - 0.3 * h, y1 + 0.3 * h, k);
+    var bw = 0.17 * Math.max(w, h), gx = bw * 0.6, gy = bw * 0.8;
+    var g = ctx.createLinearGradient(cx - gx, cy - gy, cx + gx, cy + gy);
+    var col = mix(this.c1, WHITE, 0.72), a = this.mat.sweep * Math.sin(Math.PI * clamp(e, 0, 1));
+    g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.35, rgba(col, a * 0.45)); g.addColorStop(0.5, rgba(col, a));
+    g.addColorStop(0.65, rgba(col, a * 0.45)); g.addColorStop(1, rgba(col, 0));
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = g;
+    ctx.fillRect(x0, y0, w, h);
+  };
+
+  // Floor: contact shadows (drawn with destination-over, i.e. beneath the body) + faint floor line.
+  FP._buf = function (key) {
+    var b = this[key];
+    if (!b) {
+      var c = (root.document && document.createElement) ? document.createElement('canvas') : null;
+      var x = c ? c.getContext('2d') : null;
+      if (!x) return null;
+      b = this[key] = { c: c, x: x };
+    }
+    return b;
+  };
+
+  // Floor: soft contact shadows + (dark stage) a faint light pool, composited beneath the
+  // body (destination-over). High quality evaluates the shadow analytically into a small
+  // float buffer (smooth falloffs, one quantisation step: no banding or dither noise from
+  // stacking many translucent fills) and composites it once, upscaled.
+  var SH_MAX = 160 * 96;
+  FP._stGround = function (ctx, P, M) {
+    var G = this.gnd, m = this.meta, sc = m.sc, mat = this.mat, dpr = this.dpr, i;
+    var flat = clamp(m.flat * 1.25 + 0.12, 0.16, 0.5), K = mat.shadowK;
+    var x0 = 1e9, x1 = -1e9, sy = 0, sh = 0, n = 0;
+    for (i = 0; i < NJ; i++) {
+      if (i === FACE) continue;
+      var gx = G[i * 3];
+      if (gx < x0) x0 = gx; if (gx > x1) x1 = gx;
+      sy += G[i * 3 + 1]; sh += G[i * 3 + 2]; n++;
+    }
+    sy /= n; sh /= n;
+    var B = this._blobs || (this._blobs = []), nb = 0;
+    function blob(x, y, rx, a) {
+      if (a < 0.006 || rx < 0.3) return;
+      var o = B[nb] || (B[nb] = {});
+      o.x = x; o.y = y; o.rx = rx; o.a = a; nb++;
+    }
+    if (!this.low) {
+      for (i = 0; i < ST_SHADOW.length; i++) {
+        var s = ST_SHADOW[i], a3 = s[0] * 3, b3 = s[1] * 3, t = s[2], r = s[3];
+        var h = Math.max(0, lerp(G[a3 + 2], G[b3 + 2], t) - r);
+        if (h > 0.4) continue;
+        var x = lerp(G[a3], G[b3], t) + h * 0.3 * sc, y = lerp(G[a3 + 1], G[b3 + 1], t);
+        var k1 = clamp(1 - h / 0.06, 0, 1);
+        blob(x, y, (r * 1.3 + 0.012 + h * 0.3) * sc, K * 0.3 * k1 * k1);
+        blob(x, y, (r * 2.6 + 0.03 + h * 0.8) * sc, K * 0.1 * Math.exp(-h / 0.16));
+      }
+    } else {
+      // thumbnails: one soft contact shadow under the lowest parts
+      var lo = 1e9;
+      for (i = 0; i < NJ; i++) lo = Math.min(lo, G[i * 3 + 2]);
+      var lx0 = 1e9, lx1 = -1e9, ly = 0, ln = 0;
+      for (i = 0; i < NJ; i++) {
+        if (i === FACE || G[i * 3 + 2] > lo + 0.12) continue;
+        lx0 = Math.min(lx0, G[i * 3]); lx1 = Math.max(lx1, G[i * 3]); ly += G[i * 3 + 1]; ln++;
+      }
+      blob((lx0 + lx1) / 2, ly / ln, (lx1 - lx0) / 2 + 0.09 * sc, K * 0.55 * Math.exp(-lo / 0.2));
+    }
+    // broad ambient occlusion under the whole body
+    blob((x0 + x1) / 2, sy, (x1 - x0) / 2 + 0.16 * sc, K * 0.2 * Math.exp(-sh / 0.7));
+    var done = false;
+    if (!this.low && nb) done = this._stShadowBuf(ctx, B, nb, flat, mat.shadow);
+    if (!done) {
+      ctx.fillStyle = unitShadow(ctx, mat.shadow);
+      for (i = 0; i < nb; i++) {
+        var b = B[i];
+        ctx.globalAlpha = clamp(b.a, 0, 1);
+        ctx.setTransform(dpr * b.rx, 0, 0, dpr * b.rx * flat, dpr * b.x, dpr * b.y);
+        ctx.fillRect(-1, -1, 2, 2);
+      }
+    }
+    // dark stage: a faint pool of light on the floor so the contact shadow has something to darken
+    if (mat.pool > 0) {
+      var pr = (x1 - x0) / 2 + 0.45 * sc;
+      ctx.fillStyle = unitShadow(ctx, mat.floor);
+      ctx.globalAlpha = mat.pool;
+      ctx.setTransform(dpr * pr, 0, 0, dpr * pr * flat, dpr * (x0 + x1) / 2, dpr * sy);
+      ctx.fillRect(-1, -1, 2, 2);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    // faint floor line fading to the sides
+    var W = this.W, y0 = m.floorY;
+    var lk = mat.floorK * clamp((0.3 - m.flat) / 0.12, 0, 1); // steep cameras: no horizon line
+    if (y0 < this.H + 2 && lk > 0.004) {
+      var mid = clamp(((x0 + x1) / 2) / W, 0.25, 0.75);
+      var lg = ctx.createLinearGradient(0, 0, W, 0);
+      lg.addColorStop(0, rgba(mat.floor, 0)); lg.addColorStop(mid, rgba(mat.floor, lk)); lg.addColorStop(1, rgba(mat.floor, 0));
+      ctx.fillStyle = lg;
+      ctx.fillRect(0, y0 - 0.5, W, 1);
+    }
+  };
+
+  // Analytic soft shadow: transmittance product of smooth elliptical falloffs, evaluated
+  // per coarse cell over the blobs' bounding box. Returns false if it could not run.
+  FP._stShadowBuf = function (ctx, B, nb, flat, col) {
+    var buf = this._buf('gbuf');
+    if (!buf || !ctx.createImageData) return false;
+    var bx0 = 1e9, bx1 = -1e9, by0 = 1e9, by1 = -1e9, i, b;
+    for (i = 0; i < nb; i++) {
+      b = B[i];
+      bx0 = Math.min(bx0, b.x - b.rx); bx1 = Math.max(bx1, b.x + b.rx);
+      by0 = Math.min(by0, b.y - b.rx * flat); by1 = Math.max(by1, b.y + b.rx * flat);
+    }
+    bx0 = Math.max(bx0, -8); bx1 = Math.min(bx1, this.W + 8); by0 = Math.max(by0, -8); by1 = Math.min(by1, this.H + 8);
+    if (bx1 <= bx0 || by1 <= by0) return true;
+    var cell = clamp(0.011 * this.meta.sc, 1.5, 5);
+    var gw = Math.ceil((bx1 - bx0) / cell) + 3, gh = Math.ceil((by1 - by0) / cell) + 3;
+    while (gw * gh > SH_MAX) { cell *= 1.25; gw = Math.ceil((bx1 - bx0) / cell) + 3; gh = Math.ceil((by1 - by0) / cell) + 3; }
+    var T = this._shT;
+    if (!T || T.length < gw * gh) T = this._shT = new Float32Array(Math.max(gw * gh, 4096));
+    for (i = 0; i < gw * gh; i++) T[i] = 1;
+    var ox = bx0 - cell, oy = by0 - cell; // cell (c, r) centre = o + (c + 0.5) * cell
+    for (i = 0; i < nb; i++) {
+      b = B[i];
+      var ry = b.rx * flat, ix = 1 / b.rx, iy = 1 / ry, a = clamp(b.a, 0, 1);
+      var c0 = Math.max(0, Math.floor((b.x - b.rx - ox) / cell)), c1 = Math.min(gw - 1, Math.ceil((b.x + b.rx - ox) / cell));
+      var r0 = Math.max(0, Math.floor((b.y - ry - oy) / cell)), r1 = Math.min(gh - 1, Math.ceil((b.y + ry - oy) / cell));
+      for (var r = r0; r <= r1; r++) {
+        var dy = (oy + (r + 0.5) * cell - b.y) * iy, dy2 = dy * dy;
+        if (dy2 >= 1) continue;
+        var row = r * gw;
+        for (var c = c0; c <= c1; c++) {
+          var dx = (ox + (c + 0.5) * cell - b.x) * ix, d2 = dx * dx + dy2;
+          if (d2 >= 1) continue;
+          var f = 1 - d2; f = f * f * f; // smooth, gaussian-like, exactly 0 at the rim
+          T[row + c] *= 1 - a * f;
+        }
+      }
+    }
+    var cv = buf.c, x = buf.x;
+    if (cv.width < gw || cv.height < gh) { cv.width = Math.max(cv.width, gw); cv.height = Math.max(cv.height, gh); this._shImg = null; }
+    var img = this._shImg;
+    if (!img || img.width !== gw || img.height !== gh) img = this._shImg = x.createImageData(gw, gh);
+    var D = img.data, cr = col[0] | 0, cg = col[1] | 0, cb = col[2] | 0;
+    for (i = 0; i < gw * gh; i++) {
+      var al = (1 - T[i]) * 255, k = i * 4;
+      D[k] = cr; D[k + 1] = cg; D[k + 2] = cb; D[k + 3] = al > 255 ? 255 : al;
+    }
+    x.putImageData(img, 0, 0);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = true;
+    try { ctx.imageSmoothingQuality = 'high'; } catch (err) { /* ignore */ }
+    ctx.drawImage(cv, 0, 0, gw, gh, ox, oy, gw * cell, gh * cell);
+    return true;
+  };
+
   /* ------------------------------------------------------------ public API */
   FP.setExercise = function (id) {
     if (this.dead) return;
@@ -1223,8 +1949,9 @@
     if (ex === this.ex) return;
     if (this.hasPose && this.W > 0) {
       this.from = new Float32Array(this.cur);
-      this.fromMeta = { floorY: this.meta.floorY, sc: this.meta.sc, farL: this.meta.farL, farR: this.meta.farR };
-      this.fromOrder = this.ex.order;
+      this.fromMeta = { floorY: this.meta.floorY, sc: this.meta.sc, farL: this.meta.farL, farR: this.meta.farR, flat: this.meta.flat };
+      this.fromGnd = this.studio ? new Float32Array(this.gnd) : null;
+      this.fromOrder = this.ex.order; this.fromEx = this.ex;
       this.morphT = 0;
     } else {
       this.morphT = 1;
@@ -1247,6 +1974,7 @@
     this.flash = 1;
     if (this.low || reducedMotion() || !this.hasPose) return;
     this.ring = 0;
+    if (this.studio) return; // studio: rim-light brighten + a soft light sweep, no sparks
     var P = this.cur, sc = this.meta.sc, cx = P[CHEST * 3], cy = P[CHEST * 3 + 1];
     for (var i = 0; i < 44; i++) {
       var j = ((Math.random() * 20) | 0) * 3;
@@ -1255,6 +1983,23 @@
       this._spawn(P[j], P[j + 1], (dx / dl) * sp * 0.7 + Math.cos(a) * sp * 0.5,
         (dy / dl) * sp * 0.7 + Math.sin(a) * sp * 0.5 - sc * 0.6, 0.45 + Math.random() * 0.6, 1);
     }
+  };
+  /** Switch render style live ('neon' | 'studio', scheme 'dark' | 'light') and repaint now. */
+  FP.setStyle = function (style, scheme) {
+    if (this.dead) return;
+    this._setStyle(style, scheme === undefined ? this.scheme : scheme);
+    this._still = false; this._acc = 0;
+    if (this.ctx && this.hasPose && this.W >= 4 && this.H >= 4 && !this.suspended) {
+      try { this._computePose(); this._draw(); } catch (e) { this._fail(e); }
+    }
+  };
+  FP._setStyle = function (style, scheme) {
+    this.style = styleOf(style);
+    this.scheme = schemeOf(scheme);
+    this.studio = this.style === 'studio';
+    this.mat = this.studio ? buildMat(this.scheme, this.matOpts) : null;
+    this.hist.length = 0; this.sparks.length = 0; this.ring = -1;
+    this.fromGnd = null;
   };
   FP.destroy = function () {
     if (this.dead) return;
@@ -1265,7 +2010,7 @@
     if (this.io) { try { this.io.disconnect(); } catch (e) { /* ignore */ } }
     if (this._onResize && root.removeEventListener) root.removeEventListener('resize', this._onResize);
     if (this.ctx) { try { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); } catch (e) { /* ignore */ } }
-    this.hist = []; this.sparks = []; this.bloom = null; this.bctx = null;
+    this.hist = []; this.sparks = []; this.bloom = null; this.bctx = null; this.obuf = null; this.gbuf = null;
     if (!registry.length && rafId) { caf(rafId); rafId = 0; lastT = 0; }
   };
   Object.defineProperty(FP, 'exercise', { get: function () { return exId(this.ex); } });
@@ -1298,6 +2043,12 @@
 
   root.HIITFigure = {
     EXERCISES: EXERCISES.slice(),
+    STYLES: STYLES.slice(),
+    STUDIO: (function () {
+      function hex(c) { return '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1); }
+      function m(k) { return { body: hex(MATS[k].body), shade: hex(MATS[k].shade), lit: hex(MATS[k].lit) }; }
+      return { dark: m('dark'), light: m('light') };
+    })(),
     create: function (canvas, opts) { return new Figure(canvas, opts); },
     _dev: {
       EX: EX, JN: JN, B: B,
