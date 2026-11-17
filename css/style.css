@@ -1,5 +1,6 @@
-/* Layout: neon arcade cabinet. Setup scrolls as one column (hero + config side by side on wide screens);
-   the workout is a locked full-viewport stage whose colours follow the interval phase. Single dark theme by design. */
+/* Base layout and components. Setup scrolls as one column (hero + config side by side on wide screens);
+   the workout is a locked full-viewport stage whose colours follow the interval phase.
+   The Studio look (css/studio.css) sets the colours, type and surfaces on top of this. */
 :root {
   --ink: #07020f;
   --ink-2: #110624;
@@ -946,7 +947,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .look-list button:hover, .look-list button:focus-visible { background: rgba(255,255,255,.07); outline: none; }
 .look-list button[aria-checked="true"]::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--c2); box-shadow: 0 0 10px var(--c2); }
 .sw { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,.18) inset; }
-.sw-neon { background: conic-gradient(#ff2bd6, #22e5ff, #c6ff1a, #ff2bd6); }
 .sw-dark { background: radial-gradient(circle at 35% 30%, #3a3f4b, #0b0c10 70%); }
 .sw-light { background: radial-gradient(circle at 35% 30%, #ffffff, #e6e3dc 70%); }
 .sw-auto { background: linear-gradient(135deg, #f4f3ef 0 50%, #15171d 50% 100%); }
@@ -1067,8 +1067,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 }
 .workout[data-mode="rest"] .dial { opacity: 1; }
 .dial-k { margin: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 800 clamp(13px, calc(var(--fh, 200px) * .09), 22px)/1.15 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: var(--c1); }
-.dial .digits { font-size: calc(var(--fh, 200px) * .5); filter: drop-shadow(0 0 18px color-mix(in srgb, var(--c1) 60%, transparent)); }
-.dial .digits.long { font-size: calc(var(--fh, 200px) * .3); }
 .dial-sub { margin: 0; min-height: 1.2em; font: 600 14px/1.2 var(--ui); letter-spacing: .06em; color: var(--dim); }
 @media (max-height: 700px) { .dial-sub { display: none; } }
 
@@ -1144,6 +1142,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   color: var(--ink); background: linear-gradient(90deg, var(--c1), var(--c2)); cursor: pointer;
 }
 .un-start svg { flex: none; font-size: 18px; fill: currentColor; }
+.un-start.quiet { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c1) 70%, transparent); }
 .un-start:active { transform: scale(.97); }
 /* short spaces: demo on the left, actions stacked beside it */
 .upnext.compact { grid-template-areas: "fig text" "fig act"; padding: 10px; gap: 8px 12px; }
@@ -1161,21 +1160,19 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .coach-v { order: 1; flex: 1 1 auto; min-width: 0; min-height: 0; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
 
-/* ---- undo after a skip */
-.toast {
-  position: fixed; left: 50%; bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 12px)); z-index: 40;
-  transform: translateX(-50%);
-  display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
-  padding: 5px 5px 5px 18px; border-radius: 999px;
-  background: rgba(16, 7, 34, .97); border: 1px solid var(--line-hi);
-  box-shadow: 0 18px 40px -16px rgba(0,0,0,.8);
-  font: 600 14px/1.2 var(--ui); color: var(--text); white-space: nowrap;
+/* ---- undo after a skip: lives in the strip row, never over content */
+.wp-undo { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; color: var(--text); }
+.wp-undo[hidden] { display: none; }
+.wp-undo.in { animation: toastIn .3s cubic-bezier(.2,.9,.3,1); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-4px); } }
+#toastText { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--dim); }
+.wp-undo-btn {
+  position: relative; flex: none; height: 28px; padding: 0 14px; border-radius: 999px; border: 0;
+  font: 800 12px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink); background: var(--c1); cursor: pointer;
 }
-.toast[hidden] { display: none; }
-.toast.in { animation: toastIn .3s cubic-bezier(.2,.9,.3,1); }
-@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } }
-#toastText { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.toast-btn { flex: none; height: 44px; min-width: 76px; padding: 0 18px; border-radius: 999px; border: 0; font: 800 14px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: var(--c1); cursor: pointer; }
+.wp-undo-btn::after { content: ""; position: absolute; inset: -9px -6px; } /* 46px tap target */
+.w-prog.undoing .wp-left, .w-prog.undoing .wp-skip { display: none; }
 
 /* ---- paused: Resume exactly where Pause was; End workout far away (and confirmed) */
 .veil-paused { display: block; }
@@ -1196,7 +1193,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 @media (min-aspect-ratio: 5/4) and (min-width: 560px) {
   .w-body {
     width: 100%; max-width: 1240px; justify-self: center;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, min(520px, 46%));
     grid-template-areas: "stage head" "stage lower" "stage .";
   }
   .w-tag { justify-content: flex-start; }
@@ -1219,7 +1216,26 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .wp-cell { height: 6px; } .wp-cell.is-now, .wp-cell.is-next { height: 10px; }
   .un-name { font-size: clamp(20px, 3.6vw, 26px); }
 }
-/* Neon titles stay on one line on phones, so the ring never moves between phases */
+/* titles stay on one line (fitName() shrinks long ones), so the ring never moves between phases */
 @media (max-width: 520px) {
-  .w-name { font-size: clamp(22px, 7.2vw, 34px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .w-name { font-size: clamp(22px, 7.2vw, 34px); white-space: nowrap; max-width: 100%; }
+}
+.w-name.wrap { white-space: normal; }
+
+/* small rings: no label inside the dial, so the countdown can be as big as the work one */
+.dial.bare .dial-k { display: none; }
+
+/* up-next card fitting steps (see sizeUpNext): q1 no muscles, q2 no meta, q3 no label */
+.upnext { max-height: none; }
+.upnext.q1 .un-mus { display: none; }
+.upnext.q2 .un-meta { display: none; }
+.upnext.q3 .un-k { display: none; }
+.upnext.compact .un-name { font-size: clamp(20px, 6vw, 26px); }
+.upnext.q4 .un-name { font-size: 19px; }
+.upnext.q4 .un-start { height: 42px; font-size: 13px; }
+
+/* desktop: the top bar lines up with the strip and the content */
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) {
+  .w-top { width: 100%; max-width: 1240px; justify-self: center; }
+  .w-lower { margin-top: 10px; }
 }

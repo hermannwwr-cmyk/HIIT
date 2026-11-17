@@ -34,16 +34,6 @@
   // Each look swaps the colour palette (and energy) used by the backdrop,
   // ring and figures; CSS handles the rest via html[data-look][data-scheme].
   var LOOKS = {
-    neon: {
-      style: 'neon', scheme: 'dark', meta: '#07020f', fps: null,
-      phase: {
-        setup: [['#9b5cff', '#22e5ff'], 0.22], prep: [['#b9a8ff', '#5a6bff'], 0.45], work: [['#ff2bd6', '#ff8a1f'], 1.0],
-        rest: [['#22e5ff', '#4a6bff'], 0.18], jacks: [['#c6ff1a', '#ffe14a'], 0.8], setrest: [['#36ffc0', '#9b5cff'], 0.1],
-        warmup: [['#b18cff', '#22e5ff'], 0.5],
-        done: [['#ffd23f', '#ff2bd6'], 0.55]
-      },
-      group: { upper: ['#ff4fd8', '#ff8a1f'], abs: ['#2ee6ff', '#4a6bff'], legs: ['#ffb21f', '#ff4f6a'], cardio: ['#c6ff1a', '#ffe14a'], rest: ['#22e5ff', '#4a6bff'], warmup: ['#b18cff', '#22e5ff'] }
-    },
     'studio-dark': {
       style: 'studio', scheme: 'dark', meta: '#151516', fps: 30,
       phase: {
@@ -67,7 +57,7 @@
   };
   var htmlEl = document.documentElement;
   // lookPref is what the user picked ('auto' unless they chose one); look is what's on screen.
-  var LOOK_PREF_RE = /^(auto|neon|studio-dark|studio-light)$/;
+  var LOOK_PREF_RE = /^(auto|studio-dark|studio-light)$/;
   var lookPref = LOOK_PREF_RE.test(htmlEl.getAttribute('data-look-pref')) ? htmlEl.getAttribute('data-look-pref') : 'auto';
   var schemeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   function systemScheme() {
@@ -76,8 +66,7 @@
     return schemeMQ && schemeMQ.matches ? 'dark' : 'light';
   }
   function resolveLook(pref) { return pref === 'auto' ? 'studio-' + systemScheme() : pref; }
-  var look = htmlEl.getAttribute('data-look') === 'studio' ? 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark') : 'neon';
-  function isStudio() { return LOOKS[look].style === 'studio'; }
+  var look = 'studio-' + (htmlEl.getAttribute('data-scheme') === 'light' ? 'light' : 'dark');
   // Dark-scheme directions: Charcoal+ (default) and Graphite+ (?dark=graphite): palette + mannequin material.
   var DARK_VARIANTS = {
     graphite: { material: 'titanium', meta: '#151516' },
@@ -89,7 +78,6 @@
   };
   var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'charcoal';
   function figMaterial() {
-    if (LOOKS[look].style !== 'studio') return undefined;
     return LOOKS[look].scheme === 'dark' ? DARK_VARIANTS[darkVariant].material : 'graphite';
   }
   function applyPalette() {
@@ -489,15 +477,11 @@
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.progress = 1;
-    this.ticks = 10;
     this.a = hexRgb('#9b5cff'); this.b = hexRgb('#ff2bd6');
     this.ta = this.a.slice(); this.tb = this.b.slice();
-    this.energy = 0.5;
     this.beat = 0; this.hot = 0;
-    this.rot = 0;
     this.paused = false;
     this.shocks = [];
-    this.sparks = [];
     this.w = 0; this.h = 0; this.dpr = 1;
     this.sizeDirty = true;
     this.needs = 2;
@@ -507,7 +491,7 @@
   }
   /** True while anything on the ring is animating. */
   Ring.prototype.busy = function () {
-    return this.needs > 0 || this.sparks.length > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
+    return this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
   };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
   Ring.prototype.shock = function (strength) { this.shocks.push({ t: 0, s: strength || 1 }); this.needs = 2; };
@@ -517,7 +501,7 @@
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = this.c.clientWidth, h = this.c.clientHeight;
     if (!w || !h) { this.sizeDirty = true; return false; }
-    if (w !== this.w || h !== this.h || dpr !== this.dpr || this.geoStudio !== isStudio()) {
+    if (w !== this.w || h !== this.h || dpr !== this.dpr) {
       this.w = w; this.h = h; this.dpr = dpr;
       this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
       this.layout();
@@ -531,11 +515,10 @@
    * the ring above the pill. Everything is centred in the stage.
    */
   Ring.prototype.layout = function () {
-    var studio = isStudio(), w = this.w, h = this.h;
-    this.geoStudio = studio;
+    var w = this.w, h = this.h;
     function radius(S) {
-      if (studio) { var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5 }; }
-      var t = Math.max(6, S * 0.03); return { R: S * 0.405, th: t, ext: t * 1.25 + S * 0.035 };
+      // top: how far above the centre the ring band reaches
+      var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5, top: S * 0.44 + 2 };
     }
     function pill(S) {
       // three fixed slots, so the opening never changes shape between phases
@@ -550,15 +533,17 @@
       var capY = r.R * Math.cos(ga);
       return { S: S, r: r, p: p, ga: ga, capY: capY, below: Math.max(capY + p.ph / 2, capY + r.ext) + 2 };
     }
-    var S = Math.min(w, h), f = fit(S);
-    for (var k = 0; k < 8; k++) {
-      var need = S / 2 + f.below;
+    // The bottom of the ring is an opening, so the ring may be taller than the
+    // stage: size it by what is actually drawn (top of the ring down to the pill).
+    var maxS = w / 0.9, S = Math.min(maxS, h * 1.6), f = fit(S);
+    for (var k = 0; k < 12; k++) {
+      var need = f.r.top + f.below;
       if (need <= h + 0.5 && f.p.pw <= w) break;
-      S = Math.max(60, Math.min(S * h / need, S * w / f.p.pw) * 0.998);
+      S = Math.max(60, Math.min(S * Math.pow(h / need, 0.9), S * w / f.p.pw) * 0.998);
       f = fit(S);
     }
     var r = f.r, p = f.p;
-    var cy = Math.max(0, (h - (S / 2 + f.below)) / 2) + S / 2;
+    var cy = Math.max(0, (h - (r.top + f.below)) / 2) + r.top;
     // inside the ring, above the pill: where the figure or the rest countdown goes
     var innerTop = cy - r.R + r.th * 0.5 + 4;
     var innerBot = cy + f.capY - p.ph / 2 - 4;
@@ -578,17 +563,37 @@
     sizeUpNext();
   };
   /** The up-next card overlays the readout's space; its demo tile fills that height. */
+  /**
+   * The up-next card covers the readout + coach area. It must always fit that
+   * space with its Start button inside: try the full card first, then drop
+   * extras one at a time (step, muscles, actions beside the demo, meta,
+   * label) and finally shrink the demo.
+   */
+  var UN_STATES = ['roomy', '', 'q1', 'compact q1', 'compact q1 q2', 'compact q1 q2 q3', 'compact q1 q2 q3 q4'];
   function sizeUpNext() {
     var lower = document.querySelector('.w-lower'), card = $('upNext');
     var H = lower.offsetHeight, W = Math.min(lower.offsetWidth, 520);
     if (!H || !W) return;
     var S = typeof ring !== 'undefined' && ring && ring.geo ? ring.geo.S : 300;
-    var compact = H < 230;
-    var fig = compact ? H - 20 : H - 28 - 50 - 12; // padding, action row, gap
-    fig = Math.max(64, Math.min(fig, W * 0.47, S * 0.62, 230));
-    card.classList.toggle('compact', compact);
-    card.classList.toggle('roomy', !compact && fig >= 140);
-    card.style.setProperty('--un-fig', Math.round(fig) + 'px');
+    var wasHidden = card.hidden;
+    if (wasHidden) { card.style.visibility = 'hidden'; card.hidden = false; }
+    var cap = Math.min(W * 0.47, S * 0.62, 230);
+    var fig, i, cls;
+    function apply(state, f) {
+      card.className = 'upnext' + (state ? ' ' + state : '');
+      card.style.setProperty('--un-fig', Math.round(f) + 'px');
+      return card.offsetHeight <= H + 0.5;
+    }
+    var fits = false;
+    for (i = H < 230 ? 3 : 0; i < UN_STATES.length && !fits; i++) {
+      cls = UN_STATES[i];
+      var compact = cls.indexOf('compact') >= 0;
+      fig = Math.max(56, Math.min(cap, compact ? H - 20 : H - 28 - 50 - 12));
+      if (cls === 'roomy' && fig < 140) continue;
+      fits = apply(cls, fig);
+    }
+    while (!fits && fig > 56) { fig = Math.max(56, fig * 0.86); fits = apply(cls, fig); }
+    if (wasHidden) { card.hidden = true; card.style.visibility = ''; }
   }
   Ring.prototype.draw = function (dt) {
     if (!this.resize()) return;
@@ -598,187 +603,9 @@
     for (var i = 0; i < 3; i++) { this.a[i] += (this.ta[i] - this.a[i]) * k; this.b[i] += (this.tb[i] - this.b[i]) * k; }
     this.beat *= Math.exp(-dt * 4);
     this.hot *= Math.exp(-dt * 2.5);
-    if (!this.paused && !reduced) this.rot += dt * (0.15 + 0.5 * this.energy);
-
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    if (this.geoStudio !== isStudio()) this.layout();
-    if (isStudio()) { this.drawStudio(ctx, w, h, dt); return; }
-    var g = this.geo;
-    var S = g.S;
-    var cx = g.cx, cy = g.cy;
-    var R = g.R;
-    var th = g.th;
-    var A0 = g.A0, SW = g.SW, A1 = A0 + SW;
-    var prog = Math.max(0, Math.min(1, this.progress));
-    var a1 = A0 + SW * prog;
-    var ca = this.a, cb = this.b;
-
-    ctx.lineCap = 'round';
-
-    // ticks: one per second of the interval, lit while that second remains
-    var n = this.ticks;
-    var t0 = R + th * 1.25, len = S * 0.022;
-    for (i = 0; i < n; i++) {
-      var ang = A0 + (i + 0.5) / n * SW;
-      var lit = (i + 0.5) / n <= prog;
-      var major = i % 5 === 0;
-      var L = major ? len * 1.6 : len;
-      ctx.strokeStyle = lit ? rgba(ca, 0.9) : 'rgba(255,255,255,0.10)';
-      ctx.lineWidth = major ? 2.4 : 1.6;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(ang) * t0, cy + Math.sin(ang) * t0);
-      ctx.lineTo(cx + Math.cos(ang) * (t0 + L), cy + Math.sin(ang) * (t0 + L));
-      ctx.stroke();
-    }
-
-    // groove + track, so the remaining arc reads on bright frames
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = th * 1.6;
-    ctx.beginPath(); ctx.arc(cx, cy, R, A0, A1); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = th;
-    ctx.beginPath(); ctx.arc(cx, cy, R, A0, A1); ctx.stroke();
-
-    // breathing pacer for the long set break: 4 s in, 6 s out
-    if (this.breathe != null) {
-      var bt = this.breathe % 10;
-      var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
-      // centred on the countdown, which sits above the controls
-      var by = g.fy, bmax = Math.min(R - th * 1.6, g.fh * 0.62);
-      var br = bmax * (0.52 + 0.48 * bv);
-      var bgrad = ctx.createRadialGradient(cx, by, br * 0.2, cx, by, br);
-      bgrad.addColorStop(0, rgba(ca, 0.02));
-      bgrad.addColorStop(0.75, rgba(ca, 0.10 + 0.08 * bv));
-      bgrad.addColorStop(1, rgba(ca, 0));
-      ctx.fillStyle = bgrad;
-      ctx.beginPath(); ctx.arc(cx, by, br, 0, TAU); ctx.fill();
-      ctx.strokeStyle = rgba(ca, 0.25 + 0.35 * bv);
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(cx, by, br, 0, TAU); ctx.stroke();
-    }
-
-    ctx.globalCompositeOperation = 'lighter';
-
-    // HUD decorations (kept out of the opening where the controls sit)
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, S, A0, A1); ctx.closePath(); ctx.clip();
-    ctx.translate(cx, cy);
-    ctx.rotate(this.rot);
-    ctx.strokeStyle = rgba(cb, 0.35);
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([2, 9]);
-    ctx.beginPath(); ctx.arc(0, 0, R * 0.86, 0, TAU); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.rotate(-this.rot * 1.7);
-    ctx.strokeStyle = rgba(ca, 0.4);
-    ctx.lineWidth = 2;
-    var rr = R + th * 1.25 + len * 2.4;
-    for (i = 0; i < 3; i++) {
-      ctx.beginPath(); ctx.arc(0, 0, rr, i * TAU / 3, i * TAU / 3 + 0.55); ctx.stroke();
-    }
-    ctx.restore();
-
-    // whole-session progress: thin inner arc
-    var tp = Math.max(0, Math.min(1, this.total || 0));
-    var ri = R - th * 1.6;
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A1); ctx.stroke();
-    if (tp > 0.001) {
-      ctx.strokeStyle = rgba(cb, 0.85);
-      ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + SW * tp); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath(); ctx.arc(cx + Math.cos(A0 + SW * tp) * ri, cy + Math.sin(A0 + SW * tp) * ri, 2.6, 0, TAU); ctx.fill();
-    }
-
-    // progress arc with layered glow
-    if (prog > 0.0005) {
-      var grad;
-      if (ctx.createConicGradient) {
-        grad = ctx.createConicGradient(A0, cx, cy);
-        var pf = prog * SW / TAU;
-        grad.addColorStop(0, rgba(cb, 1));
-        grad.addColorStop(Math.max(0.001, pf), rgba(ca, 1));
-        grad.addColorStop(Math.min(1, pf + 0.001), rgba(ca, 1));
-        grad.addColorStop(1, rgba(ca, 1));
-      } else {
-        grad = rgba(ca, 1);
-      }
-      var heat = 1 + this.hot * 0.8 + this.beat * 0.4;
-      var passes = [[th * 3.6, 0.07], [th * 2.2, 0.16], [th * 1.0, 0.95]];
-      for (i = 0; i < passes.length; i++) {
-        ctx.globalAlpha = Math.min(1, passes[i][1] * heat);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = passes[i][0];
-        ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
-      }
-      ctx.globalAlpha = 0.55 + 0.45 * this.hot;
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = th * 0.26;
-      ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
-      ctx.globalAlpha = 1;
-
-      // comet head
-      var hx = cx + Math.cos(a1) * R, hy = cy + Math.sin(a1) * R;
-      var hr = th * (2.6 + this.beat * 2 + this.hot * 2);
-      var rg = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
-      rg.addColorStop(0, 'rgba(255,255,255,1)');
-      rg.addColorStop(0.25, rgba(ca, 0.9));
-      rg.addColorStop(1, rgba(ca, 0));
-      ctx.fillStyle = rg;
-      ctx.beginPath(); ctx.arc(hx, hy, hr, 0, TAU); ctx.fill();
-
-      // sparks shed from the head
-      if (!this.paused && !reduced) {
-        var rate = 40 * (0.25 + this.energy) * dt;
-        while (rate > 0) {
-          if (Math.random() < rate) {
-            var tang = a1 + Math.PI / 2; // clockwise tangent: the head moves the other way
-            var sp = S * (0.05 + Math.random() * 0.25) * (0.5 + this.energy);
-            var spread = (Math.random() - 0.5) * 1.6;
-            this.sparks.push({
-              x: hx, y: hy,
-              vx: Math.cos(tang + spread) * sp + Math.cos(a1) * sp * 0.4 * (Math.random() - 0.3),
-              vy: Math.sin(tang + spread) * sp + Math.sin(a1) * sp * 0.4 * (Math.random() - 0.3),
-              life: 1, decay: 1.4 + Math.random() * 1.6, size: 0.8 + Math.random() * 1.8,
-              c: Math.random() < 0.5 ? ca : cb
-            });
-          }
-          rate -= 1;
-        }
-      }
-    }
-
-    // sparks
-    for (i = this.sparks.length - 1; i >= 0; i--) {
-      var p = this.sparks[i];
-      p.life -= dt * p.decay;
-      if (p.life <= 0) { this.sparks.splice(i, 1); continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      p.vx *= 0.96; p.vy *= 0.96;
-      ctx.strokeStyle = rgba(p.c, p.life);
-      ctx.lineWidth = p.size;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.04, p.y - p.vy * 0.04); ctx.stroke();
-    }
-    if (this.sparks.length > 400) this.sparks.splice(0, this.sparks.length - 400);
-
-    // shockwaves
-    for (i = this.shocks.length - 1; i >= 0; i--) {
-      var s = this.shocks[i];
-      s.t += dt * 1.3;
-      if (s.t >= 1) { this.shocks.splice(i, 1); continue; }
-      var e = 1 - Math.pow(1 - s.t, 3);
-      ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.8 * s.s);
-      ctx.lineWidth = th * (1 - s.t) * 1.4;
-      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.08, A0, A1); ctx.stroke();
-      ctx.strokeStyle = rgba([255, 255, 255], (1 - s.t) * 0.5 * s.s);
-      ctx.lineWidth = Math.max(1, th * 0.25 * (1 - s.t));
-      ctx.beginPath(); ctx.arc(cx, cy, R - e * S * 0.1, A0, A1); ctx.stroke();
-    }
-
-    ctx.globalCompositeOperation = 'source-over';
+    this.drawStudio(ctx, w, h, dt);
   };
 
   /** Studio ring: one thick gradient arc with a shaded end cap, nothing else. */
@@ -900,16 +727,12 @@
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(cx, cy, R + th * 0.6 + e * S * 0.05, A0, A1); ctx.stroke();
     }
-    this.sparks.length = 0;
   };
 
   // ================================================================ FX
+  // Celebration confetti on the finish screen.
   var fx = {
-    c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], waves: [], w: 0, h: 0, dpr: 1, dirty: false,
-    wave: function (x, y, colors, strength) {
-      if (reduced || isStudio()) return;
-      this.waves.push({ x: x, y: y, c: hexRgb(colors[0]), c2: hexRgb(colors[1] || colors[0]), s: strength || 1, t: 0 });
-    },
+    c: $('fx'), ctx: $('fx').getContext('2d'), parts: [], w: 0, h: 0, dpr: 1, dirty: false,
     resize: function () {
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
       var w = window.innerWidth, h = window.innerHeight;
@@ -918,33 +741,21 @@
         this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
       }
     },
-    burst: function (x, y, colors, count, power) {
-      if (reduced || isStudio()) return;
-      var m = Math.min(window.innerWidth, window.innerHeight);
-      for (var i = 0; i < count; i++) {
-        var a = Math.random() * TAU;
-        var sp = m * (0.3 + Math.random() * 0.9) * (power || 1);
-        this.parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 0, drag: 0.9,
-          life: 1, decay: 0.9 + Math.random() * 0.9, size: 1 + Math.random() * 2.2, c: hexRgb(colors[i % colors.length]), streak: true });
-      }
-    },
     confetti: function (colors) {
       if (reduced) return;
       var W = window.innerWidth, Hh = window.innerHeight;
-      var n = isStudio() ? 40 : 180;
-      for (var i = 0; i < n; i++) {
+      for (var i = 0; i < 40; i++) {
         var fromLeft = i % 2 === 0;
         var a = fromLeft ? -Math.PI / 3 - Math.random() * 0.5 : -2 * Math.PI / 3 + Math.random() * 0.5;
         var sp = Hh * (0.9 + Math.random() * 0.9);
         this.parts.push({ x: fromLeft ? -10 : W + 10, y: Hh * 0.85, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
           g: Hh * 0.9, drag: 0.985, life: 1, decay: 0.28 + Math.random() * 0.25,
-          size: 4 + Math.random() * 6, c: hexRgb(colors[(i >> 1) % colors.length]), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 12, streak: false });
+          size: 4 + Math.random() * 6, c: hexRgb(colors[(i >> 1) % colors.length]), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 12 });
       }
     },
     draw: function (dt) {
       if (this.parts.length > 400) this.parts.splice(0, this.parts.length - 400);
-      if (this.waves.length > 6) this.waves.splice(0, this.waves.length - 6);
-      if (!this.parts.length && !this.waves.length) {
+      if (!this.parts.length) {
         if (this.dirty) { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.c.width, this.c.height); this.dirty = false; }
         return;
       }
@@ -953,23 +764,6 @@
       var ctx = this.ctx;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.clearRect(0, 0, this.w, this.h);
-      ctx.globalCompositeOperation = isStudio() ? 'source-over' : 'lighter';
-      var reach = Math.hypot(this.w, this.h) * 0.8;
-      for (var wi = this.waves.length - 1; wi >= 0; wi--) {
-        var wv = this.waves[wi];
-        wv.t += dt * 1.15;
-        if (wv.t >= 1) { this.waves.splice(wi, 1); continue; }
-        var we = 1 - Math.pow(1 - wv.t, 3), fade = 1 - wv.t;
-        ctx.strokeStyle = rgba(wv.c, fade * 0.45 * wv.s);
-        ctx.lineWidth = 46 * fade * wv.s;
-        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach, 0, TAU); ctx.stroke();
-        ctx.strokeStyle = rgba(wv.c2, fade * 0.6 * wv.s);
-        ctx.lineWidth = 10 * fade;
-        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach * 0.9, 0, TAU); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,' + (fade * 0.7 * wv.s).toFixed(3) + ')';
-        ctx.lineWidth = 2.5 * fade + 0.5;
-        ctx.beginPath(); ctx.arc(wv.x, wv.y, 20 + we * reach * 0.97, 0, TAU); ctx.stroke();
-      }
       for (var i = this.parts.length - 1; i >= 0; i--) {
         var p = this.parts[i];
         p.life -= dt * p.decay;
@@ -977,21 +771,13 @@
         var drag = Math.pow(p.drag, dt * 60);
         p.vx *= drag; p.vy = p.vy * drag + p.g * dt;
         p.x += p.vx * dt; p.y += p.vy * dt;
-        if (p.streak) {
-          ctx.strokeStyle = rgba(p.c, p.life);
-          ctx.lineWidth = p.size;
-          ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.05, p.y - p.vy * 0.05); ctx.stroke();
-        } else {
-          p.rot += p.vr * dt;
-          ctx.save();
-          ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-          ctx.fillStyle = rgba(p.c, Math.min(1, p.life * 1.5));
-          ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.4 + Math.abs(Math.sin(p.rot * 2))));
-          ctx.restore();
-        }
+        p.rot += p.vr * dt;
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = rgba(p.c, Math.min(1, p.life * 1.5));
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.4 + Math.abs(Math.sin(p.rot * 2))));
+        ctx.restore();
       }
-      ctx.globalCompositeOperation = 'source-over';
     }
   };
 
@@ -1185,7 +971,7 @@
   function updateProgress(seg) {
     var tl = run.tl, idx = seg.index, sets = tl.level.sets, nEx = tl.exercises.length;
     var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
-    var nextWork = restMode ? H.nextWorkIndex(tl, idx) : -1;
+    var nextWork = restMode || seg.type === 'jacks' ? H.nextWorkIndex(tl, idx) : -1;
     Object.keys(prog.bySeg).forEach(function (k) {
       var c = prog.bySeg[k], i = +k;
       c.classList.toggle('is-done', i < idx);
@@ -1219,7 +1005,7 @@
     } else {
       var more = sets - seg.set;
       setTxt = 'Set ' + seg.set + ' of ' + sets;
-      leftTxt = more > 0 ? sets_(more) + ' left after this' : 'Final set';
+      leftTxt = more > 0 ? (window.innerWidth < 360 ? more + ' more ' + (more === 1 ? 'set' : 'sets') : sets_(more) + ' left after this') : 'Final set';
     }
     $('wpSet').textContent = setTxt;
     $('wpLeft').textContent = leftTxt;
@@ -1240,6 +1026,8 @@
     $('unName').textContent = ex.name;
     $('unMeta').innerHTML = '<b>' + esc(H.GROUPS[ex.group].label) + '</b><span class="un-mus"> · ' + esc(ex.muscles) + '</span>';
     $('unStartText').textContent = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
+    // a 30 s rest is part of the workout: starting early is possible, not encouraged
+    $('unStart').classList.toggle('quiet', seg.type === 'rest');
     $('unStart').setAttribute('aria-label', (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + ex.name);
     var c = PHASE[seg.type].colors; // the card wears the phase colour, never a work colour
     if (nextFig) { nextFig.setExercise(id); nextFig.setColors(c[0], c[1]); nextFig.pulse(); }
@@ -1341,8 +1129,6 @@
     syncFigs();
     ring.breathe = seg.type === 'setrest' || seg.type === 'rest' ? 0 : null;
     ring.dashed = seg.type === 'jacks';
-    ring.energy = ph.energy;
-    ring.ticks = seg.counts ? seg.counts * seg.beats : Math.min(seg.duration, 60);
     ring.shock(1);
     ring.hot = 1;
 
@@ -1364,9 +1150,9 @@
     var flashWord = ph.flash;
     $('beats').hidden = !(seg.type === 'warmup' && seg.counts);
     if (seg.type === 'warmup') {
-      name = warmName(seg); label = seg.counts ? 'Count' : 'Time left';
-      sub = name;
-      $('wEx').textContent = 'Move ' + seg.step + ' of ' + seg.steps;
+      name = seg.move === 'jog' ? warmName(seg) : exName(seg.move); label = seg.counts ? 'Count' : 'Time left';
+      sub = warmName(seg);
+      $('wEx').textContent = 'Move ' + seg.step + ' of ' + seg.steps + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') + ' side' : '');
       if (prevSeg && prevSeg.type === 'warmup') {
         // one wipe per new move; a side swap says SWITCH; a pace change needs no wipe
         flashWord = prevSeg.move !== seg.move ? WARM_WORD[seg.move] : prevSeg.side !== seg.side ? 'SWITCH' : '';
@@ -1381,12 +1167,12 @@
     } else if (seg.type === 'jacks') {
       name = H.JACKS.name; label = 'Time left';
       sub = seg.setBreak ? 'Then a 5:00 break' : nx ? 'Next · ' + nx.name : 'Last push';
-      $('wEx').textContent = seg.setBreak ? 'Keep moving · then a break' : nx ? 'Keep moving · then ' + nx.name : 'Last push · finish strong';
+      $('wEx').textContent = seg.setBreak ? 'Keep moving · then a break' : nx ? 'Keep moving' : 'Last push';
     } else if (seg.type === 'rest') {
       // the next move's name inside the ring only when the ring is big enough to hold it
+      $('wEx').textContent = seg.duration + ' s · breathe';
       name = 'Rest'; label = nx && ring.geo && ring.geo.S >= 300 && nx.name.length <= 14 ? nx.name + ' in' : 'Next in';
       sub = nx ? 'Next · ' + nx.name : 'Breathe';
-      $('wEx').textContent = '';
     } else { // setrest
       name = 'Set ' + seg.set + ' complete'; label = 'Set ' + (seg.set + 1) + ' in';
       sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
@@ -1394,9 +1180,14 @@
       label = 'Set ' + (seg.set + 1) + ' in';
     }
     $('wName').textContent = name;
+    fitName();
     $('dLabel').textContent = label;
-    $('dialK').textContent = label;
-    $('dialSub').textContent = '';
+    if (restMode) {
+      $('dialK').textContent = label;
+      $('dialSub').textContent = '';
+      // no label inside small rings (or short landscape ones): the countdown gets the room
+      $('dial').classList.toggle('bare', !!(ring.geo && (ring.geo.S < 300 || (window.innerWidth > window.innerHeight && ring.geo.fh < 200))));
+    }
     var mins = seg.duration >= 60 ? (seg.duration / 60) + ' minutes' : seg.duration + ' seconds';
     $('srStatus').textContent = seg.type === 'work' ? 'Work: ' + name + ', ' + mins + '.'
       : seg.type === 'jacks' ? 'Jumping jacks, ' + mins + '.'
@@ -1413,22 +1204,10 @@
 
     updateProgress(seg);
 
-    // flash, particles, sound, voice
+    // phase wipe, sound, voice
     if (flashWord) flash(flashWord, sub, false, c);
-    var stage = $('stage').getBoundingClientRect();
-    var scx = stage.left + stage.width / 2, scy = stage.top + stage.height / 2;
-    fx.burst(scx, scy, c.concat(['#ffffff']), seg.type === 'work' ? 110 : 50, seg.type === 'work' ? 1.1 : 0.6);
-    fx.wave(scx, scy, c, seg.type === 'work' ? 1 : 0.6);
-    if (seg.type === 'setrest' && !isStudio()) fx.confetti([c[0], c[1], '#ffffff', '#c6ff1a']);
-    var wb = document.querySelector('.w-body');
-    wb.classList.remove('punch');
-    if (!reduced) { void wb.offsetWidth; wb.classList.add('punch'); }
     if (run.playing) cueSegment(seg);
     else run.cuePending = idx; // play the cues when the user resumes
-
-    var stageEl = $('workout');
-    stageEl.classList.remove('shake');
-    if (seg.type === 'work' && !reduced) { void stageEl.offsetWidth; stageEl.classList.add('shake'); }
   }
 
   /** Sound, vibration and voice for the start of an interval. */
@@ -1455,6 +1234,21 @@
     else if (seg.type === 'setrest') A.say('Set ' + seg.set + ' complete. Great work. Take five minutes. Grab some water and keep moving.');
   }
 
+  /** Exercise names are never cut off: shrink to fit one line, wrap only below a floor. */
+  function fitName() {
+    var el = $('wName');
+    el.style.fontSize = '';
+    el.classList.remove('wrap');
+    var w = el.clientWidth;
+    if (!w || el.scrollWidth <= w + 1) return;
+    var fs = parseFloat(getComputedStyle(el).fontSize);
+    var floor = window.innerWidth < 360 ? 18 : 20;
+    var nfs = Math.max(floor, Math.floor(fs * w / el.scrollWidth * 0.98));
+    el.style.fontSize = nfs + 'px';
+    if (el.scrollWidth > w + 1) el.classList.add('wrap');
+  }
+  window.addEventListener('resize', function () { if (currentScreen === 'workout') fitName(); });
+
   var flashTimer = 0;
   function flash(text, sub, count, colors) {
     var el = $('flash'), t = $('flashText');
@@ -1476,10 +1270,13 @@
 
   var digitsText = '';
   function setDigits(text, spokenLabel) {
-    if (text !== digitsText) {
-      [$('digits'), $('dialDigits')].forEach(function (dg) {
+    if (text !== digitsText || (run && run.mode === 'rest' && $('dialDigits').textContent !== text)) {
+      // the dial only follows the clock in rest mode, so it never shows work numbers while fading out
+      var targets = run && run.mode === 'rest' ? [$('digits'), $('dialDigits')] : [$('digits')];
+      targets.forEach(function (dg) {
         var slash = text.indexOf('/');
-        if (text.length !== digitsText.length || slash !== digitsText.indexOf('/')) {
+        if (dg.children.length !== text.length || dg.dataset.slash !== String(slash)) {
+          dg.dataset.slash = String(slash);
           dg.textContent = '';
           for (var i = 0; i < text.length; i++) {
             var sp = document.createElement('span');
@@ -1522,11 +1319,6 @@
       }
       A.play(whole === 1 ? 'tickLast' : 'tick');
       bg.beatNow(1);
-      if (!reduced && !isStudio()) flash(String(whole), '', true);
-      var edge = $('edge');
-      edge.classList.remove('on'); void edge.offsetWidth; edge.classList.add('on');
-      var sr = $('stage').getBoundingClientRect();
-      fx.wave(sr.left + sr.width / 2, sr.top + sr.height / 2, PHASE[seg.type].colors, 0.5);
       ring.shock(0.7);
       ring.hot = Math.max(ring.hot, 0.8);
       buzz(35);
@@ -1696,11 +1488,12 @@
     $('toastText').textContent = text;
     var t = $('toast');
     t.hidden = false;
+    $('wProg').classList.add('undoing'); // takes the place of the "sets left" text
     t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');
     clearTimeout(undo.timer);
     undo.timer = setTimeout(hideUndo, 6000);
   }
-  function hideUndo() { clearTimeout(undo.timer); undo.at = null; $('toast').hidden = true; }
+  function hideUndo() { clearTimeout(undo.timer); undo.at = null; $('toast').hidden = true; $('wProg').classList.remove('undoing'); }
   function prev() {
     if (!run) return;
     var t = elapsedNow();
@@ -1758,13 +1551,7 @@
     else { doneFig.setExercise('jacks'); doneFig.setPlaying(true); }
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
-    if (isStudio()) { if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? PHASE.done.colors[1] : '#ffffff']); }
-    else fx.confetti(['#ffd23f', '#ff2bd6', '#22e5ff', '#c6ff1a', '#ffffff']);
-    setTimeout(function () {
-      var r = $('doneFig').getBoundingClientRect();
-      fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6', '#ffffff'], 140, 1.2);
-      fx.wave(r.left + r.width / 2, r.top + r.height / 2, ['#ffd23f', '#ff2bd6'], 1);
-    }, 200);
+    if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? PHASE.done.colors[1] : '#ffffff']);
     setTimeout(function () { $('again').focus({ preventScroll: true }); }, 400);
   }
 
@@ -1895,11 +1682,7 @@
       showHero(state.ids[0]);
       renderSetup();
     });
-    $('start').addEventListener('click', function (e) {
-      var r = e.currentTarget.getBoundingClientRect();
-      fx.burst(r.left + r.width / 2, r.top + r.height / 2, ['#ff2bd6', '#ff8a1f', '#ffffff'], 70, 0.8);
-      startWorkout(state.ids);
-    });
+    $('start').addEventListener('click', function () { startWorkout(state.ids); });
     $('heroGuide').addEventListener('click', function (e) { openGuide(hero.shown || state.ids[0], 'setup', e.currentTarget); });
 
     $('sfxToggle').addEventListener('click', function () { A.set('sfx', !A.get('sfx')); A.unlock(); A.play('click'); syncToggles(); savePrefs(); });
