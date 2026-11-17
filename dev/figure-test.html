@@ -49,6 +49,20 @@
     background: radial-gradient(70% 60% at 50% 38%, #232832 0%, #13161c 55%, #0d0f13 100%); border-color: #1d2128; }
   body.studio-light .cell, body.studio-light .thumb canvas, body.studio-light .aspect canvas, body.studio-light #main, body.studio-light .sheet canvas {
     background: radial-gradient(80% 70% at 50% 35%, #fbfaf7 0%, #f4f3ef 60%, #eceae4 100%); border-color: #e2e0d9; }
+  /* candidate dark stages (?stage=navy|black|charcoal) */
+  html.stage-navy { background: #070b14; }
+  html.stage-black { background: #000; }
+  html.stage-charcoal { background: #100f0e; }
+  body.studio-dark.stage-navy { --bg: #070b14; --line: #141c2c; background: radial-gradient(120% 900px at 50% 0%, #0f1626 0%, #070b14 70%) no-repeat #070b14; }
+  body.studio-dark.stage-black { --bg: #000; --line: #161616; background: radial-gradient(120% 900px at 50% 0%, #111 0%, #000 70%) no-repeat #000; }
+  body.studio-dark.stage-charcoal { --bg: #100f0e; --line: #262320; --dim: #8a837b; background: radial-gradient(120% 900px at 50% 0%, #1d1a17 0%, #100f0e 70%) no-repeat #100f0e; }
+  body.studio-dark.stage-navy :is(.cell, .thumb canvas, .aspect canvas, #main, .sheet canvas) {
+    background: radial-gradient(70% 60% at 50% 38%, #0f1626 0%, #0a101d 55%, #070b14 100%); border-color: #121a29; }
+  body.studio-dark.stage-black :is(.cell, .thumb canvas, .aspect canvas, #main, .sheet canvas) {
+    background: radial-gradient(60% 55% at 50% 38%, #111 0%, #070707 55%, #000 100%); border-color: #141414; }
+  body.studio-dark.stage-charcoal :is(.cell, .thumb canvas, .aspect canvas, #main, .sheet canvas) {
+    background: radial-gradient(70% 60% at 50% 38%, #1d1a17 0%, #161412 55%, #100f0e 100%); border-color: #221f1c; }
+  .sheet .title { grid-column: 1 / -1; color: var(--fg); font-size: 13px; letter-spacing: .08em; padding: 2px 0 4px; }
 </style>
 </head>
 <body>
@@ -65,13 +79,17 @@
   };
   function palFor(id) { return id === 'rest' ? PAL.rest : id === 'jacks' ? PAL.jacks : PAL.work; }
   var qs = new URLSearchParams(location.search);
-  // ?style=neon|studio&scheme=dark|light
+  // ?style=neon|studio&scheme=dark|light[&material=porcelain|titanium|ink|stone][&stage=navy|black|charcoal]
   var style = qs.get('style') === 'studio' ? 'studio' : 'neon';
   var scheme = qs.get('scheme') === 'light' ? 'light' : 'dark';
+  var material = qs.get('material') || null;
+  var STAGES = ['graphite', 'navy', 'black', 'charcoal'];
+  var stage = STAGES.indexOf(qs.get('stage')) > 0 ? qs.get('stage') : 'graphite';
   function applyTheme() {
     [document.documentElement, document.body].forEach(function (n) {
       n.classList.toggle('studio-dark', style === 'studio' && scheme === 'dark');
       n.classList.toggle('studio-light', style === 'studio' && scheme === 'light');
+      STAGES.forEach(function (k) { n.classList.toggle('stage-' + k, k === stage && k !== 'graphite' && style === 'studio' && scheme === 'dark'); });
     });
   }
   applyTheme();
@@ -91,12 +109,12 @@
   function make(canvas, ex, q, pal) {
     pal = pal || palFor(ex);
     var f = F.create(canvas, { exercise: ex, primary: pal[0], secondary: pal[1], quality: q, energy: ex === 'rest' ? 0.4 : 1,
-      style: style, scheme: scheme });
+      style: style, scheme: scheme, material: material });
     all.push(f);
     return f;
   }
 
-  /* ---------- contact sheet: ?sheet=1[&ph=0,0.25,0.5,0.75][&ex=a,b][&size=210][&pal=work] ---------- */
+  /* ---------- contact sheet: ?sheet=1[&ph=0,0.25,0.5,0.75][&ex=a,b][&size=210][&pal=work][&lowcol=56][&title=1] ---------- */
   if (qs.get('sheet')) {
     var phases = (qs.get('ph') || '0,0.25,0.5,0.75').split(',').map(Number);
     var exs = qs.get('ex') ? qs.get('ex').split(',') : EX;
@@ -106,10 +124,16 @@
       var cm = qs.get('cam').split(',').map(Number);
       exs.forEach(function (id) { var e = F._dev.EX[id]; e.cam = { yaw: cm[0], pitch: cm[1] }; delete e._cam; delete e._box; });
     }
+    var lowcol = +(qs.get('lowcol') || 0); // extra column: a low-quality thumbnail of each exercise
     var sheet = el('div', 'sheet', app);
-    sheet.style.gridTemplateColumns = '90px repeat(' + phases.length + ', ' + size + 'px)';
+    sheet.style.gridTemplateColumns = '90px repeat(' + phases.length + ', ' + size + 'px)' + (lowcol ? ' ' + lowcol + 'px' : '');
+    if (qs.get('title')) {
+      el('div', 'title', sheet, style === 'studio' ? (F.create(document.createElement('canvas'), { style: style, scheme: scheme, material: material }).getMaterial() +
+        (scheme === 'dark' ? ' on ' + stage : '')) : 'neon');
+    }
     el('div', '', sheet);
     phases.forEach(function (p) { el('div', 'colh', sheet, Math.round(p * 100) + '%'); });
+    if (lowcol) el('div', 'colh', sheet, lowcol + 'px');
     exs.forEach(function (id) {
       el('div', 'lbl', sheet, id);
       phases.forEach(function (p) {
@@ -119,6 +143,13 @@
         var f = make(c, id, q, pal);
         f._debugSetTime(p * F._dev.EX[id].period, true);
       });
+      if (lowcol) {
+        var lc = el('canvas', '', sheet);
+        lc.style.width = lc.style.height = lowcol + 'px';
+        lc.style.alignSelf = 'center';
+        var lp = phases[phases.length - 1];
+        make(lc, id, 'low', qs.get('pal') ? PAL[qs.get('pal')] : palFor(id))._debugSetTime(lp * F._dev.EX[id].period, true);
+      }
     });
     window.__ready = true;
     return;
@@ -164,6 +195,31 @@
       history.replaceState(null, '', u);
     };
     styBtns.push(b);
+  });
+
+  // studio material presets (dark stage) and candidate dark backgrounds
+  var matRow = el('div', 'row', ctr), matBtns = [];
+  F.MATERIALS.dark.forEach(function (name) {
+    var b = el('button', '', matRow, name);
+    b.classList.toggle('on', (material || F.MATERIALS.dark[0]) === name);
+    b.onclick = function () {
+      material = name;
+      all.forEach(function (f) { f.setMaterial(name); });
+      matBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('material', name); history.replaceState(null, '', u);
+    };
+    matBtns.push(b);
+  });
+  var stgRow = el('div', 'row', ctr), stgBtns = [];
+  STAGES.forEach(function (k) {
+    var b = el('button', '', stgRow, 'stage: ' + k);
+    b.classList.toggle('on', k === stage);
+    b.onclick = function () {
+      stage = k; applyTheme();
+      stgBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('stage', k); history.replaceState(null, '', u);
+    };
+    stgBtns.push(b);
   });
 
   var actRow = el('div', 'row', ctr);

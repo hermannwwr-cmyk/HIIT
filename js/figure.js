@@ -6,14 +6,18 @@
  *     EXERCISES: ['pushup','crunch','legraise','flutter','squat','lunge','twist','jacks','rest'],
  *     STYLES: ['neon','studio'],
  *     STUDIO: { dark: {body, shade, lit}, light: {...} },   // default studio materials (read-only info)
+ *     MATERIALS: { dark: ['porcelain','titanium','ink','stone'], light: ['graphite'] },
  *     create(canvas, opts) -> instance
  *   }
  *   opts: { exercise:'pushup', primary:'#ff2bd6', secondary:'#ffb000', quality:'high'|'low', energy:0..1,
  *           style:'neon'|'studio' (default neon; unknown -> neon), scheme:'dark'|'light' (studio only),
+ *           material: studio preset name ('porcelain' (dark default) | 'titanium' | 'ink' | 'stone' for
+ *             dark stages, 'graphite' (light default)); used while the scheme matches its stage,
  *           body, shade (studio material overrides: lit body colour, core-shadow colour) }
  *   instance.setExercise(id) / setColors(primary, secondary) / setPlaying(bool)
  *   instance.setEnergy(x) / pulse() / setSuspended(bool) / destroy()
  *   instance.setStyle(style, scheme) - switch look live (theme toggle); repaints immediately
+ *   instance.setMaterial(name) / getMaterial() - studio material preset; repaints immediately
  *
  * The figure is a 3D skeleton (forward kinematics + 2-bone IK so planted
  * hands/feet never slide), projected with a per-exercise camera, auto-fitted
@@ -607,6 +611,7 @@
     this.gnd = new Float32Array(NJ * 3);
     this.meta = { floorY: 0, sc: 1, farL: 0, farR: 0, flat: 0.2 };
     this.matOpts = { body: opts.body, shade: opts.shade };
+    this.material = typeof opts.material === 'string' ? opts.material : null;
     this.hasPose = false;
     this.from = null; this.fromMeta = null; this.morphT = 1;
     this.hist = []; this.histPool = [];
@@ -1281,28 +1286,77 @@
   var SUL = [-0.8, 0.15, 0.85];
   var BLACK = [0, 0, 0];
 
-  var MATS = {
-    dark: {
+  // Material presets. Each declares the stage it is made for ('dark' | 'light'); a
+  // requested material applies when the scheme matches its stage, otherwise the scheme's
+  // default is used (so a theme toggle keeps working). Ramp: deep -> shade -> body -> lit
+  // at I = 0, rampAt[0], rampAt[1], 1. Optional extras (absent = off): spec2 (broad
+  // sheen lobe), crisp (extra gradient stops that track the highlight so a tight one is
+  // not lost between samples), env ([floor, softbox] reflection colours, envK = mix),
+  // rimPow (rim width, 8 = narrow), rim2 (untinted kicker on the key side), spotR (head
+  // highlight size), lowRim (rim strength in thumbnails).
+  var MATERIALS = {
+    // dark stage: bright satin ceramic
+    porcelain: {
+      stage: 'dark', rampAt: [0.3, 0.7], litTo: WHITE,
       body: [233, 235, 239], shade: [140, 147, 163], deepTo: [34, 38, 48], deepK: 0.45, lit: [250, 251, 252],
       spec: [255, 255, 255], specK: 0.45, shin: 16, rimK: 0.8, rimW: 0.15,
       far: [13, 15, 19], farK: 0.32, ao: [18, 21, 30], aoK: 0.42,
       shadow: [0, 0, 0], shadowK: 1.25, floor: [255, 255, 255], floorK: 0.03, pool: 0.07, sweep: 0.5
     },
-    light: {
+    // dark stage: brushed mid-grey metal, crisp cool highlight, strong phase rim
+    titanium: {
+      stage: 'dark', rampAt: [0.32, 0.7], litTo: [226, 232, 242],
+      body: [124, 131, 146], shade: [43, 47, 56], deepTo: [8, 9, 12], deepK: 0.55, lit: [211, 216, 226],
+      spec: [242, 247, 255], specK: 1, shin: 48, crisp: true, spec2: [186, 196, 216], spec2K: 0.18, shin2: 6, spotR: 0.36,
+      env: [[22, 25, 32], [224, 230, 242]], envK: 0.32, envSide: 0.75,
+      rimK: 1.1, rimW: 0.25, rimPow: 5, rim2: [196, 208, 230], rim2K: 0.18, rim2Pow: 7, lowRim: 0.7,
+      far: [6, 8, 12], farK: 0.3, ao: [4, 5, 8], aoK: 0.45,
+      shadow: [0, 0, 0], shadowK: 1.35, floor: [214, 224, 244], floorK: 0.03, pool: 0.085, sweep: 0.55
+    },
+    // dark stage: the graphite mannequin re-lit for black, like black ceramic: crisp cool
+    // softbox reflections carry the form, a phase-tinted rim and a faint kicker outline it
+    ink: {
+      stage: 'dark', rampAt: [0.3, 0.62], litTo: [96, 104, 120],
+      body: [32, 34, 40], shade: [15, 16, 20], deepTo: [3, 4, 6], deepK: 0.5, lit: [96, 104, 120],
+      spec: [228, 236, 252], specK: 0.95, shin: 34, crisp: true, spec2: [84, 92, 110], spec2K: 0.25, shin2: 4, spotR: 0.4,
+      env: [[4, 5, 8], [128, 140, 166]], envK: 0.2, envSide: 0.6,
+      rimK: 1.3, rimW: 0.3, rimPow: 5, rim2: [140, 154, 182], rim2K: 0.4, rim2Pow: 6, lowRim: 1.1, lowLift: 0.28, lowLiftTo: [150, 160, 182],
+      far: [12, 13, 17], farK: 0.14, ao: [0, 0, 0], aoK: 0.35,
+      shadow: [0, 0, 0], shadowK: 1.4, floor: [196, 210, 240], floorK: 0.04, pool: 0.13, sweep: 0.6
+    },
+    // dark (warm charcoal) stage: matte warm stone / clay
+    stone: {
+      stage: 'dark', rampAt: [0.34, 0.74], litTo: [244, 238, 228],
+      body: [185, 176, 164], shade: [91, 84, 76], deepTo: [26, 19, 13], deepK: 0.6, lit: [239, 232, 222],
+      spec: [255, 246, 232], specK: 0.14, shin: 8, spec2: [250, 240, 226], spec2K: 0.1, shin2: 3, rimK: 0.75, rimW: 0.2, rimPow: 7,
+      far: [16, 14, 12], farK: 0.3, ao: [26, 18, 12], aoK: 0.45,
+      shadow: [8, 5, 2], shadowK: 1.25, floor: [255, 236, 212], floorK: 0.03, pool: 0.08, sweep: 0.45
+    },
+    // light stage: satin graphite on warm paper
+    graphite: {
+      stage: 'light', rampAt: [0.3, 0.62], litTo: [107, 114, 128],
       body: [42, 45, 52], shade: [24, 26, 31], deepTo: [6, 7, 9], deepK: 0.5, lit: [107, 114, 128],
       spec: [170, 176, 188], specK: 0.55, shin: 14, rimK: 0.72, rimW: 0.08,
       far: [8, 9, 11], farK: 0.22, ao: [0, 0, 0], aoK: 0.5,
       shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.03, pool: 0, sweep: 0.4
     }
   };
-  function buildMat(scheme, o) {
-    var b = MATS[scheme], m = {}, k;
+  var DEFAULT_MAT = { dark: 'porcelain', light: 'graphite' };
+  // The material actually used for a requested name on a scheme.
+  function materialFor(name, scheme) {
+    var m = typeof name === 'string' && MATERIALS.hasOwnProperty(name) ? MATERIALS[name] : null;
+    return m && m.stage === scheme ? name : DEFAULT_MAT[scheme];
+  }
+  function buildMat(name, o) {
+    var b = MATERIALS[name], m = {}, k;
     for (k in b) if (b.hasOwnProperty(k)) m[k] = b[k];
     o = o || {};
     var body = parseColor(o.body, b.body), shade = parseColor(o.shade, b.shade);
-    var lit = o.body ? mix(body, scheme === 'dark' ? WHITE : b.lit, 0.4) : b.lit;
-    m.ramp = scheme === 'dark' ? [[0, mix(shade, b.deepTo, b.deepK)], [0.3, shade], [0.7, body], [1, lit]]
-      : [[0, mix(shade, b.deepTo, b.deepK)], [0.3, shade], [0.62, body], [1, lit]];
+    var lit = o.body ? mix(body, b.litTo, 0.4) : b.lit;
+    m.ramp = [[0, mix(shade, b.deepTo, b.deepK)], [b.rampAt[0], shade], [b.rampAt[1], body], [1, lit]];
+    // thumbnails of very dark materials: lift the tones so the body still reads at ~56 px
+    m.rampLow = b.lowLift ? m.ramp.map(function (st) { return [st[0], mix(st[1], b.lowLiftTo, b.lowLift)]; }) : m.ramp;
+    m.name = name;
     return m;
   }
 
@@ -1318,7 +1372,16 @@
     else if (I <= R[1][0]) c = mix(R[0][1], R[1][1], I / R[1][0]);
     else if (I <= R[2][0]) c = mix(R[1][1], R[2][1], (I - R[1][0]) / (R[2][0] - R[1][0]));
     else c = mix(R[2][1], R[3][1], (I - R[2][0]) / (R[3][0] - R[2][0]));
+    if (M.envK > 0) { // reflected environment (view = +z): dark floor, softbox above, strip on the key side
+      var ry = 2 * nz * ny, rx = 2 * nz * nx, et = clamp((ry + 0.15) / 0.7, 0, 1), es = clamp((-rx - 0.25) / 0.55, 0, 1);
+      et = Math.max(et * et * (3 - 2 * et), M.envSide * es * es * (3 - 2 * es));
+      c = mix(c, mix(M.env[0], M.env[1], et), M.envK * M.dim);
+    }
     var nh = nx * HALFV[0] + ny * HALFV[1] + nz * HALFV[2];
+    if (M.spec2K > 0 && nh > 0) { // broad sheen (satin metal / softbox reflection)
+      var s2 = Math.pow(nh, M.shin2) * M.spec2K * M.dim;
+      if (s2 > 0.003) c = mix(c, M.spec2, clamp(s2, 0, 1));
+    }
     if (nh > 0.5) {
       var sp = Math.pow(nh, M.shin) * M.specK * M.dim;
       if (sp > 0.003) c = mix(c, M.spec, clamp(sp, 0, 1));
@@ -1326,8 +1389,15 @@
     if (ed > 0) {
       var pl = Math.sqrt(nx * nx + ny * ny), rr = pl > 1e-4 ? (nx * RIMX + ny * RIMY) / pl : 0;
       if (rr > 0) {
-        var e2 = ed * ed, e4 = e2 * e2, rim = rr * e4 * e4 * M.rimK;
+        var e2 = ed * ed, e4 = e2 * e2, rim = rr * (M.rimPow === 8 ? e4 * e4 : Math.pow(ed, M.rimPow)) * M.rimK;
         if (rim > 0.003) c = mix(c, M.rimC, clamp(rim, 0, 1));
+      }
+      if (M.rim2K > 0 && pl > 1e-4) { // kicker: untinted strip light on the opposite edge
+        var r2 = (-nx * RIMX + ny * RIMY) / pl;
+        if (r2 > 0) {
+          var k2 = r2 * Math.pow(ed, M.rim2Pow) * M.rim2K;
+          if (k2 > 0.003) c = mix(c, M.rim2, clamp(k2, 0, 1));
+        }
       }
     }
     if (M.far > 0) c = mix(c, M.farC, M.far);
@@ -1346,6 +1416,23 @@
     ctx.closePath();
   }
 
+  // Sample positions across a cylinder: the standard set, plus (crisp materials) extra
+  // samples around the specular peak u* so a tight highlight always shows.
+  var SUX = [];
+  function samples(M, e1x, e1y, e2x, e2y, e2z) {
+    if (!M.crisp) return M.low ? SUL : SU;
+    var he1 = HALFV[0] * e1x + HALFV[1] * e1y, he2 = HALFV[0] * e2x + HALFV[1] * e2y + HALFV[2] * e2z;
+    if (he2 <= 0) return SU;
+    var us = he1 / Math.sqrt(he1 * he1 + he2 * he2), w = Math.max(0.05, 0.6 / Math.sqrt(M.shin));
+    var X = SUX, n = 0, i, j = 0, extra = [us - 1.6 * w, us - 0.7 * w, us, us + 0.7 * w, us + 1.6 * w];
+    for (i = 0; i < SU.length; i++) {
+      while (j < extra.length && extra[j] < SU[i]) { if (extra[j] > -1 && Math.abs(extra[j] - SU[i]) > 0.02) X[n++] = extra[j]; j++; }
+      X[n++] = SU[i];
+    }
+    X.length = n;
+    return X;
+  }
+
   // Shading gradient across a (tapered) cylinder from screen A(ax,ay) r=ra to B, with
   // camera-space axis (vx,vy,vz). Returns a canvas gradient.
   function cylGrad(ctx, M, ax, ay, ra, bx, by, rb, vx, vy, vz, acc) {
@@ -1357,7 +1444,7 @@
     var sx = e1x, sy = -e1y; // e1 on screen (y down)
     var dx = bx - ax, dy = by - ay, d = Math.sqrt(dx * dx + dy * dy);
     var rm = (ra + rb) / 2, mx = (ax + bx) / 2, my = (ay + by) / 2;
-    var U = M.low ? SUL : SU, n = U.length, g, i, u, cu, c;
+    var U = samples(M, e1x, e1y, e2x, e2y, e2z), n = U.length, g, i, u, cu, c;
     if (!M.low && M.conic && d > Math.max(ra, rb) && Math.abs(ra - rb) > 0.03 * rm) {
       var t = ra / (ra - rb), px = ax + dx * t, py = ay + dy * t;
       var th0 = Math.atan2(my - py, mx - px) - Math.PI;
@@ -1395,7 +1482,7 @@
     var px = flip ? rmx : lmx, py = flip ? rmy : lmy, hw = Math.sqrt(sq(px - mx) + sq(py - my)) || 1;
     var Pa = flip ? R0 : L0, Pb = flip ? R1 : L1, Qa = flip ? L0 : R0, Qb = flip ? L1 : R1;
     var d1x = Pb[0] - Pa[0], d1y = Pb[1] - Pa[1], d2x = Qb[0] - Qa[0], d2y = Qb[1] - Qa[1];
-    var den = d1x * d2y - d1y * d2x, U = SU, n = U.length, g, i, u, cu, c;
+    var den = d1x * d2y - d1y * d2x, U = samples(M, e1x, e1y, e2x, e2y, e2z), n = U.length, g, i, u, cu, c;
     var conic = M.conic && Math.abs(den) > 1e-6, ax = 0, ay = 0, th0 = 0;
     if (conic) {
       var t = ((Qa[0] - Pa[0]) * d2y - (Qa[1] - Pa[1]) * d2x) / den;
@@ -1473,9 +1560,14 @@
 
   FP._stState = function () {
     var M = this._M || (this._M = {}), mat = this.mat;
-    M.ramp = mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
+    M.ramp = this.low ? mat.rampLow : mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
     M.rimC = mix(this.c1, WHITE, mat.rimW);
-    M.rimK = mat.rimK * (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash) * (this.low ? 0.45 : 1);
+    M.rimK = mat.rimK * (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash) * (this.low ? (mat.lowRim || 0.45) : 1);
+    M.rimPow = mat.rimPow || 8;
+    M.spec2 = mat.spec2; M.spec2K = mat.spec2K || 0; M.shin2 = mat.shin2 || 1;
+    M.rim2 = mat.rim2; M.rim2K = (mat.rim2K || 0) * (this.low ? (mat.lowLift ? 1.4 : 0.8) : 1); M.rim2Pow = mat.rim2Pow || 6;
+    M.spotR = mat.spotR || 0.55;
+    M.env = mat.env; M.envK = mat.envK || 0; M.envSide = mat.envSide || 0; M.crisp = !!mat.crisp && !this.low;
     M.far = 0; M.farC = mat.far; M.dim = 1;
     M.sc = this.meta.sc; M.low = this.low;
     M.rk = M.sc * (this.low ? 1.12 : 1); // thumbnails: slightly thicker limbs so they read at ~56 px
@@ -1703,12 +1795,12 @@
     // 1. diffuse along the light axis (lit edge -> dark edge)
     var g = ctx.createLinearGradient(L[0], L[1], -L[0], -L[1]);
     var S = M.low ? [1, 0.2, -0.8] : [1, 0.75, 0.45, 0.15, -0.15, -0.45, -0.75, -1];
-    var sk = M.specK; M.specK = 0;
+    var sk = M.specK, s2k = M.spec2K; M.specK = 0; M.spec2K = 0;
     for (i = 0; i < S.length; i++) {
       var sv = S[i], cz = Math.sqrt(Math.max(0, 1 - sv * sv));
       g.addColorStop((1 - sv) / 2, rgba(stShade(M, sv * KEY2[0], sv * KEY2[1], cz, null, 0)));
     }
-    M.specK = sk;
+    M.specK = sk; M.spec2K = s2k;
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
     if (!M.low) {
@@ -1721,7 +1813,7 @@
       ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
       // 3. specular spot
       var H = local(HALFV[0], -HALFV[1]), hl = Math.sqrt(HALFV[0] * HALFV[0] + HALFV[1] * HALFV[1]);
-      var hx = H[0] * hl, hy = H[1] * hl, gs = ctx.createRadialGradient(hx, hy, 0, hx, hy, 0.55);
+      var hx = H[0] * hl, hy = H[1] * hl, gs = ctx.createRadialGradient(hx, hy, 0, hx, hy, M.spotR);
       gs.addColorStop(0, rgba(M.spec, clamp(0.75 * sk, 0, 1))); gs.addColorStop(0.4, rgba(M.spec, clamp(0.25 * sk, 0, 1)));
       gs.addColorStop(1, rgba(M.spec, 0));
       ctx.fillStyle = gs;
@@ -1730,9 +1822,19 @@
       if (M.rimK > 0.01) {
         var Rd = local(RIMX, -RIMY), ro = 0.22;
         var gr = ctx.createRadialGradient(-Rd[0] * ro, -Rd[1] * ro, 0, -Rd[0] * ro, -Rd[1] * ro, 1 + ro);
-        gr.addColorStop(0, rgba(M.rimC, 0)); gr.addColorStop(0.84, rgba(M.rimC, 0));
+        var cs = M.rimPow === 8 ? 0.84 : clamp(1 - 0.16 * Math.sqrt(8 / M.rimPow), 0.6, 0.9);
+        gr.addColorStop(0, rgba(M.rimC, 0)); gr.addColorStop(cs, rgba(M.rimC, 0));
         gr.addColorStop(1, rgba(M.rimC, clamp(0.7 * M.rimK, 0, 1)));
         ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      }
+      if (M.rim2K > 0.01) { // kicker crescent on the key side
+        var Kd = local(-RIMX, -RIMY), ko = 0.22;
+        var gk = ctx.createRadialGradient(-Kd[0] * ko, -Kd[1] * ko, 0, -Kd[0] * ko, -Kd[1] * ko, 1 + ko);
+        var ks = clamp(1 - 0.16 * Math.sqrt(8 / M.rim2Pow), 0.6, 0.9);
+        gk.addColorStop(0, rgba(M.rim2, 0)); gk.addColorStop(ks, rgba(M.rim2, 0));
+        gk.addColorStop(1, rgba(M.rim2, clamp(0.6 * M.rim2K, 0, 1)));
+        ctx.fillStyle = gk;
         ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
       }
     }
@@ -2004,11 +2106,23 @@
       try { this._computePose(); this._draw(); } catch (e) { this._fail(e); }
     }
   };
+  /**
+   * Pick a studio material preset by name (see HIITFigure.MATERIALS) and repaint now.
+   * It applies while the scheme matches the preset's stage; otherwise (or for an unknown
+   * name / null) the scheme's default is used. The choice survives setStyle().
+   */
+  FP.setMaterial = function (name) {
+    if (this.dead) return;
+    this.material = typeof name === 'string' ? name : null;
+    this.setStyle(this.style, this.scheme);
+  };
+  /** Name of the studio material in use (null in neon). */
+  FP.getMaterial = function () { return this.mat ? this.mat.name : null; };
   FP._setStyle = function (style, scheme) {
     this.style = styleOf(style);
     this.scheme = schemeOf(scheme);
     this.studio = this.style === 'studio';
-    this.mat = this.studio ? buildMat(this.scheme, this.matOpts) : null;
+    this.mat = this.studio ? buildMat(materialFor(this.material, this.scheme), this.matOpts) : null;
     this.hist.length = 0; this.sparks.length = 0; this.ring = -1;
     this.fromGnd = null;
   };
@@ -2057,9 +2171,11 @@
     STYLES: STYLES.slice(),
     STUDIO: (function () {
       function hex(c) { return '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1); }
-      function m(k) { return { body: hex(MATS[k].body), shade: hex(MATS[k].shade), lit: hex(MATS[k].lit) }; }
-      return { dark: m('dark'), light: m('light') };
+      function m(k) { return { body: hex(MATERIALS[k].body), shade: hex(MATERIALS[k].shade), lit: hex(MATERIALS[k].lit) }; }
+      return { dark: m(DEFAULT_MAT.dark), light: m(DEFAULT_MAT.light) };
     })(),
+    // studio material presets by stage; the first of each list is the default
+    MATERIALS: { dark: ['porcelain', 'titanium', 'ink', 'stone'], light: ['graphite'] },
     create: function (canvas, opts) { return new Figure(canvas, opts); },
     _dev: {
       EX: EX, JN: JN, B: B,

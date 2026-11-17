@@ -83,7 +83,7 @@
         jacks: ['#ffc94a', '#ffa630'], setrest: ['#3ee0a8', '#2fc4c4'], done: ['#ff6a4d', '#ffb547'] }
     },
     oled: {
-      material: 'titanium', meta: '#000000',
+      material: 'ink', meta: '#000000',
       phase: { setup: ['#ff453a', '#0a84ff'], prep: ['#98989d', '#636366'], work: ['#ff453a', '#ff2d55'], rest: ['#0a84ff', '#5e5ce6'],
         jacks: ['#ffd60a', '#ff9f0a'], setrest: ['#30d158', '#64d2ff'], done: ['#ff453a', '#ff9f0a'] }
     },
