@@ -21,7 +21,7 @@
   --mute: #8d94a3;
   --accent: #ff5a36;
   --accent-2: #ff2d55;
-  --accent-ink: #ffffff;
+  --accent-ink: #160b06;
   --shadow-1: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 24px 48px -28px rgba(0, 0, 0, .7);
   --shadow-2: 0 30px 80px -30px rgba(0, 0, 0, .8);
   --scrim: rgba(6, 7, 10, .62);
@@ -53,8 +53,8 @@
   --line-hi: rgba(17, 20, 28, .18);
   --text: #111318;
   --dim: #464d5c;
-  --mute: #5f6675;
-  --accent: #f0441f;
+  --mute: #555c6b;
+  --accent: #d4380f;
   --accent-2: #e11d48;
   --accent-ink: #ffffff;
   --shadow-1: 0 1px 2px rgba(17, 20, 28, .05), 0 16px 40px -20px rgba(17, 20, 28, .18);
@@ -63,15 +63,15 @@
 
   --work-a: #f0441f; --work-b: #d92d20;
   --rest-a: #0a84ff; --rest-b: #2563eb;
-  --jacks-a: #f59e0b; --jacks-b: #ea580c;
+  --jacks-a: #c76a0a; --jacks-b: #b45309;
   --prep-a: #64748b; --prep-b: #3f4a5c;
   --setup-a: #f0441f; --setup-b: #3d6bff;
   --gold-a: #f0441f; --gold-b: #f59e0b;
-  --break-a: #10b981; --break-b: #0d9488;
+  --break-a: #059669; --break-b: #0f766e;
   --g-upper: #ea580c;
   --g-abs: #0284c7;
   --g-legs: #b45309;
-  --danger: #dc2626;
+  --danger: #b91c1c;
   color-scheme: light;
 }
 
@@ -284,6 +284,7 @@
   border: 1px solid color-mix(in srgb, var(--c1) 30%, transparent);
   box-shadow: none;
 }
+[data-look="studio"][data-scheme="light"] .chip { color: color-mix(in srgb, var(--c1) 50%, var(--text)); }
 [data-look="studio"] .chip::before { background: var(--c1); width: 7px; height: 7px; animation: studioPulse 1.6s ease-in-out infinite; }
 @keyframes studioPulse { 50% { opacity: .35; } }
 [data-look="studio"] .w-ex { font: 500 13px/1 var(--ui); letter-spacing: .01em; text-transform: none; color: var(--mute); text-shadow: none; opacity: 1; }
@@ -444,7 +445,8 @@
 /* ---------- appearance menu ---------- */
 [data-look="studio"] .look-list { background: var(--surface-solid); border-color: var(--line-hi); box-shadow: var(--shadow-2); }
 [data-look="studio"] .look-list button { font: 500 14px/1 var(--ui); letter-spacing: 0; }
-[data-look="studio"] .look-list button:hover, [data-look="studio"] .look-list button:focus-visible { background: var(--surface-2); }
+[data-look="studio"] .look-list button:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
+[data-look="studio"] .look-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--text) 7%, transparent); }
 [data-look="studio"] .look-list button[aria-checked="true"]::after { background: var(--accent); box-shadow: none; }
 [data-look="studio"] .sw { box-shadow: 0 0 0 1px var(--line-hi) inset; }
 
@@ -522,3 +524,40 @@
 @media (max-width: 640px) {
   [data-look="studio"] .hero-stage { max-height: 210px; }
 }
+
+/* ---------- compact layouts (Studio sizes win over the base media rules) ---------- */
+@media (max-height: 760px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .digits { font-size: clamp(64px, 24vw, 104px); }
+  [data-look="studio"] .digits.long { font-size: clamp(56px, 18vw, 88px); }
+  [data-look="studio"] .hud-v { font-size: 16px; }
+}
+@media (max-height: 640px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .w-name { font-size: clamp(22px, 6.5vw, 30px); }
+  [data-look="studio"] .digits { font-size: clamp(60px, 20vw, 84px); }
+}
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) {
+  [data-look="studio"] .digits { font-size: clamp(110px, min(17vw, 28vh), 240px); }
+  [data-look="studio"] .w-name { font-size: clamp(30px, 4.2vw, 64px); }
+}
+@media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  [data-look="studio"] .digits { font-size: min(15vw, 30vh); }
+  [data-look="studio"] .digits.long { font-size: min(11vw, 22vh); }
+  [data-look="studio"] .w-name { font-size: clamp(20px, 4vw, 30px); white-space: nowrap; }
+  [data-look="studio"] .chip { height: 24px; font-size: 10.5px; }
+  [data-look="studio"] .hud-v { font-size: 15px; }
+  [data-look="studio"] .w-head { margin-bottom: 8px; }
+}
+
+/* reading from the floor: bigger phase chip on phones, sturdier digits */
+@media (max-width: 520px) {
+  [data-look="studio"] .chip { height: 32px; font-size: 14px; padding: 0 14px 0 12px; }
+  [data-look="studio"] .digits { font-weight: 300; }
+}
+@media (max-width: 520px) and (max-height: 640px) {
+  [data-look="studio"] .chip { height: 26px; font-size: 12px; }
+}
+/* during rest the big name is what's NEXT, not what to do now */
+[data-look="studio"] body[data-phase="rest"] .w-name { color: var(--dim); }
+
+/* switching looks: no cross-fading of the old look's glows */
+.look-switching, .look-switching *, .look-switching *::before, .look-switching *::after { transition: none !important; }

@@ -536,7 +536,7 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 }
 @media (max-width: 360px) {
   .brand { gap: 7px; font-size: 13px; letter-spacing: .05em; }
-  .brand-tag { padding: 4px 6px 4px 7px; letter-spacing: .16em; }
+  .brand-tag { display: none; }
   .toggles { gap: 6px; }
   .topbar .icon-btn { width: 40px; height: 40px; font-size: 18px; }
   .hero-label { max-width: 100%; gap: 6px; padding: 6px 10px; }

@@ -55,10 +55,10 @@
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
         setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
-        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#f59e0b', '#ea580c'], 0.6], setrest: [['#10b981', '#0d9488'], 0.1],
-        done: [['#f0441f', '#f59e0b'], 0.5]
+        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#c76a0a', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
+        done: [['#d4380f', '#c76a0a'], 0.5]
       },
-      group: { upper: ['#ea580c', '#f0441f'], abs: ['#0284c7', '#2563eb'], legs: ['#d97706', '#b45309'], cardio: ['#f59e0b', '#ea580c'], rest: ['#0a84ff', '#2563eb'] }
+      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#c76a0a', '#b45309'], rest: ['#0a84ff', '#2563eb'] }
     }
   };
   var htmlEl = document.documentElement;
@@ -675,11 +675,13 @@
       ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
     }
 
-    // track
+    // track (dashed during jumping jacks so the phase reads without colour)
     ctx.lineCap = 'butt';
-    ctx.strokeStyle = rgba(ca, light ? 0.13 : 0.16);
+    ctx.strokeStyle = rgba(ca, light ? 0.22 : 0.24);
     ctx.lineWidth = th;
+    if (this.dashed) { var seg = TAU * R / 60; ctx.setLineDash([seg * 0.55, seg * 0.45]); }
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
 
     // (whole-session progress lives in the bar under the ring in this look)
     if (false) {
@@ -1037,6 +1039,7 @@
     ring.setColors(c[0], c[1]);
     ring.a = ring.ta.slice(); ring.b = ring.tb.slice(); // snap: no muddy blend mid-flash
     ring.breathe = seg.type === 'setrest' ? 0 : null;
+    ring.dashed = seg.type === 'jacks';
     ring.energy = ph.energy;
     ring.ticks = Math.min(seg.duration, 60);
     ring.shock(1);
@@ -1592,6 +1595,8 @@
   function setLook(name) {
     if (!LOOKS[name] || name === look) return;
     look = name;
+    htmlEl.classList.add('look-switching');
+    requestAnimationFrame(function () { requestAnimationFrame(function () { htmlEl.classList.remove('look-switching'); }); });
     var L = LOOKS[look];
     htmlEl.setAttribute('data-look', L.style);
     htmlEl.setAttribute('data-scheme', L.scheme);
@@ -1644,6 +1649,9 @@
   function bindLookMenu() {
     var list = $('lookList'), btn = $('lookBtn');
     btn.addEventListener('click', function () { openLookMenu(list.hidden); });
+    btn.addEventListener('keydown', function (e) {
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && list.hidden) { e.preventDefault(); openLookMenu(true); }
+    });
     list.addEventListener('click', function (e) {
       var b = e.target.closest('[data-look]');
       if (!b) return;
@@ -1657,6 +1665,9 @@
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        items[e.key === 'Home' ? 0 : items.length - 1].focus();
       } else if (e.key === 'Escape' || e.key === 'Tab') {
         if (e.key === 'Escape') e.preventDefault();
         openLookMenu(false);
