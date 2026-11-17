@@ -8,6 +8,19 @@ No framework, no dependencies, no build step. Open `index.html` in a browser, or
 npm run serve        # python3 -m http.server 8080, then open http://localhost:8080
 ```
 
+## Looks
+
+Pick a look from the appearance button (◐) in the top bar. The choice is remembered on the device, and `?look=neon|studio-dark|studio-light` in the URL overrides it.
+
+- **Neon:** a warp-tunnel backdrop, glowing light-trail athlete, sparks and glitch type.
+- **Studio dark / Studio light:** clean and quiet.
+  - **Backdrop:** a graphite or warm-paper studio with a soft spotlight.
+  - **Athlete:** a matte 3D mannequin with contact shadows.
+  - **Type:** Geist, with one coral accent.
+  - **Timer:** an Apple-style ring with thin oversized digits.
+  - **Phase colour:** appears only on the ring, the phase chip and the progress bar. During jumping jacks the ring turns into beads, so the phase reads without colour.
+  - **Finish:** a ring sweeps closed around the athlete.
+
 ## Workouts
 
 | Exercise | Group |
@@ -65,11 +78,12 @@ The screen is kept awake during a workout where the browser supports the Wake Lo
 
 ```
 index.html          markup for the three screens (setup, workout, done)
-css/style.css       all styling; phase colours are CSS custom properties
+css/style.css       base (Neon) styling; phase colours are CSS custom properties
+css/studio.css      Studio look, scoped to html[data-look="studio"] (dark/light via data-scheme)
 js/workout.js       pure workout logic: catalogue + trainer content, random full-body pick, timeline
 js/app.js           UI controller, timer engine, ring timer, particles
-js/figure.js        Canvas 2D neon athlete that demonstrates each exercise
-js/bg.js            WebGL backdrop shader
+js/figure.js        Canvas 2D athlete that demonstrates each exercise (neon or studio mannequin)
+js/bg.js            WebGL backdrop shaders (neon tunnel, studio lighting)
 js/audio.js         Web Audio sound effects and speechSynthesis voice coach
 tests/              node:test unit tests for workout.js
 dev/figure-test.html  gallery of every exercise animation for checking the figures
@@ -81,4 +95,4 @@ npm test             # unit tests (Node 18+)
 npm run build        # dist/overdrive-hiit.html, a single self-contained file
 ```
 
-Settings (intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.
+Settings (look, intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.
