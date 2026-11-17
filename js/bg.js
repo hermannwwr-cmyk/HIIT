@@ -111,6 +111,7 @@
     ' vec2 sp=q*vec2(.9,1.35);',
     ' float pool=exp(-dot(sp,sp)*2.4);',
     ' col+=mix(uDPool,vec3(.03,.03,.026),uLight)*pool;',
+    ' col+=mix(vec3(dot(uA,vec3(.3,.59,.11))),uA,.55)*pool*.05*(1.-uLight);',
     // soft top key light falling on the stage
     ' float beam=exp(-pow(abs(q.x)*1.6,2.))*smoothstep(-.6,1.2,q.y)*.5;',
     ' col+=mix(vec3(.035,.037,.045),vec3(.012,.012,.01),uLight)*beam;',
@@ -223,10 +224,10 @@
   // Dark-stage directions for the studio backdrop: bottom/top colour, spotlight pool,
   // phase-wash strength and vignette depth.
   var DARK_STAGES = {
-    graphite: { d0: [.028, .030, .038], d1: [.078, .083, .100], pool: [.085, .09, .105], wash: 1, vig: .5 },
+    graphite: { d0: [.062, .061, .062], d1: [.100, .098, .099], pool: [.07, .069, .069], wash: .9, vig: .3 },
     midnight: { d0: [.012, .018, .036], d1: [.045, .064, .112], pool: [.055, .075, .13], wash: .9, vig: .55 },
     oled: { d0: [0, 0, 0], d1: [.022, .022, .026], pool: [.05, .05, .056], wash: .75, vig: .7 },
-    charcoal: { d0: [.034, .030, .027], d1: [.092, .083, .074], pool: [.095, .085, .072], wash: .8, vig: .5 }
+    charcoal: { d0: [.040, .036, .032], d1: [.096, .087, .078], pool: [.09, .081, .07], wash: 1.4, vig: .4 }
   };
   Backdrop.prototype.setDark = function (name) {
     this.dark = DARK_STAGES[name] || DARK_STAGES.graphite;

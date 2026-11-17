@@ -1327,8 +1327,8 @@
     // dark (warm charcoal) stage: matte warm stone / clay
     stone: {
       stage: 'dark', rampAt: [0.34, 0.74], litTo: [244, 238, 228],
-      body: [185, 176, 164], shade: [91, 84, 76], deepTo: [26, 19, 13], deepK: 0.6, lit: [239, 232, 222],
-      spec: [255, 246, 232], specK: 0.14, shin: 8, spec2: [250, 240, 226], spec2K: 0.1, shin2: 3, rimK: 0.75, rimW: 0.2, rimPow: 7,
+      body: [172, 164, 153], shade: [84, 77, 70], deepTo: [26, 19, 13], deepK: 0.6, lit: [232, 225, 214],
+      spec: [255, 246, 232], specK: 0.32, shin: 20, spec2: [250, 240, 226], spec2K: 0.14, shin2: 4, rimK: 0.9, rimW: 0.2, rimPow: 7,
       far: [16, 14, 12], farK: 0.3, ao: [26, 18, 12], aoK: 0.45,
       shadow: [8, 5, 2], shadowK: 1.25, floor: [255, 236, 212], floorK: 0.03, pool: 0.08, sweep: 0.45
     },

@@ -43,7 +43,7 @@
       group: { upper: ['#ff4fd8', '#ff8a1f'], abs: ['#2ee6ff', '#4a6bff'], legs: ['#ffb21f', '#ff4f6a'], cardio: ['#c6ff1a', '#ffe14a'], rest: ['#22e5ff', '#4a6bff'] }
     },
     'studio-dark': {
-      style: 'studio', scheme: 'dark', meta: '#0b0c10', fps: 30,
+      style: 'studio', scheme: 'dark', meta: '#151516', fps: 30,
       phase: {
         setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#c3c9d4', '#8790a3'], 0.3], work: [['#ff5a36', '#ff3b30'], 0.7],
         rest: [['#2fb8ff', '#3b82f6'], 0.2], jacks: [['#ffc23d', '#ff9f0a'], 0.6], setrest: [['#34d399', '#14b8a6'], 0.1],
@@ -76,7 +76,7 @@
   function isStudio() { return LOOKS[look].style === 'studio'; }
   // Dark-scheme directions (design exploration via ?dark=): stage, palette and mannequin material.
   var DARK_VARIANTS = {
-    graphite: { material: 'porcelain', meta: '#0b0c10' },
+    graphite: { material: 'titanium', meta: '#151516' },
     midnight: {
       material: 'titanium', meta: '#060a13',
       phase: { setup: ['#ff6a4d', '#5b8cff'], prep: ['#b9c3d6', '#7d88a3'], work: ['#ff6a4d', '#ff3d5a'], rest: ['#4cc3ff', '#5b8cff'],
@@ -719,7 +719,7 @@
 
     // track (dashed during jumping jacks so the phase reads without colour)
     ctx.lineCap = 'butt';
-    ctx.strokeStyle = light ? rgba(ca, 0.2) : 'rgb(' + cb.map(function (v) { return Math.round(v * 0.28 + 10); }).join(',') + ')';
+    ctx.strokeStyle = rgba(ca, light ? 0.2 : 0.16);
     ctx.lineWidth = th;
     if (this.dashed) {
       // jumping jacks: beads for the time left, small dots for the time gone (non-colour cue)
