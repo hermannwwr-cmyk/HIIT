@@ -223,6 +223,10 @@
         <p class="dial-sub" id="dialSub"></p>
       </div>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">
+        <!-- swipe wheel: the icon row slides with the finger; whatever lands in the centre circle happens -->
+        <div class="tp-layer tp-base" aria-hidden="true"><div class="tp-rail"><i class="tp-s"><svg><use href="#i-prev"/></svg></i><i class="tp-m"><svg><use href="#i-pause"/></svg></i><i class="tp-s"><svg><use href="#i-next"/></svg></i></div></div>
+        <div class="tp-layer tp-lens" aria-hidden="true"><div class="tp-rail"><i class="tp-s"><svg><use href="#i-prev"/></svg></i><i class="tp-m"><svg><use href="#i-pause"/></svg></i><i class="tp-s"><svg><use href="#i-next"/></svg></i></div></div>
+        <span class="tp-bubble" id="tpBubble" aria-hidden="true"></span>
         <button id="prev" class="ctl" type="button" aria-label="Previous interval"><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
         <button id="pause" class="ctl ctl-main" type="button" aria-label="Pause"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
         <button id="skip" class="ctl ctl-skip" type="button" aria-label="Next interval"><svg aria-hidden="true"><use href="#i-next"/></svg></button>
@@ -257,9 +261,6 @@
       </section>
     </div>
   </div>
-
-  <!-- follows a horizontal swipe: "Next" on the right, "Back" on the left -->
-  <div class="swipe-hint" id="swipeHint" aria-hidden="true"><svg><use href="#i-next"/></svg><span id="swipeHintText">Next</span></div>
 
   <p class="sr-only" id="srStatus" role="status"></p>
 

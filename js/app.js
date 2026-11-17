@@ -926,8 +926,10 @@
     if (paused && run) {
       var seg = run.tl.segments[Math.min(run.segIdx, run.tl.segments.length - 1)];
       if (seg) {
-        var what = seg.type === 'work' || seg.type === 'prep' ? exName(seg.exercise) : seg.type === 'jacks' ? H.JACKS.name : seg.type === 'setrest' ? 'Set break' : 'Rest';
-        $('veilStatus').textContent = what + ' · ' + clock(seg.end - elapsedNow()) + ' left · Set ' + seg.set + '/' + run.tl.level.sets;
+        var what = seg.type === 'work' || seg.type === 'prep' ? exName(seg.exercise) : seg.type === 'jacks' ? H.JACKS.name
+          : seg.type === 'setrest' ? 'Set break' : seg.type === 'warmup' ? warmName(seg) : 'Rest';
+        $('veilStatus').textContent = what + ' · ' + clock(seg.end - elapsedNow()) + ' left · ' +
+          (seg.type === 'warmup' ? 'Warm-up' : 'Set ' + seg.set + '/' + run.tl.level.sets);
       }
     }
     syncPauseButton(paused);
@@ -1527,42 +1529,74 @@
     }
   }
 
-  // ---------------------------------------------------------------- swipe: left = next, right = back
+  // ---------------------------------------------------------------- swipe wheel: left = next, right = back
   /**
-   * Horizontal swipes on the workout screen: the content follows the finger a
-   * little and a "Next" / "Back" hint fills in; letting go past the threshold
-   * (or with a quick flick) does the same as the ⏭ / ⏮ buttons. Vertical moves,
-   * pinch-zoom and plain taps are left alone; nothing happens while a dialog,
-   * the paused screen or the guide is open.
+   * The transport pill doubles as a little wheel. Swiping anywhere on the
+   * workout screen (or dragging the pill itself) slides its icon row with the
+   * finger: swipe left and ⏭ moves into the centre circle, swipe right and ⏮
+   * does. When an icon fully lands the circle takes the phase colour and a
+   * label above names where you'll go; letting go then does it. Tapping ⏭ / ⏮
+   * plays the same slide, so the buttons teach the gesture.
+   * Vertical moves, pinch-zoom and plain taps are left alone; nothing happens
+   * while a dialog, the paused screen or the guide is open.
    */
+  var wheel = null;
   function initSwipe() {
-    var area = $('workout'), body = document.querySelector('.w-body');
-    var hint = $('swipeHint'), hintText = $('swipeHintText'), hintIcon = hint.querySelector('use');
-    var g = null, eatClick = false;
+    var area = $('workout'), tp = $('transport'), bubble = $('tpBubble');
+    var art = [$('fig'), $('dial')];
+    var g = null, eatClick = false, busy = 0;
     function blocked(e) {
       return !run || run.finished || currentScreen !== 'workout' ||
         !$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden ||
         (e.target.closest && e.target.closest('.w-top, .veil'));
     }
     function threshold() { return Math.min(110, Math.max(64, window.innerWidth * 0.2)); }
-    function setHint(dx) {
-      var next = dx < 0, k = Math.min(1, Math.abs(dx) / threshold());
-      hint.classList.toggle('to-next', next);
-      hint.classList.toggle('to-prev', !next);
-      hint.classList.toggle('armed', k >= 1);
-      hintText.textContent = next ? 'Next' : 'Back';
-      hintIcon.setAttribute('href', next ? '#i-next' : '#i-prev');
-      var st = $('stage').getBoundingClientRect();
-      hint.style.setProperty('--sy', Math.round(st.top + st.height * 0.42) + 'px');
-      hint.style.setProperty('--sp', k.toFixed(3));
+    function slot() { // distance between the centre circle and a side button
+      var cs = getComputedStyle($('stage'));
+      return parseFloat(cs.getPropertyValue('--pmain')) / 2 + 12 + parseFloat(cs.getPropertyValue('--pside')) / 2 || 60;
     }
-    function reset(animate) {
-      body.classList.remove('swiping');
-      body.classList.toggle('swipe-back', !!animate);
-      body.style.transform = '';
-      hint.style.setProperty('--sp', 0);
-      hint.classList.remove('armed');
+    /** Where a skip / back would land right now, in words. */
+    function target(dir) {
+      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), seg = tl.segments[idx];
+      if (!seg) return '';
+      if (dir > 0) { var n = tl.segments[idx + 1]; return n ? segName(n) + ' ›' : 'Finish ›'; }
+      if (t - seg.start >= 3 || idx === 0) return '‹ Restart';
+      return '‹ ' + segName(tl.segments[idx - 1]);
     }
+    function segName(sg) {
+      return sg.type === 'work' ? exName(sg.exercise) : sg.type === 'rest' ? 'Rest' : sg.type === 'jacks' ? 'Jumping jacks'
+        : sg.type === 'setrest' ? 'Set break' : sg.type === 'prep' ? 'Get ready' : warmName(sg);
+    }
+    /** Put the wheel at offset x (px; negative = towards next). */
+    function setWheel(x, label) {
+      var d = slot(), k = Math.min(1, Math.abs(x) / d);
+      tp.style.setProperty('--rx', x.toFixed(1) + 'px');
+      tp.style.setProperty('--tk', k.toFixed(3));
+      tp.classList.toggle('armed', k >= 0.98);
+      if (label != null) bubble.textContent = label;
+      art.forEach(function (el) { el.style.setProperty('--swx', (reduced ? 0 : Math.max(-40, Math.min(40, x * 0.5))).toFixed(1) + 'px'); });
+    }
+    function open() { tp.classList.remove('settle'); tp.classList.add('wheel'); $('stage').classList.add('swiping'); }
+    function close() {
+      tp.classList.add('settle');
+      $('stage').classList.remove('swiping');
+      setWheel(0);
+      art.forEach(function (el) { el.style.setProperty('--swx', '0px'); });
+      clearTimeout(busy);
+      busy = setTimeout(function () { tp.classList.remove('wheel', 'settle', 'armed'); }, reduced ? 0 : 260);
+    }
+    /** Animate the wheel to a side, then act (used by swipes and by the ⏭ / ⏮ buttons). */
+    function commit(dir, act) {
+      open();
+      $('stage').classList.remove('swiping');
+      tp.classList.add('settle');
+      setWheel(-dir * slot(), target(dir));
+      tp.classList.add('armed');
+      buzz(15);
+      setTimeout(function () { act(); close(); }, reduced ? 0 : 170);
+    }
+    wheel = { commit: commit };
+
     area.addEventListener('pointerdown', function (e) {
       if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
       g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0 };
@@ -1575,13 +1609,13 @@
         if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
         g.on = true;
         try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-        body.classList.remove('swipe-back');
-        body.classList.add('swiping');
+        open();
       }
       g.dx = dx;
-      // the content follows with resistance, so it feels attached but never flies off
-      if (!reduced) body.style.transform = 'translateX(' + (Math.sign(dx) * Math.min(56, Math.abs(dx) * 0.3)).toFixed(1) + 'px)';
-      setHint(dx);
+      // the row follows the finger 1:1 up to one slot, then resists
+      var d = slot(), th = threshold(), x = dx * d / th;
+      if (Math.abs(x) > d) x = Math.sign(x) * (d + (Math.abs(x) - d) * 0.15);
+      setWheel(x, target(dx < 0 ? 1 : -1));
     });
     function end(e, cancelled) {
       if (!g || e.pointerId !== g.id) return;
@@ -1589,12 +1623,10 @@
       if (!s.on) return;
       var dt = Math.max(1, performance.now() - s.t);
       var go = !cancelled && (Math.abs(s.dx) >= threshold() || (Math.abs(s.dx) > 44 && Math.abs(s.dx) / dt > 0.4));
-      reset(true);
-      if (!go) return;
+      if (!go) { close(); return; }
       eatClick = true; // a swipe that started on a button must not also press it
       setTimeout(function () { eatClick = false; }, 350);
-      buzz(15);
-      if (s.dx < 0) skip(); else prev();
+      commit(s.dx < 0 ? 1 : -1, s.dx < 0 ? skip : prev);
     }
     area.addEventListener('pointerup', function (e) { end(e, false); });
     area.addEventListener('pointercancel', function (e) { end(e, true); });
@@ -1797,7 +1829,7 @@
     $('pause').addEventListener('click', function () { if (run) setPlaying(!run.playing); });
     $('resume').addEventListener('click', function () { setPlaying(true); });
     $('endFromPause').addEventListener('click', openQuit); // always confirm
-    $('skip').addEventListener('click', skip);
+    $('skip').addEventListener('click', function () { if (wheel && run) wheel.commit(1, skip); else skip(); });
     $('unStart').addEventListener('click', skip);
     $('wpSkip').addEventListener('click', skipWarmup);
     $('toastUndo').addEventListener('click', function () {
@@ -1807,7 +1839,7 @@
     $('wuToggle').addEventListener('click', function () {
       state.warmup = !state.warmup; A.play('click'); renderSetup();
     });
-    $('prev').addEventListener('click', prev);
+    $('prev').addEventListener('click', function () { if (wheel && run) wheel.commit(-1, prev); else prev(); });
     initSwipe();
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });

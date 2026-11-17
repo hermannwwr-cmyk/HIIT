@@ -1248,23 +1248,39 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
   .w-lower { margin-top: 10px; }
 }
 
-/* ---- swipe left / right for next / back */
+/* ---- swipe wheel: the transport's icon row slides with the finger */
 .workout { touch-action: pan-y pinch-zoom; }
-.w-body.swiping { transition: none; }
-.w-body.swipe-back { transition: transform .32s cubic-bezier(.2,.9,.3,1); }
-.swipe-hint {
-  position: fixed; top: var(--sy, 45%); z-index: 20; pointer-events: none;
-  transform: translateY(-50%) scale(calc(.85 + var(--sp, 0) * .15));
-  display: flex; align-items: center; gap: 6px;
-  height: 44px; padding: 0 16px; border-radius: 999px;
-  font: 700 14px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase;
-  color: var(--text); background: rgba(16, 7, 34, .9); border: 1px solid var(--line-hi);
-  opacity: var(--sp, 0); transition: opacity .2s ease, background .15s ease, color .15s ease;
+.fig { transform: translate(calc(-50% + var(--swx, 0px)), -50%); }
+.dial { transform: translate(calc(-50% + var(--swx, 0px)), -50%); }
+.fig, .dial { transition: opacity .35s ease, transform .25s cubic-bezier(.3,.9,.3,1); }
+.w-stage.swiping .fig, .w-stage.swiping .dial { transition: opacity .35s ease; }
+.tp-layer { position: absolute; inset: 5px; pointer-events: none; opacity: 0; overflow: hidden; border-radius: 999px; }
+.tp-rail {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px;
+  transform: translateX(var(--rx, 0px));
 }
-.swipe-hint svg { font-size: 18px; fill: currentColor; }
-.swipe-hint.to-next { right: max(12px, env(safe-area-inset-right, 0px)); flex-direction: row-reverse; }
-.swipe-hint.to-prev { left: max(12px, env(safe-area-inset-left, 0px)); }
-.swipe-hint.armed { color: var(--ink); background: var(--c1); border-color: transparent; }
+.tp-rail i { display: grid; place-items: center; flex: none; height: var(--pside, 48px); width: var(--pside, 48px); font-size: calc(var(--pside, 48px) * .42); color: var(--text); }
+.tp-rail i.tp-m { width: var(--pmain, 58px); height: var(--pmain, 58px); font-size: calc(var(--pmain, 58px) * .42); }
+.tp-rail svg { fill: currentColor; }
+/* the centre circle: a clipped copy of the row in inverse colours */
+.tp-lens { clip-path: circle(calc(var(--pmain, 58px) / 2) at 50% 50%); background: var(--c1); }
+.tp-lens .tp-rail i { color: var(--ink); }
+.transport.wheel .tp-layer { opacity: 1; }
+.transport.wheel .ctl { color: transparent; background: transparent; box-shadow: none; }
+.transport.wheel .ctl svg { opacity: 0; }
+.transport.settle .tp-rail { transition: transform .2s cubic-bezier(.3,.9,.3,1); }
+.transport.armed .tp-lens { background: var(--c1); }
+.tp-bubble {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(calc((1 - var(--tk, 0)) * 6px));
+  padding: 7px 12px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  font: 700 13px/1 var(--ui); letter-spacing: .04em;
+  color: var(--text); background: rgba(16, 7, 34, .92); border: 1px solid var(--line-hi);
+  opacity: 0; transition: opacity .15s ease, background .15s ease, color .15s ease;
+}
+.transport.wheel .tp-bubble { opacity: calc(var(--tk, 0) * 1.2 - .2); }
+.transport.armed .tp-bubble { color: var(--ink); background: var(--c1); border-color: transparent; }
 .wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
 .wp-tip[hidden] { display: none; }
 .w-prog.tipping .wp-left { display: none; }
+.dial-sub { transition: opacity .2s ease; }
+.w-stage.swiping .dial-sub { opacity: 0; }
