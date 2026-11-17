@@ -892,7 +892,10 @@
       lockScreen();
       if (run.cuePending === run.segIdx) { run.cuePending = -1; cueSegment(run.tl.segments[run.segIdx]); }
       else A.play('click');
-    } else { A.stopVoice(); A.sleep(); }
+    } else {
+      A.stopVoice(); A.sleep();
+      if (run.warm && !run.warm.go) run.warm.said = false; // "Begin!" was cut: the start signal carries it on resume
+    }
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
@@ -1075,11 +1078,18 @@
   // how the coach names a warm-up move, and one short form cue (kept brief: the countdown follows)
   var WARM_SAY = { jog: 'jogging on the spot', pecstretch: 'chest stretch' };
   var WARM_CUE = { pecstretch: 'Hands behind, chest up.', squat: 'Chest up, sit back.', hamstring: 'Flat back.', calf: 'Heel down.' };
+  /** Was most of the warm-up actually done (not skipped)? */
+  function warmedUp() {
+    var segs = run.tl.segments, done = 0;
+    for (var i = 0; i < segs.length && segs[i].type === 'warmup'; i++) done += run.played[i];
+    return done >= run.tl.warmupEnd * 0.6;
+  }
   /** What the coach says as a warm-up step begins (before its 5, 4, 3, 2, 1). */
   function warmAnnounce(seg, pv) {
     var first = !pv || pv.type !== 'warmup';
     if (first) {
-      if (run.welcome) { run.welcome = false; return WELCOME + ' Let\u2019s warm up, jogging on the spot, nice and easy.'; }
+      if (run.welcome) { run.welcome = false; run.welcomeIdx = seg.index; return WELCOME + ' Let\u2019s warm up, jogging on the spot, nice and easy.'; }
+      run.welcomeIdx = -1;
       return 'Warm-up. Jogging on the spot, nice and easy.';
     }
     if (pv.move === seg.move && pv.side !== seg.side) return 'Switch to your ' + seg.side + ' leg.';
@@ -1216,7 +1226,7 @@
     var name = hd.name, label = hd.label, sub;
     if (seg.type === 'warmup' && seg.lead) label = 'Get ready';
     var flashWord = ph.flash;
-    $('beats').hidden = !(seg.type === 'warmup' && seg.counts && !seg.lead);
+    $('beats').hidden = !(seg.type === 'warmup' && seg.counts); // kept in the layout (invisible) during the lead-in: no jump at BEGIN
     if (seg.type === 'warmup') {
       sub = warmName(seg);
       if (prevSeg && prevSeg.type === 'warmup') {
@@ -1272,7 +1282,8 @@
       var first = !pv || pv.type !== 'warmup';
       A.play(first && !seg.lead ? 'go' : 'halfway');
       if (seg.lead) buzz(40);
-      A.say(warmAnnounce(seg, pv));
+      // landed mid-countdown (undo, seek): the numbers speak for themselves
+      if (!seg.lead || elapsedNow() < seg.start + seg.lead - (seg.countdown || 5) - VLEAD - GAP) A.say(warmAnnounce(seg, pv));
       return;
     }
     if (seg.type === 'work') { A.play('go'); buzz([60, 40, 120]); }
@@ -1283,7 +1294,8 @@
     var nextName = seg.next ? spoken(seg.next) : '';
     if (seg.type === 'prep') {
       var pw = run.tl.segments[seg.index - 1];
-      var intro = run.welcome ? WELCOME + ' ' : pw && pw.type === 'warmup' ? 'Warm-up done, nice work. ' : '';
+      var intro = run.welcome ? WELCOME + ' ' : pw && pw.type === 'warmup' && !run.praised && warmedUp() ? 'Warm-up done, nice work. ' : '';
+      if (intro && !run.welcome) run.praised = true;
       run.welcome = false;
       A.say(intro + 'Get ready. First up, ' + spoken(seg.exercise) + '.');
     }
@@ -1568,18 +1580,20 @@
     if (w.go) return t;
     var wk = $('workout'), box = $('wlBox');
     wk.classList.add('wu-lead');
-    var title = seg.index === 0 ? 'Welcome' : 'Get ready';
+    // the screen greets you while the coach does, then gives the instruction
+    var title = run.welcomeIdx === seg.index && t - seg.start < 3.5 ? 'Welcome' : 'Get ready';
     var startsIn = 'Starts in ' + Math.max(1, Math.ceil(leadEnd - t - 1e-6));
+    box.classList.remove('listen');
     if (t < hp) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     if (!w.counting) {
       if (t - hp > 0.6 || !run.playing) w.counting = true; // jumped in, or paused: no hold
       else {
         if (!w.holdSince) w.holdSince = now;
-        if (A.speaking() && now - w.holdSince < 4000) {
+        if (A.speaking() && A.voiceWorks() && now - w.holdSince < 4000) {
           run.base = hp - 0.001; run.anchor = now; // hold: let the coach finish
           box.classList.remove('runway');
           // only a real wait says so (a line ending right on time doesn't flicker "Listen…")
-          if (now - w.holdSince > 700) leadText(title, 'Listen\u2026');
+          if (now - w.holdSince > 700) { leadText(title, 'Listen\u2026'); box.classList.add('listen'); }
           return run.base;
         }
         w.counting = true;
@@ -1589,7 +1603,7 @@
     // the voice: each number asked for VLEAD early so it lands on its second; then "Begin!"
     var vk = Math.floor(t - cs + VLEAD + 1e-6);
     if (vk !== w.vk) {
-      var vnat = vk === w.vk + 1;
+      var vnat = vk === w.vk + 1 || (w.vk >= 0 && vk === w.vk + 2); // a late frame may skip one
       w.vk = vk;
       if (vk >= 0 && vnat && run.playing) {
         if (vk < cd) A.say(CD_WORDS[cd - 1 - vk]);
@@ -1600,7 +1614,7 @@
     // the numbers: big, pulsing, one per second; 3-2-1 also pulse the screen edge
     var k = Math.min(cd - 1, Math.floor(t - cs + 1e-6));
     if (k !== w.k) {
-      var natural = k === w.k + 1;
+      var natural = k === w.k + 1 || (w.k >= 0 && k === w.k + 2);
       w.k = k;
       var n = cd - k;
       box.classList.add('runway');
@@ -1617,7 +1631,7 @@
       }
     }
     // BEGIN's wipe: after "One" has had its moment, and it opens as the count begins
-    if (!w.flashed && run.playing && t >= leadEnd - 0.45) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
+    if (!w.flashed && run.playing && t >= leadEnd - 0.35) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
     return t;
   }
   /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
@@ -1659,6 +1673,8 @@
   function skipWarmup() {
     if (!run) return;
     var from = elapsedNow();
+    // the welcome was cut short: the get-ready says it instead
+    if (run.welcomeIdx === 0 && A.speaking() && from < 8) run.welcome = true;
     A.play('click'); A.stopVoice();
     seek(run.tl.warmupEnd);
     offerUndo('Skipped warm-up', from);

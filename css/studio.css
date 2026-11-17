@@ -524,21 +524,25 @@
   [data-look="studio"] .hero-stage { max-height: 210px; }
 }
 
+/* the warm-up countdown number is sized like the count digits (compact sizes below) */
+[data-look="studio"] .wl-box { --dg: clamp(100px, 30vw, 190px); }
+
 /* ---------- compact layouts (Studio sizes win over the base media rules) ---------- */
 @media (max-height: 760px) and (max-aspect-ratio: 5/4) {
-  [data-look="studio"] .digits { --dg: clamp(64px, 24vw, 104px); }
+  [data-look="studio"] .digits, [data-look="studio"] .wl-box { --dg: clamp(64px, 24vw, 104px); }
   [data-look="studio"] .hud-v { font-size: 16px; }
 }
 @media (max-height: 640px) and (max-aspect-ratio: 5/4) {
   [data-look="studio"] .w-name { font-size: clamp(22px, 6.5vw, 30px); }
-  [data-look="studio"] .digits { --dg: clamp(60px, 20vw, 84px); }
+  [data-look="studio"] .digits, [data-look="studio"] .wl-box { --dg: clamp(60px, 20vw, 84px); }
 }
 @media (min-aspect-ratio: 5/4) and (min-width: 560px) {
   [data-look="studio"] .digits { --dg: clamp(110px, min(17vw, 28vh), 240px); justify-content: flex-start; }
+  [data-look="studio"] .wl-box { --dg: clamp(110px, min(17vw, 28vh), 240px); }
   [data-look="studio"] .w-name { font-size: clamp(30px, 4.2vw, 64px); }
 }
 @media (min-aspect-ratio: 5/4) and (max-height: 500px) {
-  [data-look="studio"] .digits { --dg: min(15vw, 30vh); }
+  [data-look="studio"] .digits, [data-look="studio"] .wl-box { --dg: min(15vw, 30vh); }
   [data-look="studio"] .w-name { font-size: clamp(20px, 4vw, 30px); white-space: nowrap; }
   [data-look="studio"] .chip { height: 24px; font-size: 10.5px; }
   [data-look="studio"] .hud-v { font-size: 15px; }
@@ -746,16 +750,21 @@
 @media (prefers-reduced-motion: reduce) {
   [data-look="studio"] .workout.final10 .digits.tick, [data-look="studio"] .workout.final3 .digits.final { animation: none; }
 }
-[data-look="studio"] .workout.wu-lead .d-label { font: 600 16px/1 var(--ui); color: color-mix(in srgb, var(--c1) 80%, var(--text)); }
 [data-look="studio"] .wl-title { font: 600 clamp(28px, 10.5vw, 44px)/1.05 var(--ui); letter-spacing: -.035em; color: color-mix(in srgb, var(--c1) 85%, var(--text)); }
 [data-look="studio"] .wl-sub { font: 500 17px/1.2 var(--ui); color: var(--mute); }
 /* last 10 s: the digits gain weight with the colour, so they read from across the room */
-[data-look="studio"] .workout.final10 .digits { font-weight: 400; }
+[data-look="studio"] .workout.final10 .digits { font-weight: 500; }
+/* light scheme: a stronger edge pulse, so 3-2-1 is caught from across the room */
+[data-look="studio"][data-scheme="light"] .workout::after {
+  box-shadow: inset 0 0 0 12px color-mix(in srgb, var(--c1) 90%, transparent), inset 0 0 90px color-mix(in srgb, var(--c1) 50%, transparent);
+}
 [data-look="studio"][data-scheme="dark"] .workout::after {
   box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--c1) 85%, transparent), inset 0 0 70px color-mix(in srgb, var(--c1) 55%, transparent);
 }
 [data-look="studio"] .wl-box.runway .wl-sub { font: 500 13px/1 var(--ui); letter-spacing: .02em; text-transform: none; color: var(--mute); }
-[data-look="studio"] .wl-box.runway .wl-title { font-weight: 600; letter-spacing: -.03em; }
+/* the warm-up countdown number: exactly the size, weight and colour of the workout's last-10 digits */
+[data-look="studio"] .wl-box.runway .wl-title { font: 500 var(--dg)/.92 var(--ui); letter-spacing: -.05em; color: color-mix(in srgb, var(--c1) 88%, var(--text)); }
+[data-look="studio"][data-scheme="light"] .wl-box.runway .wl-title { color: color-mix(in srgb, var(--c1) 82%, #000); }
 /* dark scheme: phase wipes are built from the deep end of the colour so white text stays readable (≥ 4.5:1) */
 [data-look="studio"][data-scheme="dark"] .flash::before {
   background: radial-gradient(circle at var(--fx, 50%) var(--fy, 50%), color-mix(in srgb, var(--c1) 66%, #000), color-mix(in srgb, var(--c1) 52%, #000) 38%, color-mix(in srgb, var(--c2) 46%, #000));

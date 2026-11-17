@@ -31,7 +31,7 @@
         var u = new SpeechSynthesisUtterance('Ready');
         u.volume = 0; u.lang = 'en-US';
         var started = false;
-        u.onstart = function () { started = true; voice.ok = true; };
+        u.onstart = function () { started = true; voice.ok = true; voice.healthy = true; };
         hold(u);
         try { window.speechSynthesis.resume(); } catch (e) { /* ignore */ }
         window.speechSynthesis.speak(u);
@@ -157,7 +157,9 @@
    * all. We work around the first two and notice the third: if lines never
    * actually start playing, onProblem() is called once so the app can say so.
    */
-  var voice = { ok: false, unlocked: false, misses: 0, seq: 0, told: false, onProblem: null };
+  // ok: a line has played here at some point. healthy: the latest lines are actually starting
+  // (an engine can hang mid-session: Chrome on Android sometimes does).
+  var voice = { ok: false, healthy: false, unlocked: false, misses: 0, seq: 0, told: false, onProblem: null };
   // Chrome on Android can garbage-collect an utterance while it is queued or
   // speaking (the line is cut or never plays): keep a reference until it ends.
   var live = [];
@@ -174,10 +176,12 @@
     if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
     u.rate = 1.05; u.pitch = 1; u.volume = 1;
     var started = false, id = ++voice.seq;
-    u.onstart = function () { started = true; voice.ok = true; voice.misses = 0; };
+    u.onstart = function () { started = true; voice.ok = true; voice.healthy = true; voice.misses = 0; };
     hold(u);
     try { s.resume(); } catch (e) { /* ignore */ }
     s.speak(u);
+    // not started 1.2 s later (even if a newer line replaced it): the voice isn't reliable right now
+    setTimeout(function () { if (!started && settings.voice) voice.healthy = false; }, 1200);
     // nothing started within 2.5 s and no newer line replaced it: that line was lost
     setTimeout(function () {
       if (started || voice.seq !== id || !settings.voice) return;
@@ -219,8 +223,8 @@
     set: function (k, v) { settings[k] = !!v; if (k === 'voice' && !v) stopVoice(); },
     get: function (k) { return settings[k]; },
     voiceSupported: function () { return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); },
-    /** Has a spoken line actually played here (and is the coach on)? */
-    voiceWorks: function () { return !!(settings.voice && voice.ok); },
+    /** Is the coach on, and are its lines actually playing right now? */
+    voiceWorks: function () { return !!(settings.voice && voice.healthy); },
     /** fn() is called once if spoken lines never actually play here. */
     onVoiceProblem: function (fn) { voice.onProblem = fn; }
   };
