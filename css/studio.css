@@ -310,7 +310,7 @@
 }
 [data-look="studio"] .d-label { font: 500 13px/1 var(--ui); letter-spacing: .02em; text-transform: none; color: var(--mute); opacity: 1; text-shadow: none; margin: 0; }
 [data-look="studio"] .digits {
-  --dg: clamp(104px, 33vw, 190px);
+  --dg: clamp(100px, 30vw, 190px);
   font: 200 var(--dg)/.92 var(--ui); letter-spacing: -.05em;
   height: calc(var(--dg) * .92); align-items: center;
   font-variant-numeric: tabular-nums;
@@ -339,15 +339,6 @@
 }
 [data-look="studio"] .link-btn svg { color: var(--mute); }
 [data-look="studio"] .link-btn:hover { background: var(--surface-2); }
-
-[data-look="studio"] .segs { height: 5px; gap: 2px; }
-[data-look="studio"] .segs i { background: var(--line); border-radius: 2px; }
-[data-look="studio"] .segs i.t-work { --sc: var(--work-a); }
-[data-look="studio"] .segs i.t-rest { --sc: var(--rest-a); }
-[data-look="studio"] .segs i.t-jacks { --sc: var(--jacks-a); }
-[data-look="studio"] .segs i.t-prep { --sc: var(--prep-a); }
-[data-look="studio"] .segs i.t-setrest { --sc: var(--break-a); }
-[data-look="studio"] .segs i.now { box-shadow: none; background: var(--line-hi); }
 
 [data-look="studio"] .ctl {
   border: 1px solid var(--line-hi); background: var(--surface); color: var(--text);
@@ -500,19 +491,9 @@
 /* fixed-width digits wherever numbers tick */
 [data-look="studio"] :is(.hud-v, .stats dd, .me dd, .count, .w-next, .veil-status, .done-list li b, .start-time, .digits) { font-variant-numeric: tabular-nums; }
 
-/* workout controls never shift when the skip button gains a label */
-[data-look="studio"] .controls { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); width: 100%; }
-[data-look="studio"] #prev { justify-self: end; }
-[data-look="studio"] .ctl-skip { justify-self: start; }
 [data-look="studio"] .w-next { min-height: 1.2em; }
 [data-look="studio"] .w-next[hidden] { display: block !important; visibility: hidden; }
 [data-look="studio"] .coach { margin-top: 10px; }
-@media (min-aspect-ratio: 5/4) and (min-width: 560px) {
-  [data-look="studio"] .controls { width: 400px; }
-}
-@media (max-width: 400px) {
-  [data-look="studio"] .ctl-skip.has-text svg { display: none; }
-}
 @media (hover: none) {
   [data-look="studio"] .ctl-main:hover { box-shadow: 0 16px 34px -16px rgba(0,0,0,.6); }
   [data-look="studio"] .ctl:hover, [data-look="studio"] .icon-btn:hover { background: var(--surface); }
@@ -572,8 +553,6 @@
 @media (max-width: 520px) and (max-height: 640px) {
   [data-look="studio"] .chip { height: 26px; font-size: 12px; }
 }
-/* during rest the big name is what's NEXT, not what to do now */
-[data-look="studio"] body[data-phase="rest"] .w-name { color: var(--dim); }
 
 /* switching looks: no cross-fading of the old look's glows */
 .look-switching, .look-switching *, .look-switching *::before, .look-switching *::after { transition: none !important; }
@@ -647,7 +626,6 @@
 
 /* ---------- warm-up (Studio) ---------- */
 [data-look="studio"] .strip .s-warmup, [data-look="studio"] .strip-legend .k-warmup { background: color-mix(in srgb, var(--warm-a) 55%, transparent); opacity: 1; }
-[data-look="studio"] .segs i.t-warmup { --sc: var(--warm-a); }
 [data-look="studio"] .wu-row { background: var(--surface-2); border-color: var(--line); border-radius: 14px; }
 [data-look="studio"] .wu-k { font: 600 14px/1.2 var(--ui); }
 [data-look="studio"] .switch { background: color-mix(in srgb, var(--text) 14%, transparent); border-color: var(--line-hi); }
@@ -663,4 +641,56 @@
 [data-look="studio"] .ex-groups .ex-group { display: none; }
 @media (max-width: 360px) {
   [data-look="studio"] .ex-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* =====================================================================
+   WORKOUT LAYOUT (Studio): progress strip, controls in the ring,
+   rest dial and the "Up next" card.
+   ===================================================================== */
+[data-look="studio"] .w-prog { gap: 8px; padding-top: 14px; }
+[data-look="studio"] .wp-meta { font: 500 13px/1.2 var(--ui); letter-spacing: 0; text-transform: none; }
+[data-look="studio"] .wp-set { font-weight: 600; }
+[data-look="studio"] .wp-track { gap: 6px; height: 6px; }
+[data-look="studio"] .wp-cell { border-radius: 3px; --tr: color-mix(in srgb, var(--gc) 22%, transparent); }
+[data-look="studio"] .wp-group:not(.is-cur):not(.is-done) .wp-cell { --tr: var(--line-hi); }
+[data-look="studio"] .wp-cell.is-now { box-shadow: none; --tr: color-mix(in srgb, var(--gc) 30%, transparent); }
+
+[data-look="studio"] .transport {
+  gap: 4px; padding: 5px;
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+[data-look="studio"] .ctl { border: 0; background: transparent; color: var(--text); box-shadow: none; }
+[data-look="studio"] .ctl:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+[data-look="studio"] .ctl-main { background: var(--text); color: var(--ink); box-shadow: none; }
+[data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: 0 0 0 4px color-mix(in srgb, var(--text) 12%, transparent); }
+[data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: none; }
+[data-look="studio"] .ctl-skip.has-text { border: 0; background: transparent; box-shadow: none; padding: 0 16px 0 12px; }
+[data-look="studio"] .ctl-skip.has-text .ctl-text { font: 600 14px/1 var(--ui); letter-spacing: 0; text-transform: none; }
+@media (hover: none) {
+  [data-look="studio"] .ctl:hover { background: transparent; }
+  [data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: none; }
+}
+
+[data-look="studio"] .dial-k { font: 600 14px/1 var(--ui); letter-spacing: .01em; text-transform: none; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }
+[data-look="studio"] .dial .digits { --dg: calc(var(--ss, 300px) * .34); }
+[data-look="studio"] .dial-sub { font: 500 15px/1.2 var(--ui); letter-spacing: 0; color: var(--mute); }
+
+[data-look="studio"] .upnext {
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1);
+  border-radius: 18px;
+}
+[data-look="studio"] .un-figwrap { border-radius: 12px; background: radial-gradient(120% 90% at 50% 30%, var(--surface-2), var(--tile)); }
+[data-look="studio"] .un-k { font: 600 13px/1.2 var(--ui); letter-spacing: 0; text-transform: none; color: color-mix(in srgb, var(--gc) 65%, var(--text)); }
+[data-look="studio"] .un-name { font: 600 clamp(24px, 7vw, 32px)/1.05 var(--ui); letter-spacing: -.03em; text-transform: none; }
+[data-look="studio"] .un-meta { font-size: 14px; color: var(--mute); }
+
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) {
+  [data-look="studio"] .w-body { grid-template-areas: "stage ." "stage head" "stage lower" "stage ."; }
+}
+@media (max-height: 760px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .w-prog { padding-top: 8px; gap: 6px; }
+  [data-look="studio"] .coach { margin-top: 2px; padding: 8px 12px 10px; }
+  [data-look="studio"] .w-lower { gap: 8px; }
 }

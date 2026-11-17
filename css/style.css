@@ -660,57 +660,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 .link-btn svg { flex: none; font-size: 15px; color: var(--c2); }
 .link-btn:hover { background: rgba(255,255,255,.1); }
 
-.w-bottom { display: grid; gap: 12px; padding-top: 6px; }
-.progress { display: grid; gap: 8px; }
-.segs { display: flex; gap: 2px; height: 8px; }
-.segs i {
-  position: relative; flex: var(--w, 1) 1 0; min-width: 1px; border-radius: 2px; overflow: hidden;
-  background: rgba(255,255,255,.09);
-}
-.segs i::after {
-  content: ""; position: absolute; inset: 0;
-  transform-origin: left; transform: scaleX(var(--p, 0));
-  background: var(--sc, var(--c1));
-}
-.segs i.t-work { --sc: linear-gradient(90deg, var(--work-a), var(--work-b)); }
-.segs i.t-rest { --sc: var(--rest-a); }
-.segs i.t-jacks { --sc: linear-gradient(90deg, var(--jacks-a), var(--jacks-b)); }
-.segs i.t-prep { --sc: var(--prep-a); }
-.segs i.t-setrest { --sc: var(--break-a); }
-.segs i.now { box-shadow: 0 0 12px var(--c1); background: rgba(255,255,255,.18); }
-.progress-meta { display: flex; justify-content: space-between; font: 600 12px/1 var(--ui); letter-spacing: .14em; color: var(--mute); font-variant-numeric: tabular-nums; text-transform: uppercase; }
-
-.controls { display: flex; align-items: center; justify-content: center; gap: clamp(10px, 4vw, 22px); }
-.ctl {
-  display: grid; place-items: center;
-  width: 58px; height: 58px; border-radius: 50%;
-  border: 1px solid var(--line-hi);
-  background: rgba(255,255,255,.05);
-  font-size: 24px; cursor: pointer;
-  transition: transform .15s, background .2s, box-shadow .2s;
-}
-.ctl svg { fill: currentColor; }
-.ctl:hover { background: rgba(255,255,255,.1); }
-.ctl:active { transform: scale(.92); }
-.ctl-text { display: none; }
-.ctl-skip.has-text {
-  width: auto; padding: 0 18px 0 16px; border-radius: 999px; gap: 8px;
-  display: inline-flex; align-items: center;
-  border-color: color-mix(in srgb, var(--c1) 60%, transparent);
-  background: color-mix(in srgb, var(--c1) 16%, transparent);
-  box-shadow: 0 0 22px -6px var(--c1);
-}
-.ctl-skip.has-text .ctl-text { display: inline; font: 700 13px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
-.ctl-skip.has-text svg { font-size: 18px; }
-.ctl-main {
-  width: 76px; height: 76px; font-size: 30px; border: 0;
-  color: var(--ink);
-  background: radial-gradient(circle at 35% 30%, #fff, var(--c1) 45%, var(--c2));
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c1) 25%, transparent), 0 0 40px -4px var(--c1);
-}
-.ctl-main svg { stroke-width: 3.2; }
-.ctl-main:hover { background: radial-gradient(circle at 35% 30%, #fff, var(--c1) 50%, var(--c2)); box-shadow: 0 0 0 6px color-mix(in srgb, var(--c1) 30%, transparent), 0 0 56px -2px var(--c1); }
-
 /* phase flash overlay */
 .flash {
   position: fixed; inset: 0; z-index: 30; pointer-events: none;
@@ -807,7 +756,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .digits.long { font-size: clamp(72px, min(11.5vw, 24vh), 220px); }
   .w-name { font-size: clamp(32px, 4.6vw, 72px); }
   .coach { width: min(100%, 520px); }
-  .w-bottom { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 32px; }
 }
 @media (max-height: 760px) and (max-aspect-ratio: 5/4) {
   .digits { font-size: clamp(60px, 17vw, 100px); }
@@ -822,8 +770,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 @media (max-height: 640px) and (max-aspect-ratio: 5/4) {
   .coach-v { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .d-label { display: none; }
-  .ctl { width: 50px; height: 50px; }
-  .ctl-main { width: 64px; height: 64px; }
   .w-name { font-size: clamp(22px, 6.5vw, 36px); }
 }
 
@@ -973,9 +919,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .digits { font-size: min(17vw, 30vh); }
   .digits.long { font-size: min(13vw, 24vh); }
   .w-next { font-size: 13px; }
-  .w-bottom { gap: 6px; padding-top: 2px; }
-  .ctl { width: 46px; height: 46px; font-size: 20px; }
-  .ctl-main { width: 58px; height: 58px; font-size: 24px; }
   .hud-cell { padding: 4px 9px; }
   .hud-v { font-size: 15px; }
   .icon-btn { width: 40px; height: 40px; }
@@ -1018,7 +961,6 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
 
 /* ---------- warm-up ---------- */
 .strip .s-warmup, .strip-legend .k-warmup { background: linear-gradient(90deg, var(--warm-a), var(--warm-b)); opacity: .8; }
-.segs i.t-warmup { --sc: var(--warm-a); }
 .wu-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: rgba(0,0,0,.18); }
 .wu-text { display: grid; gap: 4px; min-width: 0; }
 .wu-k { font: 600 14px/1.2 var(--ui); color: var(--text); }
@@ -1060,3 +1002,144 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .toggles { gap: 6px; }
   .brand { gap: 8px; }
 }
+
+/* =====================================================================
+   WORKOUT LAYOUT: progress strip on top, controls inside the ring,
+   a rest screen with its own countdown dial and an "Up next" card.
+   ===================================================================== */
+.workout { grid-template-rows: auto auto minmax(0, 1fr); }
+
+/* session progress: one group per set, one cell per exercise */
+.w-prog { display: grid; gap: 8px; padding: 12px 2px 0; min-width: 0; }
+.wp-meta { margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; font: 600 12px/1.2 var(--ui); letter-spacing: .14em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.wp-set { color: var(--text); white-space: nowrap; }
+.wp-left { color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wp-track { display: flex; gap: 8px; height: 8px; }
+.wp-group { flex: var(--n, 1) 1 0; display: flex; gap: 2px; min-width: 0; }
+.wp-cell {
+  --gc: var(--c1); --tr: color-mix(in srgb, var(--gc) 16%, rgba(255,255,255,.06));
+  display: block; flex: 1 1 0; min-width: 2px;
+  border-radius: 2px;
+  /* fill drawn as a background (no transformed layer): progress = --p */
+  background: linear-gradient(var(--gc), var(--gc)) left / calc(var(--p, 0) * 100%) 100% no-repeat, var(--tr);
+}
+.wp-cell.g-upper { --gc: var(--g-upper); }
+.wp-cell.g-abs { --gc: var(--g-abs); }
+.wp-cell.g-legs { --gc: var(--g-legs); }
+.wp-cell.g-warmup { --gc: var(--warm-a); }
+.wp-group:not(.is-cur):not(.is-done) .wp-cell { --tr: rgba(255,255,255,.07); }
+.wp-cell.is-now { --tr: color-mix(in srgb, var(--gc) 32%, transparent); box-shadow: 0 0 10px var(--gc); }
+
+/* body: name, stage (ring + controls), then the readout or the up-next card */
+.w-body { grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px; }
+.w-stage { min-height: 210px; }
+.fig { top: var(--cy, 50%); transition: opacity .35s ease; }
+.workout[data-mode="rest"] .fig { opacity: 0; }
+
+/* rest dial: the countdown moves inside the ring */
+.dial {
+  position: absolute; left: 50%; top: var(--cy, 50%);
+  width: calc(var(--rr, 120px) * 1.62);
+  transform: translate(-50%, -50%);
+  display: grid; justify-items: center; gap: calc(var(--ss, 300px) * .02);
+  text-align: center; pointer-events: none;
+  opacity: 0; transition: opacity .35s ease;
+}
+.workout[data-mode="rest"] .dial { opacity: 1; }
+.dial-k { margin: 0; font: 700 13px/1 var(--ui); letter-spacing: .26em; text-transform: uppercase; color: var(--c1); white-space: nowrap; }
+.dial .digits { font-size: calc(var(--ss, 300px) * .3); filter: drop-shadow(0 0 18px color-mix(in srgb, var(--c1) 60%, transparent)); }
+.dial .digits.long { font-size: calc(var(--ss, 300px) * .19); }
+.dial-sub { margin: 0; min-height: 1.2em; font: 600 14px/1.2 var(--ui); letter-spacing: .06em; color: var(--dim); }
+
+/* transport: back, pause, skip sit in the ring's opening */
+.transport {
+  position: absolute; left: 50%; top: var(--ty, calc(100% - 40px)); z-index: 2;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px; border-radius: 999px;
+  background: rgba(8, 3, 20, .86);
+  border: 1px solid var(--line-hi);
+  box-shadow: 0 12px 32px -12px rgba(0,0,0,.8);
+}
+.ctl {
+  display: inline-grid; place-items: center; flex: none;
+  width: 48px; height: 48px; padding: 0; border-radius: 50%;
+  border: 0; background: transparent; color: var(--text);
+  font-size: 22px; cursor: pointer;
+  transition: transform .15s, background .2s, box-shadow .2s;
+}
+.ctl svg { fill: currentColor; }
+.ctl:hover { background: rgba(255,255,255,.08); }
+.ctl:active { transform: scale(.92); }
+.ctl-text { display: none; }
+.ctl-skip.has-text { width: auto; padding: 0 16px 0 12px; border-radius: 999px; gap: 6px; display: inline-flex; align-items: center; }
+.ctl-skip.has-text .ctl-text { display: inline; font: 700 12px/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.ctl-skip.has-text svg { font-size: 16px; }
+.ctl-main {
+  width: 62px; height: 62px; font-size: 26px;
+  color: var(--ink);
+  background: radial-gradient(circle at 35% 30%, #fff, var(--c1) 45%, var(--c2));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 25%, transparent), 0 0 30px -4px var(--c1);
+}
+.ctl-main svg { stroke-width: 3.2; }
+.ctl-main:hover { background: radial-gradient(circle at 35% 30%, #fff, var(--c1) 50%, var(--c2)); }
+
+/* lower area: readout and up-next share one cell so the stage never jumps */
+.w-lower { display: grid; gap: 10px; justify-items: center; width: 100%; min-width: 0; }
+.w-swap { position: relative; display: grid; width: 100%; min-width: 0; justify-items: center; }
+.w-swap > * { grid-area: 1 / 1; }
+/* the next line keeps its row even when empty, so nothing below jumps */
+.w-next[hidden] { display: block; visibility: hidden; }
+.workout[data-mode="rest"] .w-readout { visibility: hidden; }
+.workout:not([data-mode="rest"]) .upnext { visibility: hidden; }
+
+.upnext {
+  --gc: var(--c1);
+  /* overlays the readout's cell (the readout alone sets its height) */
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(100%, 460px); max-height: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px;
+  padding: 8px 18px 8px 8px; border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--gc) 16%, rgba(8,3,20,.86)), rgba(8,3,20,.84));
+  border: 1px solid color-mix(in srgb, var(--gc) 35%, transparent);
+}
+.un-figwrap { width: var(--un-fig, 120px); height: var(--un-fig, 120px); border-radius: 12px; overflow: hidden; background: rgba(255,255,255,.04); }
+.un-fig { display: block; width: 100%; height: 100%; }
+.un-text { display: grid; gap: 6px; min-width: 0; }
+.un-k { margin: 0; font: 700 11px/1.2 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--gc); }
+.un-name { margin: 0; font: 900 clamp(20px, 5.6vw, 30px)/1.05 var(--display); letter-spacing: -.01em; text-transform: uppercase; text-wrap: balance; }
+.un-meta { margin: 0; font-size: 13px; line-height: 1.35; color: var(--dim); }
+
+/* landscape / desktop: ring left; name, readout and coach right */
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) {
+  .w-body { grid-template-areas: "stage head" "stage lower" "stage ."; }
+  .w-lower { grid-area: lower; justify-items: start; align-self: start; }
+  .w-swap { justify-items: start; }
+  .upnext { left: 0; transform: translateY(-50%); }
+}
+@media (max-height: 760px) and (max-aspect-ratio: 5/4) {
+  .w-prog { padding-top: 8px; gap: 6px; }
+  .un-name { font-size: clamp(22px, 6vw, 28px); }
+}
+@media (max-height: 640px) and (max-aspect-ratio: 5/4) {
+  .wp-track { height: 6px; }
+  .ctl { width: 44px; height: 44px; font-size: 20px; }
+  .ctl-main { width: 54px; height: 54px; font-size: 22px; }
+  .dial-sub { display: none; }
+}
+@media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  .w-prog { padding-top: 4px; gap: 4px; }
+  .wp-meta { font-size: 11px; }
+  .ctl { width: 42px; height: 42px; font-size: 19px; }
+  .ctl-main { width: 52px; height: 52px; font-size: 22px; }
+  .upnext { padding: 6px 12px 6px 6px; gap: 10px; }
+  .un-meta { display: none; }
+}
+@media (max-height: 760px) and (max-aspect-ratio: 5/4) {
+  .w-stage { min-height: 150px; }
+  .w-prog { padding-top: 6px; gap: 6px; }
+}
+/* phase chip and "Exercise 2 of 5" share one line */
+.w-tag { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; max-width: 100%; }
+@media (max-height: 760px) and (max-aspect-ratio: 5/4) { .w-ex { display: inline; } }
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) { .w-tag { justify-content: flex-start; } }

@@ -16,7 +16,7 @@
     setup: { colors: ['#9b5cff', '#22e5ff'], energy: 0.22, chip: '', flash: '' },
     prep: { colors: ['#b9a8ff', '#5a6bff'], energy: 0.45, chip: 'Get ready', flash: 'READY' },
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
-    rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest · up next', flash: 'REST' },
+    rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
     warmup: { colors: ['#b18cff', '#22e5ff'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
     setrest: { colors: ['#36ffc0', '#9b5cff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
@@ -252,7 +252,7 @@
   function toggleExercise(id) {
     var i = state.ids.indexOf(id);
     if (i >= 0) state.ids.splice(i, 1);
-    else if (state.ids.length < H.MAX_EXERCISES) state.ids.push(id);
+    else if (state.ids.length < H.MAX_EXERCISES) state.ids = H.order(state.ids.concat([id]));
     A.play('click');
     if (i < 0) { hero.hover = null; showHero(id); }
     renderSetup();
@@ -313,7 +313,7 @@
     hint.classList.toggle('warn', !v.ok);
     if (!v.ok) hint.textContent = v.reason;
     else if (!hint.querySelector('svg')) {
-      hint.innerHTML = 'Add or remove exercises. They run in the numbered order. <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> opens the trainer’s guide.';
+      hint.innerHTML = 'Add or remove exercises. They run in the numbered order: upper body, abs, then legs. <svg aria-hidden="true" class="inline-ico"><use href="#i-info"/></svg> opens the trainer’s guide.';
     }
 
     $('start').disabled = !v.ok;
@@ -423,6 +423,7 @@
     heroFig.setSuspended(on);
     Object.keys(thumbs).forEach(function (k) { thumbs[k].setSuspended(on); });
     if (workFig) workFig.setSuspended(on);
+    if (nextFig) nextFig.setSuspended(on);
     if (doneFig) doneFig.setSuspended(on);
     if (currentScreen !== 'workout') bg.setRunning(!on);
     setInert(on);
@@ -430,7 +431,7 @@
 
   /** Make everything behind an open dialog unreachable for keyboard and screen readers. */
   function setInert(on) {
-    var parts = currentScreen === 'workout' ? document.querySelectorAll('.w-top, .w-body, .w-bottom') : [$(currentScreen)];
+    var parts = currentScreen === 'workout' ? document.querySelectorAll('.w-top, .w-prog, .w-body') : [$(currentScreen)];
     Array.prototype.forEach.call(parts, function (el) { if (el) el.inert = !!on; });
   }
 
@@ -516,15 +517,57 @@
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = this.c.clientWidth, h = this.c.clientHeight;
     if (!w || !h) { this.sizeDirty = true; return false; }
-    if (w !== this.w || h !== this.h || dpr !== this.dpr) {
-      this.w = w; this.h = h; this.dpr = dpr;
+    var tp = $('transport');
+    var hh = tp ? tp.offsetHeight / 2 : 0;
+    if (w !== this.w || h !== this.h || dpr !== this.dpr || hh !== this.hh || this.geoStudio !== isStudio()) {
+      this.w = w; this.h = h; this.dpr = dpr; this.hh = hh;
       this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
-      var S = Math.min(w, h);
-      var fig = $('fig');
-      fig.style.setProperty('--fig-size', Math.round(S * 0.7) + 'px');
+      this.layout();
     }
     return true;
   };
+  /**
+   * Gauge geometry: the ring sits at the top of the stage with an opening at
+   * the bottom, and the transport controls (back, pause, skip) sit in that
+   * opening, half over the ring line. Everything centred inside the stage.
+   */
+  Ring.prototype.layout = function () {
+    var studio = isStudio(), w = this.w, h = this.h, hh = this.hh;
+    this.geoStudio = studio;
+    var drop = hh * 0.12; // transport centre sits just below the ring line
+    function radius(S) {
+      if (studio) { var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5 }; }
+      var t = Math.max(6, S * 0.03); return { R: S * 0.405, th: t, ext: t * 1.25 + S * 0.035 };
+    }
+    // the largest square whose ring + hanging transport fits the stage
+    var S = Math.min(w, h);
+    for (var k = 0; k < 4; k++) {
+      var r0 = radius(S);
+      var need = S / 2 + r0.R + drop + hh;
+      if (need <= h) break;
+      S = Math.max(40, S * h / need);
+    }
+    var r = radius(S);
+    var top = Math.max(0, (h - (S / 2 + r.R + drop + hh)) / 2);
+    var cy = top + S / 2;
+    // half-angle of the opening: the ring line ends just above the transport
+    var clear = r.R - (hh - drop) - 8;
+    var ga = hh ? Math.acos(Math.max(-1, Math.min(1, clear / (r.R + r.ext)))) : 0;
+    ga = Math.max(ga, 0.35);
+    this.geo = { S: S, cx: w / 2, cy: cy, R: r.R, th: r.th, ga: ga, A0: Math.PI / 2 + ga, SW: TAU - 2 * ga };
+    var st = this.c.parentNode;
+    st.style.setProperty('--cy', Math.round(cy) + 'px');
+    st.style.setProperty('--rr', Math.round(r.R) + 'px');
+    st.style.setProperty('--ss', Math.round(S) + 'px');
+    st.style.setProperty('--ty', Math.round(cy + r.R + drop) + 'px');
+    $('fig').style.setProperty('--fig-size', Math.round(S * 0.7) + 'px');
+    sizeUpNext();
+  };
+  /** The up-next card overlays the readout's space; its demo tile fills that height. */
+  function sizeUpNext() {
+    var h = $('readout').offsetHeight;
+    if (h) $('upNext').style.setProperty('--un-fig', Math.round(Math.max(64, Math.min(150, h - 16))) + 'px');
+  }
   Ring.prototype.draw = function (dt) {
     if (!this.resize()) return;
     if (this.needs > 0) this.needs--;
@@ -537,14 +580,16 @@
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    if (this.geoStudio !== isStudio()) this.layout();
     if (isStudio()) { this.drawStudio(ctx, w, h, dt); return; }
-    var S = Math.min(w, h);
-    var cx = w / 2, cy = h / 2;
-    var R = S * 0.405;
-    var th = Math.max(6, S * 0.03);
-    var A0 = -Math.PI / 2;
+    var g = this.geo;
+    var S = g.S;
+    var cx = g.cx, cy = g.cy;
+    var R = g.R;
+    var th = g.th;
+    var A0 = g.A0, SW = g.SW, A1 = A0 + SW;
     var prog = Math.max(0, Math.min(1, this.progress));
-    var a1 = A0 + TAU * prog;
+    var a1 = A0 + SW * prog;
     var ca = this.a, cb = this.b;
 
     ctx.lineCap = 'round';
@@ -553,7 +598,7 @@
     var n = this.ticks;
     var t0 = R + th * 1.25, len = S * 0.022;
     for (i = 0; i < n; i++) {
-      var ang = A0 + (i + 0.5) / n * TAU;
+      var ang = A0 + (i + 0.5) / n * SW;
       var lit = (i + 0.5) / n <= prog;
       var major = i % 5 === 0;
       var L = major ? len * 1.6 : len;
@@ -568,10 +613,10 @@
     // groove + track, so the remaining arc reads on bright frames
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = th * 1.6;
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R, A0, A1); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = th;
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R, A0, A1); ctx.stroke();
 
     // breathing pacer for the long set break: 4 s in, 6 s out
     if (this.breathe != null) {
@@ -591,8 +636,9 @@
 
     ctx.globalCompositeOperation = 'lighter';
 
-    // HUD decorations
+    // HUD decorations (kept out of the opening where the controls sit)
     ctx.save();
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, S, A0, A1); ctx.closePath(); ctx.clip();
     ctx.translate(cx, cy);
     ctx.rotate(this.rot);
     ctx.strokeStyle = rgba(cb, 0.35);
@@ -614,13 +660,13 @@
     var ri = R - th * 1.6;
     ctx.strokeStyle = 'rgba(255,255,255,0.07)';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, ri, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A1); ctx.stroke();
     if (tp > 0.001) {
       ctx.strokeStyle = rgba(cb, 0.85);
       ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + TAU * tp); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, ri, A0, A0 + SW * tp); ctx.stroke();
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.beginPath(); ctx.arc(cx + Math.cos(A0 + TAU * tp) * ri, cy + Math.sin(A0 + TAU * tp) * ri, 2.6, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + Math.cos(A0 + SW * tp) * ri, cy + Math.sin(A0 + SW * tp) * ri, 2.6, 0, TAU); ctx.fill();
     }
 
     // progress arc with layered glow
@@ -628,9 +674,10 @@
       var grad;
       if (ctx.createConicGradient) {
         grad = ctx.createConicGradient(A0, cx, cy);
+        var pf = prog * SW / TAU;
         grad.addColorStop(0, rgba(cb, 1));
-        grad.addColorStop(Math.max(0.001, prog), rgba(ca, 1));
-        grad.addColorStop(Math.min(1, prog + 0.001), rgba(ca, 1));
+        grad.addColorStop(Math.max(0.001, pf), rgba(ca, 1));
+        grad.addColorStop(Math.min(1, pf + 0.001), rgba(ca, 1));
         grad.addColorStop(1, rgba(ca, 1));
       } else {
         grad = rgba(ca, 1);
@@ -713,12 +760,13 @@
   /** Studio ring: one thick gradient arc with a shaded end cap, nothing else. */
   Ring.prototype.drawStudio = function (ctx, w, h, dt) {
     var light = LOOKS[look].scheme === 'light';
-    var S = Math.min(w, h), cx = Math.round(w / 2), cy = Math.round(h / 2);
-    var th = Math.max(9, S * 0.05);
-    var R = S * 0.44 - th * 0.5;
-    var A0 = -Math.PI / 2;
+    var g = this.geo;
+    var S = g.S, cx = Math.round(g.cx), cy = Math.round(g.cy);
+    var th = g.th;
+    var R = g.R;
+    var A0 = g.A0, SW = g.SW, A1 = A0 + SW;
     var prog = Math.max(0, Math.min(1, this.progress));
-    var a1 = A0 + TAU * prog;
+    var a1 = A0 + SW * prog;
     var ca = this.a, cb = this.b;
     var ink = light ? [17, 19, 24] : [244, 245, 247];
     var breathing = this.breathe != null;
@@ -742,10 +790,10 @@
     ctx.lineWidth = th;
     if (this.dashed) {
       // jumping jacks: beads for the time left, small dots for the time gone (non-colour cue)
-      var nB = 60, stepB = TAU / nB, span = prog * TAU, k, ang, u;
+      var nB = 48, stepB = SW / nB, span = prog * SW, k, ang, u;
       ctx.fillStyle = ctx.strokeStyle;
       var fadeK = Math.floor(span / stepB + 1e-6) + 1, fadeA = (span / stepB) % 1;
-      for (k = 0; k < nB; k++) {
+      for (k = 0; k <= nB; k++) {
         if (k * stepB <= span + 1e-6) continue;
         ctx.globalAlpha = k === fadeK ? 1 - Math.min(1, fadeA) : 1; // no bullseye under the fading bead
         ang = A0 + k * stepB;
@@ -753,7 +801,7 @@
       }
       ctx.globalAlpha = 1;
       if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th; }
-      for (k = 0; k * stepB <= span + 1e-6 && k < nB; k++) {
+      for (k = 0; k * stepB <= span + 1e-6 && k <= nB; k++) {
         u = span ? k * stepB / span : 1;
         ang = A0 + k * stepB;
         ctx.fillStyle = rgba([cb[0] + (ca[0] - cb[0]) * u, cb[1] + (ca[1] - cb[1]) * u, cb[2] + (ca[2] - cb[2]) * u], 1);
@@ -761,23 +809,26 @@
       }
       // the next bead fades out smoothly instead of popping
       var frac = (span / stepB) % 1;
-      if (k < nB && frac > 0.01) {
+      if (k <= nB && frac > 0.01) {
         ang = A0 + k * stepB;
         ctx.fillStyle = rgba(ca, Math.min(1, frac));
         ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, th * 0.31, 0, TAU); ctx.fill();
       }
       ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
     } else {
-      ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, cy, R, A0, A1); ctx.stroke();
+      ctx.lineCap = 'butt';
     }
 
     if (prog > 0.001 && !this.dashed) {
       var grad;
       if (ctx.createConicGradient) {
         grad = ctx.createConicGradient(A0, cx, cy);
+        var pf = prog * SW / TAU;
         grad.addColorStop(0, rgba(cb, 1));
-        grad.addColorStop(Math.max(0.001, prog), rgba(ca, 1));
-        grad.addColorStop(Math.min(1, prog + 0.001), rgba(ca, 1));
+        grad.addColorStop(Math.max(0.001, pf), rgba(ca, 1));
+        grad.addColorStop(Math.min(1, pf + 0.001), rgba(ca, 1));
         grad.addColorStop(1, rgba(ca, 1));
       } else grad = rgba(ca, 1);
       // tail cap in the tail colour, butt-ended arc, then the head cap: no seams
@@ -789,7 +840,7 @@
       ctx.lineWidth = th;
       if (this.dashed) {
         // the live arc becomes a run of beads during jacks, readable without colour
-        var dseg = TAU * R / 60;
+        var dseg = SW * R / 48;
         ctx.setLineDash([0.01, dseg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.62;
       }
       ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
@@ -921,7 +972,7 @@
 
   // ================================================================ WORKOUT
   var ring = new Ring($('ring'));
-  var workFig = null;
+  var workFig = null, nextFig = null;
   var run = null;
   var wakeLock = null;
 
@@ -952,15 +1003,16 @@
     A.unlock();
     var tl = H.buildTimeline(ids, state.level, { warmup: state.warmup });
     run = {
-      tl: tl, ids: H.sanitize(ids), level: state.level,
+      tl: tl, ids: tl.exercises.slice(), level: state.level,
       base: 0, anchor: performance.now(), playing: true,
       segIdx: -1, lastWhole: null, lastClock: -1, coachIdx: -1, figSwapped: false,
       played: tl.segments.map(function () { return 0; }), lastT: 0, cuePending: -1, finished: false
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
-    workFig.setPlaying(true);
-    buildSegs(tl);
+    if (!nextFig) nextFig = makeFig($('nextFig'), { exercise: tl.exercises[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.45 });
+    run.mode = null;
+    buildProgress(tl);
     setPauseUi(false);
     lockScreen();
     requestAnimationFrame(function () { focusOn($('stage')); });
@@ -1023,6 +1075,7 @@
     A.stopVoice();
     A.sleep();
     if (workFig) workFig.setPlaying(false);
+    if (nextFig) nextFig.setPlaying(false);
     ring.paused = true;
     bg.setRunning(false);
     syncPauseButton(true);
@@ -1046,21 +1099,106 @@
       }
     }
     syncPauseButton(paused);
-    if (workFig) workFig.setPlaying(!paused);
+    syncFigs();
     ring.paused = paused;
     bg.setRunning(!paused);
     if (paused) setTimeout(function () { if (!$('pausedVeil').hidden) $('resume').focus(); }, 30);
   }
 
-  function buildSegs(tl) {
-    var wrap = $('segs');
+  /** Which of the two figures is on screen animates; the hidden one rests. */
+  function syncFigs() {
+    var live = !!(run && run.playing && !run.finished);
+    if (workFig) workFig.setPlaying(live && run.mode !== 'rest');
+    if (nextFig) nextFig.setPlaying(live && run.mode === 'rest');
+  }
+
+  // ---------------------------------------------------------------- session progress strip
+  // One group per set (plus the warm-up), one cell per exercise, coloured by body area.
+  var prog = { bySeg: {}, groups: [], warm: null, live: null };
+  function buildProgress(tl) {
+    var wrap = $('wpTrack');
     wrap.textContent = '';
-    tl.segments.forEach(function (s) {
-      var i = document.createElement('i');
-      i.className = 't-' + s.type;
-      i.style.setProperty('--w', s.duration);
-      wrap.appendChild(i);
+    prog = { bySeg: {}, groups: {}, warm: null, live: null };
+    function group(key, label, n) {
+      var g = document.createElement('div');
+      g.className = 'wp-group';
+      g.style.setProperty('--n', n);
+      g.dataset.label = label;
+      wrap.appendChild(g);
+      prog.groups[key] = g;
+      return g;
+    }
+    if (tl.warmupEnd > 0) {
+      var wg = group('w', 'Warm-up', Math.max(1.5, tl.exercises.length * 0.4));
+      wg.classList.add('wp-warm');
+      prog.warm = document.createElement('i');
+      prog.warm.className = 'wp-cell g-warmup';
+      wg.appendChild(prog.warm);
+    }
+    for (var s = 1; s <= tl.level.sets; s++) group(s, 'Set ' + s, tl.exercises.length);
+    tl.segments.forEach(function (sg) {
+      if (sg.type !== 'work') return;
+      var c = document.createElement('i');
+      c.className = 'wp-cell g-' + H.get(sg.exercise).group;
+      prog.groups[sg.set].appendChild(c);
+      prog.bySeg[sg.index] = c;
     });
+  }
+  function updateProgress(seg) {
+    var tl = run.tl, idx = seg.index, sets = tl.level.sets, nEx = tl.exercises.length;
+    Object.keys(prog.bySeg).forEach(function (k) {
+      var c = prog.bySeg[k], i = +k;
+      c.classList.toggle('is-done', i < idx);
+      c.classList.toggle('is-now', i === idx);
+      c.style.setProperty('--p', i < idx ? 1 : 0);
+    });
+    if (prog.warm) {
+      var wDone = seg.type !== 'warmup';
+      prog.warm.classList.toggle('is-done', wDone);
+      prog.warm.classList.toggle('is-now', !wDone);
+      prog.warm.style.setProperty('--p', wDone ? 1 : 0);
+    }
+    var curSet = seg.type === 'warmup' ? 0 : seg.set;
+    Object.keys(prog.groups).forEach(function (k) {
+      var g = prog.groups[k], n = k === 'w' ? 0 : +k;
+      var done = k === 'w' ? curSet > 0 : n < curSet || (n === curSet && seg.type === 'setrest');
+      g.classList.toggle('is-done', done);
+      g.classList.toggle('is-cur', !done && n === curSet);
+    });
+    prog.live = seg.type === 'work' ? prog.bySeg[idx] : seg.type === 'warmup' ? prog.warm : null;
+
+    var setTxt, leftTxt;
+    if (seg.type === 'warmup') {
+      setTxt = 'Warm-up';
+      leftTxt = 'then ' + sets + ' sets of ' + nEx;
+    } else if (seg.type === 'setrest') {
+      setTxt = 'Set ' + seg.set + ' of ' + sets + ' done';
+      leftTxt = (sets - seg.set) + (sets - seg.set === 1 ? ' set to go' : ' sets to go');
+    } else {
+      var more = sets - seg.set;
+      setTxt = 'Set ' + seg.set + ' of ' + sets;
+      leftTxt = more > 0 ? more + (more === 1 ? ' more set after this' : ' more sets after this') : 'Final set';
+    }
+    $('wpSet').textContent = setTxt;
+    $('wpLeft').textContent = leftTxt;
+  }
+
+  /** The rest screen's "Up next" card: name, body area and a live demo of what's coming. */
+  function showUpNext(seg) {
+    var tl = run.tl;
+    var id = seg.type === 'prep' ? seg.exercise : seg.next;
+    var ex = id ? H.get(id) : null;
+    if (!ex) return;
+    var n = tl.exercises.indexOf(id) + 1, of = tl.exercises.length;
+    $('unK').textContent = seg.type === 'prep' ? 'First up · 1 of ' + of
+      : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) + ' · first up'
+      : 'Up next · ' + n + ' of ' + of;
+    $('unName').textContent = ex.name;
+    $('unMeta').textContent = H.GROUPS[ex.group].label + ' · ' + ex.muscles;
+    var gc = GROUP_COLORS[ex.group] || PHASE.work.colors;
+    $('upNext').style.setProperty('--gc', gc[0]);
+    if (nextFig) { nextFig.setExercise(id); nextFig.setColors(gc[0], gc[1]); nextFig.pulse(); }
+    sizeUpNext();
   }
 
   function exName(id) { var e = H.get(id); return e ? e.name : ''; }
@@ -1149,18 +1287,24 @@
     bg.flashNow();
     ring.setColors(c[0], c[1]);
     ring.a = ring.ta.slice(); ring.b = ring.tb.slice(); // snap: no muddy blend mid-flash
-    ring.breathe = seg.type === 'setrest' ? 0 : null;
+    var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
+    run.mode = restMode ? 'rest' : 'active';
+    $('workout').dataset.mode = run.mode;
+    $('upNext').setAttribute('aria-hidden', restMode ? 'false' : 'true');
+    $('dial').setAttribute('aria-hidden', 'true');
+    syncFigs();
+    ring.breathe = seg.type === 'setrest' || seg.type === 'rest' ? 0 : null;
     ring.dashed = seg.type === 'jacks';
     ring.energy = ph.energy;
     ring.ticks = seg.counts ? seg.counts * seg.beats : Math.min(seg.duration, 60);
     ring.shock(1);
     ring.hot = 1;
 
-    var figEx = seg.type === 'warmup' ? warmFigId(seg) : seg.type === 'rest' ? (seg.next || 'rest') : seg.type === 'setrest' ? 'rest' : seg.exercise;
-    if (workFig) {
-      workFig.setExercise(figEx);
+    if (restMode) showUpNext(seg);
+    else if (workFig) {
+      workFig.setExercise(seg.type === 'warmup' ? warmFigId(seg) : seg.exercise);
       workFig.setColors(c[0], c[1]);
-      workFig.setEnergy(seg.type === 'rest' || seg.type === 'setrest' ? 0.35 : ph.energy);
+      workFig.setEnergy(ph.energy);
       workFig.pulse();
     }
 
@@ -1169,7 +1313,6 @@
     var nEx = tl.exercises.length;
     var ex = H.get(seg.exercise);
     var nx = seg.next ? H.get(seg.next) : null;
-    $('wSet').textContent = seg.type === 'warmup' ? '–' : seg.set + '/' + level.sets;
     $('phaseChip').textContent = ph.chip;
     var name, label, sub;
     var flashWord = ph.flash;
@@ -1183,8 +1326,8 @@
         flashWord = prevSeg.move !== seg.move ? WARM_WORD[seg.move] : prevSeg.side !== seg.side ? 'SWITCH' : '';
       }
     } else if (seg.type === 'prep') {
-      name = ex.name; label = 'Starting in'; sub = 'First up · ' + ex.name;
-      $('wEx').textContent = 'Exercise 1 of ' + nEx;
+      name = 'Get into position'; label = 'Starting in'; sub = 'First up · ' + ex.name;
+      $('wEx').textContent = 'First up: ' + ex.name;
     } else if (seg.type === 'work') {
       name = ex.name; label = 'Time left';
       sub = (seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + ' · ' : '') + ex.name;
@@ -1194,23 +1337,25 @@
       sub = seg.setBreak ? 'Then a 5:00 break' : nx ? 'Next · ' + nx.name : 'Last push';
       $('wEx').textContent = 'Active recovery';
     } else if (seg.type === 'rest') {
-      name = nx ? nx.name : 'Rest'; label = 'Next exercise in';
+      name = 'Catch your breath'; label = 'Next in';
       sub = nx ? 'Next · ' + nx.name : 'Breathe';
-      $('wEx').textContent = 'Recover';
+      $('wEx').textContent = seg.duration + ' second rest';
     } else { // setrest
-      name = 'Set ' + seg.set + ' done'; label = 'Set ' + (seg.set + 1) + ' starts in';
+      name = 'Set ' + seg.set + ' complete'; label = 'Set ' + (seg.set + 1) + ' in';
       sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
-      $('wEx').textContent = 'Breathe in…';
+      $('wEx').textContent = (seg.duration >= 60 ? seg.duration / 60 + ' minute' : seg.duration + ' second') + ' break';
     }
     $('wName').textContent = name;
     $('dLabel').textContent = label;
+    $('dialK').textContent = label;
+    $('dialSub').textContent = '';
     var mins = seg.duration >= 60 ? (seg.duration / 60) + ' minutes' : seg.duration + ' seconds';
     $('srStatus').textContent = seg.type === 'work' ? 'Work: ' + name + ', ' + mins + '.'
       : seg.type === 'jacks' ? 'Jumping jacks, ' + mins + '.'
-      : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + name + '.'
+      : seg.type === 'rest' ? 'Rest ' + mins + '. Next: ' + (nx ? nx.name : '') + '.'
       : seg.type === 'setrest' ? 'Set ' + seg.set + ' complete. Break, ' + mins + '.'
       : seg.type === 'warmup' ? 'Warm-up: ' + name + (seg.counts ? ', ' + seg.counts + ' counts of ' + seg.beats + '.' : ', ' + mins + '.')
-      : 'Get ready. First up: ' + name + '.';
+      : 'Get ready. First up: ' + ex.name + '.';
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
@@ -1221,12 +1366,7 @@
     $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Skip the warm-up and get ready to start'
       : showStart ? skipLabel + ': ' + exName(seg.next || seg.exercise) : 'Next interval');
 
-    // progress bar
-    var bars = $('segs').children;
-    for (var i = 0; i < bars.length; i++) {
-      bars[i].style.setProperty('--p', i < idx ? 1 : 0);
-      bars[i].classList.toggle('now', i === idx);
-    }
+    updateProgress(seg);
 
     // flash, particles, sound, voice
     if (flashWord) flash(flashWord, sub, false, c);
@@ -1291,21 +1431,30 @@
 
   var digitsText = '';
   function setDigits(text, spokenLabel) {
-    var dg = $('digits');
     if (text !== digitsText) {
-      if (text.length !== digitsText.length) {
-        dg.textContent = '';
-        for (var i = 0; i < text.length; i++) {
-          var sp = document.createElement('span');
-          sp.className = text[i] === ':' ? 'd colon' : 'd';
-          dg.appendChild(sp);
+      [$('digits'), $('dialDigits')].forEach(function (dg) {
+        if (text.length !== digitsText.length) {
+          dg.textContent = '';
+          for (var i = 0; i < text.length; i++) {
+            var sp = document.createElement('span');
+            sp.className = text[i] === ':' ? 'd colon' : 'd';
+            dg.appendChild(sp);
+          }
         }
-      }
-      for (var j = 0; j < text.length; j++) dg.children[j].textContent = text[j];
-      dg.classList.toggle('long', text.length > 2);
+        for (var j = 0; j < text.length; j++) dg.children[j].textContent = text[j];
+        dg.classList.toggle('long', text.length > 2);
+      });
       digitsText = text;
     }
-    dg.setAttribute('aria-label', spokenLabel);
+    $('digits').setAttribute('aria-label', spokenLabel);
+  }
+  /** Restart a one-shot animation class on both countdowns. */
+  function pulseDigits(cls) {
+    [$('digits'), $('dialDigits')].forEach(function (dg) {
+      dg.classList.remove('tick', 'final');
+      void dg.offsetWidth;
+      if (cls) dg.classList.add(cls);
+    });
   }
 
   /** Called once per whole second of countdown (and on any jump). */
@@ -1316,13 +1465,10 @@
     }
     var long = seg.duration >= 60;
     setDigits(long ? H.formatTime(whole) : String(whole), (long ? H.formatTime(whole) : whole + ' seconds') + ' left');
-    var dg = $('digits');
     var natural = prev != null && whole < prev && prev - whole <= 2 && run.playing;
     if (!natural) return;
-    dg.classList.remove('tick', 'final');
-    void dg.offsetWidth;
     if (whole <= 3) {
-      dg.classList.add('final');
+      pulseDigits('final');
       A.play(whole === 1 ? 'tickLast' : 'tick');
       bg.beatNow(1);
       if (!reduced && !isStudio()) flash(String(whole), '', true);
@@ -1334,7 +1480,7 @@
       ring.hot = Math.max(ring.hot, 0.8);
       buzz(35);
     } else {
-      dg.classList.add('tick');
+      pulseDigits('tick');
       bg.beatNow(seg.type === 'work' ? 0.45 : 0.2);
       ring.beat = 1;
     }
@@ -1358,11 +1504,6 @@
       else if (whole === 60) A.say('One minute. Set ' + (seg.set + 1) + ' is coming up.');
       else if (whole === 30) A.say('Thirty seconds. First up, ' + nx + '. Get in position.');
       else if (whole === 10) A.say('Ten seconds.');
-    }
-    if (seg.type === 'setrest' && whole <= 30 && !run.figSwapped && seg.next && workFig) {
-      run.figSwapped = true;
-      workFig.setExercise(seg.next);
-      workFig.pulse();
     }
   }
 
@@ -1412,12 +1553,11 @@
     for (var i = 0; i < dots.length; i++) { dots[i].classList.toggle('on', i < beat); dots[i].classList.toggle('now', i === beat - 1); }
     var natural = prev != null && bi === prev + 1 && run.playing;
     if (!natural) return;
-    var dg = $('digits');
     if (beat === seg.beats) {
       A.play('beatAccent');
       A.say(COUNT_WORDS[count - 1]);
       bg.beatNow(0.5); ring.beat = 1;
-      dg.classList.remove('tick'); void dg.offsetWidth; dg.classList.add('tick');
+      pulseDigits('tick');
     } else {
       A.play('beat');
       bg.beatNow(0.2);
@@ -1449,15 +1589,17 @@
     }
     updateCoach(seg, t);
 
-    if (seg.type === 'setrest') {
+    if (seg.type === 'setrest' || seg.type === 'rest') {
       ring.breathe = t - seg.start;
       var inhale = (ring.breathe % 10) < 4;
-      if (inhale !== run.inhale) { run.inhale = inhale; $('wEx').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
+      if (inhale !== run.inhale) { run.inhale = inhale; $('dialSub').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
     }
     ring.progress = remaining / seg.duration;
     ring.total = t / tl.total;
-    var cur = $('segs').children[idx];
-    if (cur) cur.style.setProperty('--p', ((t - seg.start) / seg.duration).toFixed(4));
+    if (prog.live) {
+      var pf = prog.live === prog.warm ? t / tl.warmupEnd : (t - seg.start) / seg.duration;
+      prog.live.style.setProperty('--p', Math.min(1, pf).toFixed(4));
+    }
 
     var sec = Math.floor(t);
     if (sec !== run.lastClock) {
@@ -1510,6 +1652,7 @@
     bg.setRunning(true);
     setTimeout(function () { if (currentScreen === 'done') bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy); }, 2200);
     if (workFig) workFig.setPlaying(false);
+    if (nextFig) nextFig.setPlaying(false);
     showScreen('done');
 
     var tl = run.tl;
@@ -1572,6 +1715,7 @@
     A.stopVoice();
     A.sleep(0);
     if (workFig) workFig.setPlaying(false);
+    if (nextFig) nextFig.setPlaying(false);
     $('pausedVeil').hidden = true;
     setInert(false);
     $('quitDialog').hidden = true;
@@ -1811,8 +1955,11 @@
         bg.setMood(c[0], c[1], PHASE[seg.type].energy);
         ring.setColors(c[0], c[1]); ring.a = ring.ta.slice(); ring.b = ring.tb.slice();
         if (workFig) workFig.setColors(c[0], c[1]);
+        if (run.mode === 'rest') showUpNext(seg);
+        updateProgress(seg);
       }
     }
+    ring.sizeDirty = true;
     if (currentScreen === 'done') {
       bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], PHASE.done.energy);
       if (doneFig) doneFig.setColors(PHASE.done.colors[0], PHASE.done.colors[1]);
