@@ -86,11 +86,7 @@
       tone(1568, t, 0.08, { type: 'triangle', vol: 0.5 });
       tone(784, t, 0.07, { type: 'sine', vol: 0.2 });
     },
-    // warm-up: "ready…" (two rising beeps) then a loud start signal before the count begins
-    ready: function (t) {
-      tone(880, t, 0.12, { type: 'square', vol: 0.26, filter: 3000 });
-      tone(1175, t + 0.18, 0.14, { type: 'square', vol: 0.3, filter: 3200 });
-    },
+    // warm-up: a loud start signal on "Begin!", before the count begins
     start: function (t) {
       [783.99, 987.77, 1174.66, 1567.98].forEach(function (f, i) {
         tone(f, t + i * 0.035, 0.6, { type: 'sawtooth', vol: 0.26, filter: 4200 });
@@ -221,6 +217,8 @@
     set: function (k, v) { settings[k] = !!v; if (k === 'voice' && !v) stopVoice(); },
     get: function (k) { return settings[k]; },
     voiceSupported: function () { return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); },
+    /** Has a spoken line actually played here (and is the coach on)? */
+    voiceWorks: function () { return !!(settings.voice && voice.ok); },
     /** fn() is called once if spoken lines never actually play here. */
     onVoiceProblem: function (fn) { voice.onProblem = fn; }
   };

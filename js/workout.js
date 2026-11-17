@@ -160,20 +160,21 @@
   // The routine, in order. Timed steps have a duration; counted steps run
   // `counts` × `beats` beats of `beat` seconds (SAF "5 counts of 4").
   // lead: seconds of "get ready" before the move starts: time for the coach to
-  // explain it, then "ready, tick, tick, GO" at the move's own tempo, and only
-  // then the count (jog pace changes run straight on).
+  // name it ("Next warm-up: squats"), then a spoken "5, 4, 3, 2, 1, begin",
+  // and only then the count (jog pace changes run straight on). The first
+  // lead also holds the coach's welcome.
   var WARMUP_STEPS = [
-    { move: 'jog', pace: 'slow', duration: 10, lead: 5 },
+    { move: 'jog', pace: 'slow', duration: 10, lead: 12 },
     { move: 'jog', pace: 'quick', duration: 10 },
     { move: 'jog', pace: 'slow', duration: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
-    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 4.5 },
-    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 6 },
-    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 5.5 },
-    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 6.5 },
-    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 5 },
-    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 6.5 },
-    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 5 }
+    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 9 },
+    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 9 },
+    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 9 },
+    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 7.5 },
+    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 7.5 }
   ];
   /** The moving part of a step (without its lead-in). */
   function warmupMoveDuration(st) { return st.duration || Math.round(st.counts * st.beats * st.beat * 1000) / 1000; }

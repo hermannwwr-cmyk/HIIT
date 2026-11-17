@@ -43,7 +43,7 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 
 ### Warm-up
 
-When a workout starts, a 3:36 SAF-style warm-up runs first:
+When a workout starts, the coach welcomes you ("Welcome to today's HIIT session") and a 4:06 SAF-style warm-up runs first:
 
 | Step | How long |
 | --- | --- |
@@ -54,7 +54,7 @@ When a workout starts, a 3:36 SAF-style warm-up runs first:
 | Hamstring stretch, left then right | 5 counts of 4 each |
 | Calf stretch, left then right | 5 counts of 4 each |
 
-Each new move starts with a short **Get ready**: the coach explains the move (the demo waits, dimmed), and nothing starts while the coach is still talking (the screen says *Listen…* and the clock waits). Then **Ready**, two ticks at the move's own tempo, a full-screen **GO** with a loud start signal and a vibration, and only then the first count. With beeps off, the coach says "Ready" and "Go!" instead. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
+Each new move starts with a short **Get ready**: the coach names it ("Next warm-up: squats. Five counts of four.") while the demo waits, dimmed, and nothing starts while the coach is still talking (the screen says *Listen…* and the clock waits). Then the coach counts down "5, 4, 3, 2, 1" with a big number and a tick each second (3, 2, 1 also pulse the screen edge and vibrate), says "Begin!" as a full-screen **BEGIN** opens with a loud start signal, and only then the first count. A leg switch gets the same countdown; a change of jogging pace runs straight on. If the voice can't play, the ticks get louder for 3, 2, 1 and carry the countdown on their own. Counted moves show the count with four beat dots, tick on every beat and call the count on the fourth ("1, 2, 3, ONE"). **Skip warm-up** jumps straight to Get ready, and the switch in the Session panel turns the warm-up off (remembered on the device).
 
 ### Intensity
 
@@ -63,7 +63,7 @@ Each new move starts with a short **Get ready**: the coach explains the move (th
 | Easy | 30 s | 30 s rest | 3 | 5:00 rest |
 | Medium | 30 s | 30 s jumping jacks | 2 | 5:00 rest |
 
-Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set break replaces the rest after the last exercise of a set, and the very last rest is dropped. On Medium every exercise is followed by jumping jacks, then the set break. A 5-exercise session is 23:40 on Easy and 15:10 on Medium.
+Every session opens with a 10 s get-ready countdown (after the warm-up, the coach says "Warm-up done" first). On Easy the 5-minute set break replaces the rest after the last exercise of a set, and the very last rest is dropped. On Medium every exercise is followed by jumping jacks, then the set break. A 5-exercise session is 23:40 on Easy and 15:10 on Medium.
 
 ### Personal trainer
 
