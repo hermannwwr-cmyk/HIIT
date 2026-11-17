@@ -1531,7 +1531,7 @@
     $('wProg').classList.add('undoing'); // takes the place of the "sets left" text
     t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');
     clearTimeout(undo.timer);
-    undo.timer = setTimeout(hideUndo, 6000);
+    undo.timer = setTimeout(hideUndo, 8000);
   }
   function hideUndo() { clearTimeout(undo.timer); undo.at = null; $('toast').hidden = true; $('wProg').classList.remove('undoing'); }
   /**
@@ -1580,7 +1580,7 @@
     var peek = $('riPeek'), pkDial = $('pkDial'), pkK = $('pkK'), pkDigits = $('pkDigits'), pkSub = $('pkSub');
     var chip = $('phaseChip'), wName = $('wName'), wEx = $('wEx'), head = document.querySelector('.w-head');
     var peekFig = null, saved = null, dest = null;
-    var g = null, eatClick = false, lockUntil = 0, settleT = 0;
+    var g = null, eatClick = false, lockUntil = 0, settleT = 0, nudgeT = 0;
     function locked() { return performance.now() < lockUntil; }
     function blocked(e) {
       return !run || run.finished || currentScreen !== 'workout' || locked() ||
@@ -1674,6 +1674,7 @@
       stage.classList.remove('swiping');
       clearTimeout(settleT);
       settleT = setTimeout(function () {
+        if (g && g.on) return; // a new swipe took over: keep the carousel
         stage.classList.remove('settle', 'carousel');
         tp.classList.remove('charge-next', 'charge-prev');
         if (peekFig) peekFig.setPlaying(false);
@@ -1718,7 +1719,7 @@
       open(); prepare(1);
       stage.classList.remove('swiping'); stage.classList.add('settle');
       set(0.35, 1);
-      setTimeout(function () { springBack(1); }, 700);
+      nudgeT = setTimeout(function () { nudgeT = 0; springBack(1); }, 700);
     }
     /** A sideways swipe during exercise that we ignored: show where skipping lives instead. */
     var hinted = false;
@@ -1749,6 +1750,7 @@
         ignored = e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
       }
       hinted = false;
+      if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
       g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored };
     });
     area.addEventListener('pointermove', function (e) {
@@ -1804,6 +1806,7 @@
   function finish() {
     if (!run || run.finished) return;
     run.finished = true;
+    releaseHistory();
     var st = playedStats();
     var counted = st.active >= st.planned * 0.5;
     if (counted) recordWorkout(st.total);
@@ -1872,8 +1875,13 @@
     requestAnimationFrame(step);
   }
 
+  /** The workout added a history entry (so Back asks first); take it away when we leave. */
+  function releaseHistory() {
+    try { if (history.state && history.state.hiit) history.back(); } catch (e) { /* ignore */ }
+  }
   function endRun() {
     if (run) run.finished = true;
+    releaseHistory();
     run = null;
     unlockScreen();
     A.stopVoice();

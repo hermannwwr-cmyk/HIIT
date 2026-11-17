@@ -79,7 +79,7 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 - Progress strip under it: one group per set (plus the warm-up), one cell per exercise. The current cell fills as you go; during rest the next one is outlined. It reads *Set 1 of 3 · 2 sets left after this*, then *Final set*.
 - Big countdown labelled for what it counts down to: *Time left*, *Crunches in*, *Set 2 in*. The warm-up shows counts as *2/5*.
 - *Next: Squats in 0:58* line during every exercise, so you always know what's coming and when.
-- **Start now** (or **Start set 2**) on the Up next card jumps straight to the next exercise; **Skip warm-up** sits in the progress strip. Every skip can be undone for 6 seconds.
+- **Start now** (or **Start set 2**) on the Up next card jumps straight to the next exercise; **Skip warm-up** sits in the progress strip. Every skip or back can be undone for 8 seconds.
 - The ring shows the current interval. The last three seconds of every interval beep.
 - The finish screen shows total time, time spent on each exercise, and your workouts and day streak on this device.
 
@@ -88,8 +88,10 @@ Every session opens with a 10 s get-ready countdown. On Easy the 5-minute set br
 | Action | Button | Key |
 | --- | --- | --- |
 | Pause / resume | centre button in the ring | Space |
-| Next interval | ⏭ or swipe left | → |
-| Previous interval (or restart the current one) | ⏮ or swipe right | ← |
+| Next interval | ⏭, or swipe left | → |
+| Back (restart the interval, or redo the last exercise during a rest) | ⏮, or swipe right | ← |
+
+Swiping slides a preview of where you're going into the ring while ⏭ / ⏮ fills up; let go once it's full. During rest, get ready and the set break you can swipe anywhere; during an exercise only a drag that starts on the controls counts, so wiping the screen or picking the phone up never skips. Browser Back during a workout asks before ending it.
 | End workout | ✕ | Esc |
 
 The screen is kept awake during a workout where the browser supports the Wake Lock API, and phones vibrate on each phase change.
