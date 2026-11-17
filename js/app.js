@@ -55,7 +55,7 @@
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
         setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
-        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#c76a0a', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
+        rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#d97706', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
         done: [['#d4380f', '#c76a0a'], 0.5]
       },
       group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#c76a0a', '#b45309'], rest: ['#0a84ff', '#2563eb'] }
@@ -677,11 +677,15 @@
 
     // track (dashed during jumping jacks so the phase reads without colour)
     ctx.lineCap = 'butt';
-    ctx.strokeStyle = rgba(ca, light ? 0.2 : 0.24);
+    ctx.strokeStyle = light ? rgba(ca, 0.2) : 'rgb(' + cb.map(function (v) { return Math.round(v * 0.28 + 10); }).join(',') + ')';
     ctx.lineWidth = th;
-    if (this.dashed) { var seg = TAU * R / 60; ctx.setLineDash([seg * 0.55, seg * 0.45]); }
+    if (this.dashed) {
+      // jumping jacks: a dotted ring (non-colour cue)
+      var seg = TAU * R / 72;
+      ctx.setLineDash([0.01, seg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.42;
+    }
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.lineWidth = th;
 
     if (prog > 0.001) {
       var grad;
@@ -698,9 +702,13 @@
       if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th * 1.2; }
       ctx.strokeStyle = grad;
       ctx.lineWidth = th;
-      if (this.dashed) { var dseg = TAU * R / 60; ctx.setLineDash([dseg * 0.55, dseg * 0.45]); }
+      if (this.dashed) {
+        // the live arc becomes a run of beads during jacks, readable without colour
+        var dseg = TAU * R / 72;
+        ctx.setLineDash([0.01, dseg]); ctx.lineCap = 'round'; ctx.lineWidth = th * 0.78;
+      }
       ctx.beginPath(); ctx.arc(cx, cy, R, A0, a1); ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.setLineDash([]); ctx.lineCap = 'butt'; ctx.lineWidth = th;
       ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
 
       // head cap with a soft shadow ahead of it, kept inside the ring band
@@ -767,7 +775,7 @@
         var sp = Hh * (0.9 + Math.random() * 0.9);
         this.parts.push({ x: fromLeft ? -10 : W + 10, y: Hh * 0.85, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
           g: Hh * 0.9, drag: 0.985, life: 1, decay: 0.28 + Math.random() * 0.25,
-          size: 4 + Math.random() * 6, c: hexRgb(colors[i % colors.length]), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 12, streak: false });
+          size: 4 + Math.random() * 6, c: hexRgb(colors[(i >> 1) % colors.length]), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 12, streak: false });
       }
     },
     draw: function (dt) {
@@ -1093,7 +1101,7 @@
     }
 
     // flash, particles, sound, voice
-    flash(ph.flash, sub);
+    flash(ph.flash, sub, false, c);
     var stage = $('stage').getBoundingClientRect();
     var scx = stage.left + stage.width / 2, scy = stage.top + stage.height / 2;
     fx.burst(scx, scy, c.concat(['#ffffff']), seg.type === 'work' ? 110 : 50, seg.type === 'work' ? 1.1 : 0.6);
@@ -1126,9 +1134,10 @@
   }
 
   var flashTimer = 0;
-  function flash(text, sub, count) {
+  function flash(text, sub, count, colors) {
     var el = $('flash'), t = $('flashText');
     if (!text) return;
+    if (colors) { el.style.setProperty('--c1', colors[0]); el.style.setProperty('--c2', colors[1]); }
     t.textContent = text;
     t.dataset.text = text;
     t.style.setProperty('--n', Math.max(3, text.length));
@@ -1321,6 +1330,8 @@
     A.sleep(4000);
     buzz([100, 60, 100, 60, 240]);
     setDoneTitle(counted);
+    var dr = $('doneRing');
+    dr.classList.remove('play'); void dr.getBoundingClientRect(); if (counted) dr.classList.add('play');
 
     document.body.dataset.phase = 'done';
     bg.setMood(PHASE.done.colors[0], PHASE.done.colors[1], 1);
@@ -1348,7 +1359,7 @@
     else { doneFig.setExercise('jacks'); doneFig.setPlaying(true); }
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
-    if (isStudio()) { if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? '#111318' : '#ffffff']); }
+    if (isStudio()) { if (counted) fx.confetti([PHASE.done.colors[0], PHASE.rest.colors[0], PHASE.setrest.colors[0], LOOKS[look].scheme === 'light' ? PHASE.done.colors[1] : '#ffffff']); }
     else fx.confetti(['#ffd23f', '#ff2bd6', '#22e5ff', '#c6ff1a', '#ffffff']);
     setTimeout(function () {
       var r = $('doneFig').getBoundingClientRect();
@@ -1366,7 +1377,8 @@
       el.dataset.text = lines[i];
       el.firstElementChild.textContent = lines[i];
     });
-    $('doneEyebrow').textContent = counted ? 'Session complete' : 'Less than half done';
+    var lv = run && run.tl ? run.tl.level : H.LEVELS[state.level];
+    $('doneEyebrow').textContent = (counted ? 'Session complete · ' : '') + lv.name + ' · ' + lv.sets + ' sets';
     $('doneNote').hidden = counted;
   }
 

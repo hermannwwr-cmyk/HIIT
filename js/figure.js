@@ -448,6 +448,14 @@
         if (y - r < y0) y0 = y - r; if (y + r > y1) y1 = y + r;
       }
     }
+    // Standing movements: frame symmetrically around the standing pose so the
+    // athlete starts (and rests) in the centre, not offset by the step/hip hinge.
+    if (ex.id === 'squat' || ex.id === 'lunge' || ex.id === 'jacks' || ex.id === 'rest') {
+      project(safePose(ex, 0, 0), ex, TMPV);
+      var hx = TMPV[PELVIS * 3];
+      var half = Math.max(hx - x0, x1 - hx);
+      x0 = hx - half; x1 = hx + half;
+    }
     var fv = camSetup(ex).floorV;
     ex._box = { x0: x0 - 0.05, x1: x1 + 0.05, y0: Math.min(y0, fv) - 0.06, y1: y1 + 0.05 };
     return ex._box;
