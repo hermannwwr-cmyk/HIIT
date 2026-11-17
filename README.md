@@ -2,6 +2,8 @@
 
 A full-body HIIT interval timer with a neon arcade look and a built-in personal trainer: a WebGL warp-tunnel backdrop that changes with each phase, glowing animated exercise demos, a ring timer that sheds sparks, step-by-step form guides, and synthesised sound cues with a spoken coach.
 
+**Live site (GitHub Pages):** https://hermannwwr-cmyk.github.io/HIIT/
+
 No framework, no dependencies, no build step. Open `index.html` in a browser, or serve the folder:
 
 ```sh
@@ -95,5 +97,12 @@ scripts/build.mjs   bundles everything into one HTML file in dist/
 npm test             # unit tests (Node 18+)
 npm run build        # dist/overdrive-hiit.html, a single self-contained file
 ```
+
+## Hosting on GitHub Pages
+
+The site is static, so Pages serves it as-is (over HTTPS, which also enables the screen wake lock).
+
+- **Automatic (recommended):** `.github/workflows/pages.yml` runs the unit tests and publishes `index.html`, `css/` and `js/` on every push to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+- **Without Actions:** **Settings → Pages → Source: Deploy from a branch**, pick the branch and `/ (root)`. `.nojekyll` makes Pages serve the files untouched.
 
 Settings (look, intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.
