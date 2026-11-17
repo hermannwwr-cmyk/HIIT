@@ -655,7 +655,7 @@
   --shadow-1: 0 1px 0 rgba(255, 244, 230, .07) inset, 0 1px 2px rgba(0, 0, 0, .3), 0 22px 44px -26px rgba(0, 0, 0, .85);
   --work-a: #ff6b3d; --work-b: #f04a2a; --rest-a: #5fb3e8; --rest-b: #6b8fd6; --jacks-a: #f2b544; --jacks-b: #e8873a;
   --prep-a: #c9bfb2; --prep-b: #8f867b; --break-a: #5fcf9f; --break-b: #3fb3a0; --gold-a: #ff6b3d; --gold-b: #f2b544;
-  --setup-a: #ff6b3d; --setup-b: #6b8fd6;
+  --setup-a: #d8c8b8; --setup-b: #c9b8a6;
 }
 
 /* ---------- dark scheme details shared by all dark directions ---------- */
