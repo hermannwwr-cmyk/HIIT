@@ -517,56 +517,78 @@
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     var w = this.c.clientWidth, h = this.c.clientHeight;
     if (!w || !h) { this.sizeDirty = true; return false; }
-    var tp = $('transport');
-    var hh = tp ? tp.offsetHeight / 2 : 0;
-    if (w !== this.w || h !== this.h || dpr !== this.dpr || hh !== this.hh || this.geoStudio !== isStudio()) {
-      this.w = w; this.h = h; this.dpr = dpr; this.hh = hh;
+    if (w !== this.w || h !== this.h || dpr !== this.dpr || this.geoStudio !== isStudio()) {
+      this.w = w; this.h = h; this.dpr = dpr;
       this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
       this.layout();
     }
     return true;
   };
   /**
-   * Gauge geometry: the ring sits at the top of the stage with an opening at
-   * the bottom, and the transport controls (back, pause, skip) sit in that
-   * opening, half over the ring line. Everything centred inside the stage.
+   * Gauge geometry. The ring has an opening at the bottom; the transport pill
+   * (back, pause, skip) sits in it, centred on the ring's end caps, and scales
+   * with the ring. The figure (or the rest countdown) fills the space inside
+   * the ring above the pill. Everything is centred in the stage.
    */
   Ring.prototype.layout = function () {
-    var studio = isStudio(), w = this.w, h = this.h, hh = this.hh;
+    var studio = isStudio(), w = this.w, h = this.h;
     this.geoStudio = studio;
-    var drop = hh * 0.12; // transport centre sits just below the ring line
     function radius(S) {
       if (studio) { var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5 }; }
       var t = Math.max(6, S * 0.03); return { R: S * 0.405, th: t, ext: t * 1.25 + S * 0.035 };
     }
-    // the largest square whose ring + hanging transport fits the stage
-    var S = Math.min(w, h);
-    for (var k = 0; k < 4; k++) {
-      var r0 = radius(S);
-      var need = S / 2 + r0.R + drop + hh;
-      if (need <= h) break;
-      S = Math.max(40, S * h / need);
+    function pill(S) {
+      // three fixed slots, so the opening never changes shape between phases
+      var ph = Math.round(Math.max(56, Math.min(84, S * 0.19)));
+      var main = ph - 10, side = Math.max(44, Math.round(ph * 0.72));
+      return { ph: ph, main: main, side: side, pw: side * 2 + main + 12 * 2 + 5 * 2 + 2 }; // 12px between buttons
     }
-    var r = radius(S);
-    var top = Math.max(0, (h - (S / 2 + r.R + drop + hh)) / 2);
-    var cy = top + S / 2;
-    // half-angle of the opening: the ring line ends just above the transport
-    var clear = r.R - (hh - drop) - 8;
-    var ga = hh ? Math.acos(Math.max(-1, Math.min(1, clear / (r.R + r.ext)))) : 0;
-    ga = Math.max(ga, 0.35);
-    this.geo = { S: S, cx: w / 2, cy: cy, R: r.R, th: r.th, ga: ga, A0: Math.PI / 2 + ga, SW: TAU - 2 * ga };
-    var st = this.c.parentNode;
-    st.style.setProperty('--cy', Math.round(cy) + 'px');
-    st.style.setProperty('--rr', Math.round(r.R) + 'px');
-    st.style.setProperty('--ss', Math.round(S) + 'px');
-    st.style.setProperty('--ty', Math.round(cy + r.R + drop) + 'px');
-    $('fig').style.setProperty('--fig-size', Math.round(S * 0.7) + 'px');
+    function fit(S) {
+      var r = radius(S), p = pill(S);
+      var half = p.pw / 2 + 12 + r.ext; // opening half-chord: pill + breathing room + cap
+      var ga = Math.asin(Math.min(0.92, half / r.R));
+      var capY = r.R * Math.cos(ga);
+      return { S: S, r: r, p: p, ga: ga, capY: capY, below: Math.max(capY + p.ph / 2, capY + r.ext) + 2 };
+    }
+    var S = Math.min(w, h), f = fit(S);
+    for (var k = 0; k < 8; k++) {
+      var need = S / 2 + f.below;
+      if (need <= h + 0.5 && f.p.pw <= w) break;
+      S = Math.max(60, Math.min(S * h / need, S * w / f.p.pw) * 0.998);
+      f = fit(S);
+    }
+    var r = f.r, p = f.p;
+    var cy = Math.max(0, (h - (S / 2 + f.below)) / 2) + S / 2;
+    // inside the ring, above the pill: where the figure or the rest countdown goes
+    var innerTop = cy - r.R + r.th * 0.5 + 4;
+    var innerBot = cy + f.capY - p.ph / 2 - 4;
+    var regionH = Math.max(40, innerBot - innerTop);
+    this.geo = { S: S, cx: w / 2, cy: cy, R: r.R, th: r.th, ga: f.ga, A0: Math.PI / 2 + f.ga, SW: TAU - 2 * f.ga, fy: (innerTop + innerBot) / 2, fh: regionH };
+    var st = this.c.parentNode, px = function (v) { return Math.round(v) + 'px'; };
+    st.style.setProperty('--cy', px(cy));
+    st.style.setProperty('--rr', px(r.R));
+    st.style.setProperty('--ss', px(S));
+    st.style.setProperty('--ty', px(cy + f.capY));
+    st.style.setProperty('--ph', px(p.ph));
+    st.style.setProperty('--pmain', px(p.main));
+    st.style.setProperty('--pside', px(p.side));
+    st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
+    st.style.setProperty('--fh', px(regionH));
+    $('fig').style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
     sizeUpNext();
   };
   /** The up-next card overlays the readout's space; its demo tile fills that height. */
   function sizeUpNext() {
-    var h = $('readout').offsetHeight;
-    if (h) $('upNext').style.setProperty('--un-fig', Math.round(Math.max(64, Math.min(150, h - 16))) + 'px');
+    var lower = document.querySelector('.w-lower'), card = $('upNext');
+    var H = lower.offsetHeight, W = Math.min(lower.offsetWidth, 520);
+    if (!H || !W) return;
+    var S = typeof ring !== 'undefined' && ring && ring.geo ? ring.geo.S : 300;
+    var compact = H < 230;
+    var fig = compact ? H - 20 : H - 28 - 50 - 12; // padding, action row, gap
+    fig = Math.max(64, Math.min(fig, W * 0.47, S * 0.62, 230));
+    card.classList.toggle('compact', compact);
+    card.classList.toggle('roomy', !compact && fig >= 140);
+    card.style.setProperty('--un-fig', Math.round(fig) + 'px');
   }
   Ring.prototype.draw = function (dt) {
     if (!this.resize()) return;
@@ -622,16 +644,18 @@
     if (this.breathe != null) {
       var bt = this.breathe % 10;
       var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
-      var br = R * (0.42 + 0.4 * bv);
-      var bgrad = ctx.createRadialGradient(cx, cy, br * 0.2, cx, cy, br);
+      // centred on the countdown, which sits above the controls
+      var by = g.fy, bmax = Math.min(R - th * 1.6, g.fh * 0.62);
+      var br = bmax * (0.52 + 0.48 * bv);
+      var bgrad = ctx.createRadialGradient(cx, by, br * 0.2, cx, by, br);
       bgrad.addColorStop(0, rgba(ca, 0.02));
       bgrad.addColorStop(0.75, rgba(ca, 0.10 + 0.08 * bv));
       bgrad.addColorStop(1, rgba(ca, 0));
       ctx.fillStyle = bgrad;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, by, br, 0, TAU); ctx.fill();
       ctx.strokeStyle = rgba(ca, 0.25 + 0.35 * bv);
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, by, br, 0, TAU); ctx.stroke();
     }
 
     ctx.globalCompositeOperation = 'lighter';
@@ -748,10 +772,10 @@
       var e = 1 - Math.pow(1 - s.t, 3);
       ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.8 * s.s);
       ctx.lineWidth = th * (1 - s.t) * 1.4;
-      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.08, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R + e * S * 0.08, A0, A1); ctx.stroke();
       ctx.strokeStyle = rgba([255, 255, 255], (1 - s.t) * 0.5 * s.s);
       ctx.lineWidth = Math.max(1, th * 0.25 * (1 - s.t));
-      ctx.beginPath(); ctx.arc(cx, cy, R - e * S * 0.1, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R - e * S * 0.1, A0, A1); ctx.stroke();
     }
 
     ctx.globalCompositeOperation = 'source-over';
@@ -775,13 +799,14 @@
     if (breathing) {
       var bt = this.breathe % 10;
       var bv = bt < 4 ? easeInOut(bt / 4) : 1 - easeInOut((bt - 4) / 6);
-      var br = (R - th) * (0.55 + 0.42 * bv);
-      var pg = ctx.createRadialGradient(cx, cy, br * 0.15, cx, cy, br);
+      var by = g.fy, bmax = Math.min(R - th, g.fh * 0.66);
+      var br = bmax * (0.55 + 0.45 * bv);
+      var pg = ctx.createRadialGradient(cx, by, br * 0.15, cx, by, br);
       pg.addColorStop(0, rgba(ca, 0));
       pg.addColorStop(0.7, rgba(ca, (light ? 0.08 : 0.07) + 0.07 * bv));
       pg.addColorStop(1, rgba(ca, 0));
       ctx.fillStyle = pg;
-      ctx.beginPath(); ctx.arc(cx, cy, br, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, by, br, 0, TAU); ctx.fill();
     }
 
     // track (dashed during jumping jacks so the phase reads without colour)
@@ -873,7 +898,7 @@
       var e = 1 - Math.pow(1 - s.t, 3);
       ctx.strokeStyle = rgba(ca, (1 - s.t) * 0.45 * s.s);
       ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(cx, cy, R + th * 0.6 + e * S * 0.05, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R + th * 0.6 + e * S * 0.05, A0, A1); ctx.stroke();
     }
     this.sparks.length = 0;
   };
@@ -1087,7 +1112,20 @@
     btn.querySelector('use').setAttribute('href', paused ? '#i-play' : '#i-pause');
   }
 
+  var veilGuard = 0;
   function setPauseUi(paused) {
+    var veil = $('pausedVeil');
+    if (paused && veil.hidden) {
+      // Resume lands exactly under the finger that pressed pause
+      var pr = $('pause').getBoundingClientRect();
+      if (pr.width) {
+        veil.style.setProperty('--rx', Math.round(pr.left + pr.width / 2) + 'px');
+        veil.style.setProperty('--ry', Math.round(pr.top + pr.height / 2) + 'px');
+      }
+      veil.classList.add('guard');
+      clearTimeout(veilGuard);
+      veilGuard = setTimeout(function () { veil.classList.remove('guard'); }, 500);
+    }
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
     setInert(!$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden);
     ring.needs = 2;
@@ -1146,10 +1184,13 @@
   }
   function updateProgress(seg) {
     var tl = run.tl, idx = seg.index, sets = tl.level.sets, nEx = tl.exercises.length;
+    var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
+    var nextWork = restMode ? H.nextWorkIndex(tl, idx) : -1;
     Object.keys(prog.bySeg).forEach(function (k) {
       var c = prog.bySeg[k], i = +k;
       c.classList.toggle('is-done', i < idx);
       c.classList.toggle('is-now', i === idx);
+      c.classList.toggle('is-next', i === nextWork); // during rest: where you're headed
       c.style.setProperty('--p', i < idx ? 1 : 0);
     });
     if (prog.warm) {
@@ -1168,19 +1209,22 @@
     prog.live = seg.type === 'work' ? prog.bySeg[idx] : seg.type === 'warmup' ? prog.warm : null;
 
     var setTxt, leftTxt;
+    function sets_(n) { return n + (n === 1 ? ' set' : ' sets'); }
     if (seg.type === 'warmup') {
       setTxt = 'Warm-up';
-      leftTxt = 'then ' + sets + ' sets of ' + nEx;
+      leftTxt = '';
     } else if (seg.type === 'setrest') {
       setTxt = 'Set ' + seg.set + ' of ' + sets + ' done';
-      leftTxt = (sets - seg.set) + (sets - seg.set === 1 ? ' set to go' : ' sets to go');
+      leftTxt = sets_(sets - seg.set) + ' left';
     } else {
       var more = sets - seg.set;
       setTxt = 'Set ' + seg.set + ' of ' + sets;
-      leftTxt = more > 0 ? more + (more === 1 ? ' more set after this' : ' more sets after this') : 'Final set';
+      leftTxt = more > 0 ? sets_(more) + ' left after this' : 'Final set';
     }
     $('wpSet').textContent = setTxt;
     $('wpLeft').textContent = leftTxt;
+    $('wpLeft').hidden = !leftTxt;
+    $('wpSkip').hidden = seg.type !== 'warmup';
   }
 
   /** The rest screen's "Up next" card: name, body area and a live demo of what's coming. */
@@ -1194,10 +1238,11 @@
       : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) + ' · first up'
       : 'Up next · ' + n + ' of ' + of;
     $('unName').textContent = ex.name;
-    $('unMeta').textContent = H.GROUPS[ex.group].label + ' · ' + ex.muscles;
-    var gc = GROUP_COLORS[ex.group] || PHASE.work.colors;
-    $('upNext').style.setProperty('--gc', gc[0]);
-    if (nextFig) { nextFig.setExercise(id); nextFig.setColors(gc[0], gc[1]); nextFig.pulse(); }
+    $('unMeta').innerHTML = '<b>' + esc(H.GROUPS[ex.group].label) + '</b><span class="un-mus"> · ' + esc(ex.muscles) + '</span>';
+    $('unStartText').textContent = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
+    $('unStart').setAttribute('aria-label', (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + ex.name);
+    var c = PHASE[seg.type].colors; // the card wears the phase colour, never a work colour
+    if (nextFig) { nextFig.setExercise(id); nextFig.setColors(c[0], c[1]); nextFig.pulse(); }
     sizeUpNext();
   }
 
@@ -1232,15 +1277,16 @@
     function steps(e, named) { return e.steps.map(function (s, i) { return { k: 'Step ' + (i + 1) + ' of ' + e.steps.length + (named ? ' · ' + e.name : ''), v: s }; }); }
     switch (seg.type) {
       case 'prep':
-        return { period: 5, items: [{ k: 'First up · ' + ex.name, v: ex.steps[0] }, { k: 'First up · ' + ex.name, v: ex.cue }] };
+        return { period: 5, items: [{ k: 'Setup', v: ex.steps[0] }, { k: 'Form', v: ex.cue }] };
       case 'work':
         return { period: 7.5, items: [{ k: 'Form', v: ex.cue }].concat(
           ex.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
           [{ k: 'Breathing', v: ex.breathe }]) };
-      case 'jacks':
-        return { period: 7.5, items: [{ k: 'Form', v: H.JACKS.cue }].concat(
-          H.JACKS.cues.slice(0, 2).map(function (c) { return { k: 'Form', v: c }; }),
-          [{ k: 'Breathing', v: H.JACKS.breathe }]) };
+      case 'jacks': {
+        var up = nx ? [{ k: 'Up next · ' + nx.name, v: nx.steps[0] }] : [];
+        return { period: 6, items: [{ k: 'Form', v: H.JACKS.cue }].concat(up,
+          [{ k: 'Breathing', v: H.JACKS.breathe }], up.length ? [{ k: 'Up next · ' + nx.name, v: nx.cue }] : []) };
+      }
       case 'rest':
         return { period: 7.5, items: nx ? steps(nx) : [{ k: 'Recover', v: H.REST.cue }] };
       case 'warmup': {
@@ -1290,7 +1336,7 @@
     var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
     run.mode = restMode ? 'rest' : 'active';
     $('workout').dataset.mode = run.mode;
-    $('upNext').setAttribute('aria-hidden', restMode ? 'false' : 'true');
+    $('upNext').hidden = !restMode;
     $('dial').setAttribute('aria-hidden', 'true');
     syncFigs();
     ring.breathe = seg.type === 'setrest' || seg.type === 'rest' ? 0 : null;
@@ -1320,30 +1366,32 @@
     if (seg.type === 'warmup') {
       name = warmName(seg); label = seg.counts ? 'Count' : 'Time left';
       sub = name;
-      $('wEx').textContent = 'Warm-up · ' + seg.step + ' of ' + seg.steps;
+      $('wEx').textContent = 'Move ' + seg.step + ' of ' + seg.steps;
       if (prevSeg && prevSeg.type === 'warmup') {
         // one wipe per new move; a side swap says SWITCH; a pace change needs no wipe
         flashWord = prevSeg.move !== seg.move ? WARM_WORD[seg.move] : prevSeg.side !== seg.side ? 'SWITCH' : '';
       }
     } else if (seg.type === 'prep') {
-      name = 'Get into position'; label = 'Starting in'; sub = 'First up · ' + ex.name;
-      $('wEx').textContent = 'First up: ' + ex.name;
+      name = 'Get into position'; label = ring.geo && ring.geo.S >= 300 && ex.name.length <= 14 ? ex.name + ' in' : 'Starting in'; sub = 'First up · ' + ex.name;
+      $('wEx').textContent = 'Set 1 · ' + nEx + ' exercises';
     } else if (seg.type === 'work') {
       name = ex.name; label = 'Time left';
       sub = (seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + ' · ' : '') + ex.name;
-      $('wEx').textContent = 'Exercise ' + (seg.slot + 1) + ' of ' + nEx;
+      $('wEx').innerHTML = '<span class="ex-word">Exercise </span>' + (seg.slot + 1) + ' of ' + nEx + ' · <b>' + esc(H.GROUPS[ex.group].label) + '</b>';
     } else if (seg.type === 'jacks') {
       name = H.JACKS.name; label = 'Time left';
       sub = seg.setBreak ? 'Then a 5:00 break' : nx ? 'Next · ' + nx.name : 'Last push';
-      $('wEx').textContent = 'Active recovery';
+      $('wEx').textContent = seg.setBreak ? 'Keep moving · then a break' : nx ? 'Keep moving · then ' + nx.name : 'Last push · finish strong';
     } else if (seg.type === 'rest') {
-      name = 'Catch your breath'; label = 'Next in';
+      // the next move's name inside the ring only when the ring is big enough to hold it
+      name = 'Rest'; label = nx && ring.geo && ring.geo.S >= 300 && nx.name.length <= 14 ? nx.name + ' in' : 'Next in';
       sub = nx ? 'Next · ' + nx.name : 'Breathe';
-      $('wEx').textContent = seg.duration + ' second rest';
+      $('wEx').textContent = '';
     } else { // setrest
       name = 'Set ' + seg.set + ' complete'; label = 'Set ' + (seg.set + 1) + ' in';
       sub = 'Set ' + seg.set + ' of ' + level.sets + ' complete';
       $('wEx').textContent = (seg.duration >= 60 ? seg.duration / 60 + ' minute' : seg.duration + ' second') + ' break';
+      label = 'Set ' + (seg.set + 1) + ' in';
     }
     $('wName').textContent = name;
     $('dLabel').textContent = label;
@@ -1359,12 +1407,9 @@
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
-    var skipLabel = seg.type === 'warmup' ? 'Skip warm-up' : seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
-    var showStart = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest' || seg.type === 'warmup';
-    $('skip').classList.toggle('has-text', showStart);
-    $('skipText').textContent = skipLabel;
-    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Skip the warm-up and get ready to start'
-      : showStart ? skipLabel + ': ' + exName(seg.next || seg.exercise) : 'Next interval');
+    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Next warm-up move'
+      : restMode ? (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise)
+      : 'Next interval');
 
     updateProgress(seg);
 
@@ -1433,16 +1478,17 @@
   function setDigits(text, spokenLabel) {
     if (text !== digitsText) {
       [$('digits'), $('dialDigits')].forEach(function (dg) {
-        if (text.length !== digitsText.length) {
+        var slash = text.indexOf('/');
+        if (text.length !== digitsText.length || slash !== digitsText.indexOf('/')) {
           dg.textContent = '';
           for (var i = 0; i < text.length; i++) {
             var sp = document.createElement('span');
-            sp.className = text[i] === ':' ? 'd colon' : 'd';
+            sp.className = text[i] === ':' ? 'd colon' : slash >= 0 && i >= slash ? 'd of' : 'd';
             dg.appendChild(sp);
           }
         }
         for (var j = 0; j < text.length; j++) dg.children[j].textContent = text[j];
-        dg.classList.toggle('long', text.length > 2);
+        dg.classList.toggle('long', (slash >= 0 ? slash : text.length) > 2);
       });
       digitsText = text;
     }
@@ -1469,6 +1515,11 @@
     if (!natural) return;
     if (whole <= 3) {
       pulseDigits('final');
+      if (run.mode === 'rest') {
+        $('dialK').textContent = 'Get set';
+        $('dialSub').textContent = '';
+        var wc = PHASE.work.colors; ring.setColors(wc[0], wc[1]);
+      }
       A.play(whole === 1 ? 'tickLast' : 'tick');
       bg.beatNow(1);
       if (!reduced && !isStudio()) flash(String(whole), '', true);
@@ -1518,6 +1569,9 @@
     var v = $('coachV');
     v.textContent = item.v;
     v.classList.remove('swap'); void v.offsetWidth; v.classList.add('swap');
+    var tip = $('unTip');
+    tip.innerHTML = '<b>' + esc(item.k) + '</b> ' + esc(item.v);
+    tip.classList.remove('swap'); void tip.offsetWidth; tip.classList.add('swap');
   }
 
   /** The always-visible "what's next and when" line. */
@@ -1538,8 +1592,10 @@
       if (segs[i].type === 'setrest') return 'Set break in <b>' + clock(segs[i].start - t) + '</b>';
     }
     if (nw >= 0) {
-      var then = segs[idx + 1] && segs[idx + 1].type === 'jacks' && seg.type === 'work' ? ' after jacks' : '';
-      return 'Next: <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>' + then;
+      if (segs[idx + 1] && segs[idx + 1].type === 'jacks' && seg.type === 'work') {
+        return 'Then <b>jumping jacks</b> → <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>';
+      }
+      return 'Next: <b>' + esc(exName(segs[nw].exercise)) + '</b> in <b>' + clock(segs[nw].start - t) + '</b>';
     }
     if (seg.type === 'work' && segs[idx + 1] && segs[idx + 1].type === 'jacks') return 'Then <b>30s jumping jacks</b> to finish';
     return '<b>Last interval.</b> Finish strong!';
@@ -1548,7 +1604,7 @@
   /** Counted warm-up steps: one call per beat ("1, 2, 3, ONE"). */
   function onBeat(seg, bi, prev) {
     var count = Math.floor(bi / seg.beats) + 1, beat = bi % seg.beats + 1;
-    setDigits(String(count), 'Count ' + count + ' of ' + seg.counts);
+    setDigits(count + '/' + seg.counts, 'Count ' + count + ' of ' + seg.counts);
     var dots = $('beats').children;
     for (var i = 0; i < dots.length; i++) { dots[i].classList.toggle('on', i < beat); dots[i].classList.toggle('now', i === beat - 1); }
     var natural = prev != null && bi === prev + 1 && run.playing;
@@ -1592,7 +1648,7 @@
     if (seg.type === 'setrest' || seg.type === 'rest') {
       ring.breathe = t - seg.start;
       var inhale = (ring.breathe % 10) < 4;
-      if (inhale !== run.inhale) { run.inhale = inhale; $('dialSub').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
+      if (inhale !== run.inhale && remaining > 3) { run.inhale = inhale; $('dialSub').textContent = inhale ? 'Breathe in…' : 'Breathe out…'; }
     }
     ring.progress = remaining / seg.duration;
     ring.total = t / tl.total;
@@ -1611,11 +1667,40 @@
 
   function skip() {
     if (!run) return;
-    var idx = H.segmentAt(run.tl, elapsedNow());
-    var next = run.tl.segments[idx + 1];
+    var from = elapsedNow();
+    var idx = H.segmentAt(run.tl, from);
+    var seg = run.tl.segments[idx], next = run.tl.segments[idx + 1];
     A.play('click');
     seek(next ? next.start : run.tl.total);
+    if (seg && next && seg.end - from > 4) offerUndo(skippedWhat(seg), from);
   }
+  function skippedWhat(seg) {
+    return seg.type === 'warmup' ? 'Skipped ' + warmName(seg).toLowerCase()
+      : seg.type === 'setrest' ? 'Skipped the set break'
+      : seg.type === 'rest' ? 'Skipped rest'
+      : seg.type === 'prep' ? 'Started early'
+      : seg.type === 'jacks' ? 'Skipped jumping jacks'
+      : 'Skipped ' + exName(seg.exercise);
+  }
+  function skipWarmup() {
+    if (!run) return;
+    var from = elapsedNow();
+    A.play('click'); A.stopVoice();
+    seek(run.tl.warmupEnd);
+    offerUndo('Skipped warm-up', from);
+  }
+  /** A skip throws time away; give a few seconds to take it back. */
+  var undo = { at: null, timer: 0 };
+  function offerUndo(text, at) {
+    undo.at = at;
+    $('toastText').textContent = text;
+    var t = $('toast');
+    t.hidden = false;
+    t.classList.remove('in'); void t.offsetWidth; t.classList.add('in');
+    clearTimeout(undo.timer);
+    undo.timer = setTimeout(hideUndo, 6000);
+  }
+  function hideUndo() { clearTimeout(undo.timer); undo.at = null; $('toast').hidden = true; }
   function prev() {
     if (!run) return;
     var t = elapsedNow();
@@ -1720,6 +1805,7 @@
     setInert(false);
     $('quitDialog').hidden = true;
     $('coachSheet').hidden = true;
+    hideUndo();
   }
 
   // quit dialog
@@ -1831,10 +1917,13 @@
 
     $('pause').addEventListener('click', function () { if (run) setPlaying(!run.playing); });
     $('resume').addEventListener('click', function () { setPlaying(true); });
-    $('endFromPause').addEventListener('click', function () { endRun(); showScreen('setup'); });
-    $('skip').addEventListener('click', function () {
-      if (run && run.tl.segments[run.segIdx] && run.tl.segments[run.segIdx].type === 'warmup') { A.play('click'); A.stopVoice(); seek(run.tl.warmupEnd); }
-      else skip();
+    $('endFromPause').addEventListener('click', openQuit); // always confirm
+    $('skip').addEventListener('click', skip);
+    $('unStart').addEventListener('click', skip);
+    $('wpSkip').addEventListener('click', skipWarmup);
+    $('toastUndo').addEventListener('click', function () {
+      if (run && undo.at != null) { A.play('click'); seek(undo.at); }
+      hideUndo();
     });
     $('wuToggle').addEventListener('click', function () {
       state.warmup = !state.warmup; A.play('click'); renderSetup();
@@ -1843,11 +1932,13 @@
     $('quit').addEventListener('click', openQuit);
     $('quitNo').addEventListener('click', function () { closeQuit(true); });
     $('quitYes').addEventListener('click', function () { endRun(); showScreen('setup'); });
-    $('howTo').addEventListener('click', function (e) {
+    function howTo(e) {
       if (!run) return;
       var seg = run.tl.segments[run.segIdx];
       if (seg) openGuide(guideTarget(seg), 'workout', e.currentTarget);
-    });
+    }
+    $('howTo').addEventListener('click', howTo);
+    $('unHow').addEventListener('click', howTo);
 
     $('csClose').addEventListener('click', closeGuide);
     $('csDone').addEventListener('click', closeGuide);
