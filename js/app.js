@@ -683,11 +683,14 @@
       // jumping jacks: beads for the time left, small dots for the time gone (non-colour cue)
       var nB = 60, stepB = TAU / nB, span = prog * TAU, k, ang, u;
       ctx.fillStyle = ctx.strokeStyle;
+      var fadeK = Math.floor(span / stepB + 1e-6) + 1, fadeA = (span / stepB) % 1;
       for (k = 0; k < nB; k++) {
         if (k * stepB <= span + 1e-6) continue;
+        ctx.globalAlpha = k === fadeK ? 1 - Math.min(1, fadeA) : 1; // no bullseye under the fading bead
         ang = A0 + k * stepB;
         ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R, th * 0.15, 0, TAU); ctx.fill();
       }
+      ctx.globalAlpha = 1;
       if (this.hot > 0.01) { ctx.shadowColor = rgba(ca, (light ? 0.28 : 0.55) * this.hot); ctx.shadowBlur = th; }
       for (k = 0; k * stepB <= span + 1e-6 && k < nB; k++) {
         u = span ? k * stepB / span : 1;

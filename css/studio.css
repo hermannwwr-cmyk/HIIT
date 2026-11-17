@@ -583,7 +583,7 @@
 
 /* finish: a coral ring sweeps closed around the athlete */
 [data-look="studio"] .done-figwrap { width: min(300px, 60vw, 30vh); aspect-ratio: 1; }
-[data-look="studio"] .done-figwrap .done-fig { width: 80%; transform: translateY(-4%); }
+[data-look="studio"] .done-figwrap .done-fig { width: 76%; transform: translateY(-3%); }
 [data-look="studio"] .done-ring stop:first-child { stop-color: var(--gold-b); }
 [data-look="studio"] .done-ring stop:last-child { stop-color: var(--gold-a); }
 [data-look="studio"] .done-ring {
