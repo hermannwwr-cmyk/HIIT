@@ -10,6 +10,8 @@ No framework, no dependencies, no build step. Open `index.html` in a browser, or
 npm run serve        # python3 -m http.server 8080, then open http://localhost:8080
 ```
 
+**On your phone:** open the live site and add it to the home screen (iPhone: Share → *Add to Home Screen*; Android Chrome: ⋮ → *Add to Home screen* / *Install app*). It gets the Overdrive icon (the workout's timer ring with a pause in its opening) and opens full screen like an app.
+
 ## Looks
 
 The default is **Automatic**: Studio in light or dark to match the phone's system theme, switching live if the phone changes (even mid-workout). Pick light or dark from the appearance button (◐) in the top bar; that choice is remembered on the device. `?look=auto|studio-dark|studio-light` in the URL overrides it for that visit only.
@@ -107,7 +109,10 @@ js/app.js           UI controller, timer engine, ring timer with the controls in
 js/figure.js        Canvas 2D athlete that demonstrates each exercise (studio mannequin)
 js/bg.js            WebGL backdrop shader (studio lighting)
 js/audio.js         Web Audio sound effects and speechSynthesis voice coach
-tests/              node:test unit tests for workout.js
+icons/              app icon: favicon.svg / favicon-32.png (browser tab), apple-touch-icon.png (iPhone),
+                    icon-192/512 + maskable-512 (Android); icon.svg and maskable.svg are the sources
+manifest.webmanifest  name, colours and icons for "Add to Home Screen" (opens full screen)
+tests/              node:test unit tests for workout.js and the site's icon/manifest files
 dev/figure-test.html  gallery of every exercise animation for checking the figures
 scripts/build.mjs   bundles everything into one HTML file in dist/
 ```
@@ -121,7 +126,7 @@ npm run build        # dist/overdrive-hiit.html, a single self-contained file
 
 The site is static, so Pages serves it as-is (over HTTPS, which also enables the screen wake lock).
 
-- **Automatic (recommended):** `.github/workflows/pages.yml` runs the unit tests and publishes `index.html`, `css/` and `js/` on every push to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+- **Automatic (recommended):** `.github/workflows/pages.yml` runs the unit tests and publishes `index.html`, `manifest.webmanifest`, `css/`, `js/` and `icons/` on every push to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 - **Without Actions:** **Settings → Pages → Source: Deploy from a branch**, pick the branch and `/ (root)`. `.nojekyll` makes Pages serve the files untouched.
 
 Settings (look, intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.

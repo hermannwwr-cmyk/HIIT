@@ -29,7 +29,7 @@ jobs:
       - name: Assemble the site (only what the app needs)
         run: |
           mkdir -p _site
-          cp -r index.html css js _site/
+          cp -r index.html manifest.webmanifest css js icons _site/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
