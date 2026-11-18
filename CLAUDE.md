@@ -1,0 +1,69 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Overdrive HIIT is a static, dependency-free HIIT interval timer (no framework, no bundler, no npm dependencies). It is live on GitHub Pages at https://hermannwwr-cmyk.github.io/HIIT/. The README describes the user-facing behaviour (warm-up, intensities, controls, swipe, voice coach) and the file layout.
+
+## Commands
+
+```sh
+npm test                                   # node --test tests/*.test.js (Node 18+)
+node --test --test-name-pattern "warm" tests/workout.test.js   # run matching tests only
+npm run build                              # dist/overdrive-hiit.html: one self-contained file
+node scripts/build.mjs out.html --fragment # same, without <html>/<head>/<body> (for hosts that add their own)
+npm run serve                              # python3 -m http.server 8080
+```
+
+There is no linter or formatter. Opening `index.html` directly (file://) must keep working.
+
+## Architecture
+
+**Classic scripts sharing globals.** `index.html` loads `js/workout.js`, `bg.js`, `audio.js`, `figure.js` and `app.js` in that order. Each file is an IIFE that publishes one global:
+- `window.HIIT`: workout logic. It is also `module.exports`, which is how the tests `require` it.
+- `HIITBackdrop`: WebGL background.
+- `HIITAudio`: synthesised sounds and the speech coach.
+- `HIITFigure`: the Canvas 2D mannequin demo.
+
+`app.js` is the controller that uses all of them. Keep the code ES5-style (`var`, plain functions) and module-free, so it runs from file://, from the Pages sub-path, and inlined by `build.mjs`.
+
+**`js/workout.js` is pure data and logic, with no DOM.**
+- It holds the exercise catalogue and trainer text, `LEVELS`, `WARMUP_STEPS`, the random full-body pick, and `order()` (upper body → abs → legs).
+- `buildTimeline(ids, level, {warmup})` returns a flat list of segments, each with `start`, `end`, `duration` and `index`. Segment `type` is one of `warmup`, `prep`, `work`, `rest`, `jacks` or `setrest`.
+- Warm-up segments also carry `lead` (seconds of lead-in before the move) and `countdown` (5, or 3 for a leg switch).
+- `tests/workout.test.js` pins exact numbers: the lead values, `WARMUP_SECONDS` formatting to `'4:05'`, and session totals. So timing changes need test updates, plus the static fallback in `index.html` (`#wuTime`).
+
+**`js/app.js` drives the clock in one loop.**
+- The clock is `run.base` plus the time since `run.anchor`, read through `elapsedNow()`.
+- `update()` runs every animation frame:
+  1. finds the segment for the current time;
+  2. on entering a new one, calls `enterSegment()`, which then calls `cueSegment()` for sounds and voice;
+  3. calls `onSecond()` once per whole second (the last-10-second countdown and trainer calls);
+  4. calls `onBeat()` for counted warm-up moves.
+- `warmLead()` runs a warm-up step's lead-in: "Get ready", a spoken 5-4-3-2-1, then "Begin!". It can hold the clock by rewriting `run.base` while the coach is still speaking.
+- Jumps go through `seek(t)`. Cues only fire on "natural" progress (see the `natural` and `prev` checks), so seeking never replays a whole round of sounds.
+- The timer ring is the `Ring` canvas class. `Ring.layout()` writes the stage geometry as CSS custom properties (`--cy`, `--rr`, `--ph`, …) that the CSS uses to place the dial, the swipe carousel and the transport pill inside the ring's opening.
+- `ring.progress` is set in `update()`. Warm-up steps get two sweeps: one for the lead-in, one for the move.
+- Rest, prep and the set break switch the screen to `#workout[data-mode="rest"]`: a dial inside the ring plus an "Up next" card.
+
+**Looks.**
+- Only the "Studio" look exists. An inline script in `<head>` sets `html[data-look="studio"]` and `data-scheme="light|dark"` before first paint, following the system setting unless the user overrides it.
+- `css/style.css` holds the base layout. `css/studio.css` holds everything scoped to `[data-look="studio"]`, including the compact media queries (the countdown digits size via `--dg`).
+- Preferences and stats live in localStorage under `overdrive-hiit:v1`.
+
+**Audio and voice (`js/audio.js`).**
+- All sounds are synthesised with Web Audio; there are no audio files.
+- The coach uses `speechSynthesis`, with workarounds for phones:
+  - keep a reference to each utterance until it ends;
+  - cancel, then wait before speaking the next line;
+  - call `resume()` before speaking;
+  - unlock speech with a silent word on the first user gesture.
+- `voiceWorks()` reports whether recent lines actually started; the countdown falls back to louder ticks when they didn't. `onVoiceProblem` lets the app show a notice when the viewer can't speak at all.
+
+**Test and debug hook.** `window.__hiit` exposes `run`, `ring`, `seek(t)`, `advance(sec)`, `start()`, `finish()`, `guide(id)` and `look(name)`. Changes are checked by driving `index.html` with Playwright and these hooks, often with a mocked `speechSynthesis`.
+
+## Deploy
+
+- `.github/workflows/pages.yml` runs `npm test` on every push to `main`, then publishes only `index.html`, `manifest.webmanifest`, `css/`, `js/` and `icons/`. Any new file the site needs must be added to that `cp` line.
+- `tests/site.test.js` checks the icons and manifest against the workflow. The root-level PNGs and `q2/` are screenshots and are not published.
+- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated by hand if the SVGs change; there is no script for it in the repo.
+- `scripts/build.mjs` inlines the CSS, the JS and the SVG favicon, and drops the other icon and manifest links.
