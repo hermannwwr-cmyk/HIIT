@@ -5,26 +5,24 @@
  *   window.HIITFigure = {
  *     EXERCISES: ['pushup','crunch','legraise','flutter','squat','lunge','twist','jacks','rest',
  *                 'shouldertap','jog-slow','jog-quick','pecstretch','hamstring-l','hamstring-r','calf-l','calf-r'],
- *     STYLES: ['neon','studio'],
- *     STUDIO: { dark: {body, shade, lit}, light: {...} },   // default studio materials (read-only info)
- *     MATERIALS: { dark: ['porcelain','titanium','ink','stone'], light: ['graphite'] },
+ *     STYLES: ['studio'],
+ *     MATERIALS: { dark: ['stone','titanium'], light: ['graphite'] },   // the first of each is the default
  *     create(canvas, opts) -> instance
  *   }
  *   opts: { exercise:'pushup', primary:'#ff2bd6', secondary:'#ffb000', quality:'high'|'low', energy:0..1,
- *           style:'neon'|'studio' (default neon; unknown -> neon), scheme:'dark'|'light' (studio only),
- *           material: studio preset name ('porcelain' (dark default) | 'titanium' | 'ink' | 'stone' for
- *             dark stages, 'graphite' (light default)); used while the scheme matches its stage,
- *           body, shade (studio material overrides: lit body colour, core-shadow colour) }
- *   instance.setExercise(id) / setColors(primary, secondary) / setPlaying(bool)
- *   instance.setEnergy(x) / pulse() / setSuspended(bool) / destroy()
- *   instance.setStyle(style, scheme) - switch look live (theme toggle); repaints immediately
- *   instance.setMaterial(name) / getMaterial() - studio material preset; repaints immediately
+ *           scheme:'dark'|'light', material: preset name, used while the scheme matches its stage,
+ *           body, shade (material overrides: lit body colour, core-shadow colour) }
+ *   instance.setExercise(id, {instant, time}) / getTime() / setColors(primary, secondary, instant)
+ *   instance.setPlaying(bool) / setEnergy(x) / pulse() / setSuspended(bool) / destroy()
+ *   instance.setStyle(style, scheme[, material]) - switch scheme (and material) live; repaints once, now
+ *   instance.setMaterial(name) / getMaterial() - material preset; repaints immediately
  *
  * The figure is a 3D skeleton (forward kinematics + 2-bone IK so planted
  * hands/feet never slide), projected with a per-exercise camera, auto-fitted
- * to the canvas, and rendered either as additive neon tubes with a white-hot
- * core ('neon') or as a matte, softly lit 3D mannequin with contact shadows
- * ('studio'). The canvas stays transparent; the page paints the backdrop.
+ * to the canvas, and rendered as a matte, softly lit 3D mannequin with contact
+ * shadows. The canvas stays transparent; the page paints the backdrop. All
+ * instances share one requestAnimationFrame loop, which sleeps while every
+ * figure is stopped, hidden or suspended.
  */
 (function (root) {
   'use strict';
@@ -77,7 +75,6 @@
     return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * h * m1;
   }
 
-  function V(x, y, z) { return [x, y, z]; }
   function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
   function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
   function mul(a, s) { return [a[0] * s, a[1] * s, a[2] * s]; }
@@ -600,7 +597,8 @@
   EX['calf-l'] = calfEx('L');
   EX['calf-r'] = calfEx('R');
 
-  // studio (opaque) draw order where it differs from the neon one
+  // Draw order where it differs from the table's `order` (left over from the retired additive
+  // renderer, which drew limbs behind the torso); fold into `order` when the table is next edited.
   EX.jacks.sorder = ['LL', 'LR', 'T', 'AL', 'AR'];
   EX.rest.sorder = ['AL', 'LL', 'LR', 'T', 'AR'];
   for (var exk in EX) if (EX.hasOwnProperty(exk)) EX[exk].id = exk;
@@ -609,9 +607,8 @@
 
   // Draw order of an exercise's limb groups (some vary with the phase, e.g. a lifted knee
   // or a forward-swung arm passing in front of the torso).
-  function orderOf(ex, p, studio) {
-    if (ex.orderAt) return ex.orderAt(p);
-    return studio ? (ex.sorder || ex.order) : ex.order;
+  function orderOf(ex, p) {
+    return ex.orderAt ? ex.orderAt(p) : (ex.sorder || ex.order);
   }
   function phaseOf(ex, t) { return ((t / ex.period) % 1 + 1) % 1; }
 
@@ -722,21 +719,7 @@
   }
 
   /* ---------------------------------------------------------------- shapes */
-  var RS = 0.88; // global body radius multiplier
-  var SHAPES = {
-    T: [[PELVIS, CHEST, 0.052, 0.058], [CHEST, NECK, 0.06, 0.048], [NECK, HEAD, 0.028, 0.03], [SHL, SHR, 0.042, 0.042], [HIPL, HIPR, 0.038, 0.038]],
-    AL: [[SHL, ELL, 0.035, 0.027], [ELL, WRL, 0.027, 0.02], [WRL, HAL, 0.02, 0.016]],
-    AR: [[SHR, ELR, 0.035, 0.027], [ELR, WRR, 0.027, 0.02], [WRR, HAR, 0.02, 0.016]],
-    LL: [[HIPL, KNL, 0.056, 0.037], [KNL, ANL, 0.037, 0.024], [ANL, TOL, 0.024, 0.015]],
-    LR: [[HIPR, KNR, 0.056, 0.037], [KNR, ANR, 0.037, 0.024], [ANR, TOR, 0.024, 0.015]]
-  };
-  var NODES = { T: [], AL: [ELL, WRL], AR: [ELR, WRR], LL: [KNL, ANL], LR: [KNR, ANR] };
-  // light pulses run along these chains (centre -> extremities)
-  var FLOW = { T: [PELVIS, CHEST, NECK], AL: [SHL, ELL, WRL, HAL], AR: [SHR, ELR, WRR, HAR], LL: [HIPL, KNL, ANL, TOL], LR: [HIPR, KNR, ANR, TOR] };
-  var FLOW_OFS = { T: 0.15, AL: 0.55, AR: 0.05, LL: 0.8, LR: 0.3 };
-  var CHAINS = [[HIPL, KNL, ANL, TOL], [HIPR, KNR, ANR, TOR], [SHL, ELL, WRL, HAL], [SHR, ELR, WRR, HAR], [PELVIS, CHEST, NECK, HEAD]];
-  var TRAIL_J = [HAL, HAR, TOL, TOR, HEAD];
-
+  // Tapered capsule (circles at both ends joined by tangents) / circle, added to the current path.
   function capsule(ctx, x1, y1, r1, x2, y2, r2) {
     var dx = x2 - x1, dy = y2 - y1, d = Math.sqrt(dx * dx + dy * dy);
     if (d <= Math.abs(r1 - r2) + 0.01) {
@@ -753,32 +736,10 @@
   }
   function circle(ctx, x, y, r) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU); }
 
-  // Adds group g to the current path. full = include torso plate + head disc.
-  // Adds group g to the current path. full = include torso plate + head disc.
-  // noHead: skip the head disc; spineOnly: torso spine capsules only.
-  function pathGroup(ctx, g, P, sc, rm, grow, full, coreMul, noHead, spineOnly) {
-    var list = SHAPES[g], cm = coreMul || 1, n = spineOnly ? 2 : list.length;
-    for (var i = 0; i < n; i++) {
-      var s = list[i], a = s[0] * 3, b = s[1] * 3;
-      capsule(ctx, P[a], P[a + 1], s[2] * RS * sc * rm * cm + grow, P[b], P[b + 1], s[3] * RS * sc * rm * cm + grow);
-    }
-    if (g === 'T' && full) {
-      var q = [SHL, SHR, HIPR, HIPL], area = 0, j, k;
-      for (j = 0; j < 4; j++) {
-        k = (j + 1) % 4;
-        area += P[q[j] * 3] * P[q[k] * 3 + 1] - P[q[k] * 3] * P[q[j] * 3 + 1];
-      }
-      if (Math.abs(area) > 1) {
-        if (area < 0) q.reverse();
-        ctx.moveTo(P[q[0] * 3], P[q[0] * 3 + 1]);
-        for (j = 1; j < 4; j++) ctx.lineTo(P[q[j] * 3], P[q[j] * 3 + 1]);
-        ctx.closePath();
-      }
-      if (!noHead) circle(ctx, P[HEAD * 3], P[HEAD * 3 + 1], B.headR * sc * rm + grow);
-    }
-  }
-
   /* ------------------------------------------------------------ shared loop */
+  // One requestAnimationFrame loop drives every instance, and only while some figure needs
+  // frames: each _tick() says whether it does, and whatever can wake a figure (a setter, a
+  // resize, the canvas scrolling into view, the tab showing again) calls ensureLoop().
   var registry = [];
   var rafId = 0, lastT = 0;
   var hasRAF = typeof root.requestAnimationFrame === 'function';
@@ -791,11 +752,12 @@
     if (isHidden()) { lastT = 0; return; }
     var dt = lastT ? Math.min(0.1, Math.max(0, (t - lastT) / 1000)) : 1 / 60;
     lastT = t;
-    var list = registry.slice();
+    var list = registry.slice(), busy = false;
     for (var i = 0; i < list.length; i++) {
-      try { list[i]._tick(dt); } catch (e) { list[i]._fail(e); }
+      try { if (list[i]._tick(dt)) busy = true; } catch (e) { list[i]._fail(e); busy = true; }
     }
-    ensureLoop();
+    if (busy) ensureLoop();
+    if (!rafId) lastT = 0; // asleep: the first frame after waking steps 1/60 s, not the whole pause
   }
   function ensureLoop() {
     if (!rafId && registry.length && !isHidden()) rafId = raf(tick);
@@ -805,13 +767,13 @@
       if (isHidden()) { if (rafId) caf(rafId); rafId = 0; lastT = 0; } else ensureLoop();
     });
   }
+  // A zoom or a move to another screen changes devicePixelRatio, which _tick checks.
+  if (root.addEventListener) root.addEventListener('resize', ensureLoop);
   var reduceMQ = null;
   try { reduceMQ = root.matchMedia ? root.matchMedia('(prefers-reduced-motion: reduce)') : null; } catch (e) { reduceMQ = null; }
   function reducedMotion() { return !!(reduceMQ && reduceMQ.matches); }
 
   /* --------------------------------------------------------------- instance */
-  var HIST_MAX = 48, HIST_AGE = 0.3;
-
   function Figure(canvas, opts) {
     opts = opts || {};
     this.canvas = canvas;
@@ -820,7 +782,6 @@
     this.low = opts.quality === 'low';
     this.ex = getEx(opts.exercise);
     this.time = 0;
-    this.rt = 0;
     this.playing = true;
     this.energy = this.energyT = clamp(num(opts.energy, 1), 0, 1);
     var c1 = parseColor(opts.primary, [255, 43, 214]), c2 = parseColor(opts.secondary, [255, 176, 0]);
@@ -833,9 +794,7 @@
     this.material = typeof opts.material === 'string' ? opts.material : null;
     this.hasPose = false;
     this.from = null; this.fromMeta = null; this.morphT = 1;
-    this.hist = []; this.histPool = [];
-    this.sparks = []; this.emitAcc = {};
-    this.flash = 0; this.ring = -1; this.emberAcc = 0;
+    this.flash = 0; this.ring = -1;
     this._setStyle(opts.style, opts.scheme);
     this.W = 0; this.H = 0; this.dpr = 1;
     this.visible = true;
@@ -845,20 +804,23 @@
     this._stats = { frames: 0, ms: 0 };
     this._fitCache = null;
     var self = this;
+    // Resizing the backing store clears it: repaint at once, not on the next frame.
+    function resized() { if (!self.dead && self._measure()) self._paint(); }
     if (canvas && root.ResizeObserver) {
       try {
-        this.ro = new root.ResizeObserver(function () { if (!self.dead) self._measure(); });
+        this.ro = new root.ResizeObserver(resized);
         this.ro.observe(canvas);
       } catch (e) { this.ro = null; }
     }
     if (!this.ro) {
-      this._onResize = function () { self._measure(); };
+      this._onResize = resized;
       if (root.addEventListener) root.addEventListener('resize', this._onResize);
     }
     if (canvas && root.IntersectionObserver) {
       try {
         this.io = new root.IntersectionObserver(function (entries) {
           for (var i = 0; i < entries.length; i++) self.visible = entries[i].isIntersecting;
+          ensureLoop();
         });
         this.io.observe(canvas);
       } catch (e) { this.io = null; }
@@ -872,20 +834,28 @@
 
   var FP = Figure.prototype;
 
+  // _still: the last frame drawn was settled (see _tick), so nothing needs drawing until
+  // something changes. Whatever changes something clears it (setExercise, setSuspended,
+  // setStyle, a resize...), and clearing it wakes the shared loop.
+  Object.defineProperty(FP, '_still', {
+    get: function () { return !!this._stillF; },
+    set: function (v) { this._stillF = !!v; if (!v) ensureLoop(); }
+  });
+
   FP._fail = function (e) {
     this.errors++;
     if (this.errors === 1 && root.console && console.warn) console.warn('[HIITFigure] frame error (suppressed):', e);
-    this.hist.length = 0; this.sparks.length = 0;
   };
 
+  // Follow the canvas's CSS size and the device pixel ratio. Returns whether either changed
+  // (the backing store may have been cleared; the caller repaints).
   FP._measure = function () {
     var c = this.canvas;
-    if (!c) return;
+    if (!c) return false;
     var w = c.clientWidth, h = c.clientHeight;
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     var bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
-    if (w === this.W && h === this.H && dpr === this.dpr && c.width === bw && c.height === bh) return;
-    this._still = false; // resized: the next tick must repaint
+    if (w === this.W && h === this.H && dpr === this.dpr && c.width === bw && c.height === bh) return false;
     if (c.width !== bw || c.height !== bh) {
       c.width = bw; c.height = bh;
       // If the canvas was sized only by its attributes, resizing the backing store would
@@ -894,12 +864,29 @@
         c.style.width = w + 'px'; c.style.height = h + 'px';
       }
     }
+    // A morph in flight carries on (a phone's URL bar collapsing resizes the stage): its
+    // start pose, in screen space, moves from the old fit to the new one.
+    var morph = this.morphT < 1 && this.from && this.fromEx;
+    var f0 = morph && this.W >= 4 && this.H >= 4 ? this._fit(this.fromEx) : null;
     this.W = w; this.H = h; this.dpr = dpr;
     this._fitCache = null;
-    this.hist.length = 0;
-    this.sparks.length = 0;
-    this.morphT = 1; this.from = null;
-    if (this.bloom) { this.bloom.width = 1; }
+    if (morph) {
+      if (f0 && w >= 4 && h >= 4) this._refit(f0, this._fit(this.fromEx));
+      else { this.morphT = 1; this.from = null; }
+    }
+    this._still = false; // the next tick must repaint
+    return true;
+  };
+
+  // Map the morph's start pose (and its contact shadows) from fit a to fit b.
+  FP._refit = function (a, b) {
+    var k = b.sc / a.sc, fm = this.fromMeta;
+    function move(A) {
+      for (var i = 0; i < NJ * 3; i += 3) { A[i] = b.ox + (A[i] - a.ox) * k; A[i + 1] = b.oy + (A[i + 1] - a.oy) * k; }
+    }
+    move(this.from);
+    if (this.fromGnd) move(this.fromGnd);
+    if (fm) { fm.floorY = b.oy + (fm.floorY - a.oy) * k; fm.sc *= k; }
   };
 
   FP._fit = function (ex) {
@@ -927,13 +914,13 @@
       P[i * 3 + 2] = v[i * 3 + 2];
     }
     m.floorY = f.floorY; m.sc = f.sc; m.farL = ex.far.L; m.farR = ex.far.R;
-    if (this.studio) { groundProject(J, ex, f, this.gnd); m.flat = camSetup(ex).sp; }
+    groundProject(J, ex, f, this.gnd); m.flat = camSetup(ex).sp;
     if (this.morphT < 1 && this.from) {
       var k = cubic(this.morphT), A = this.from, fm = this.fromMeta;
       for (i = 0; i < NJ * 3; i++) P[i] = lerp(A[i], P[i], k);
       m.floorY = lerp(fm.floorY, m.floorY, k); m.sc = lerp(fm.sc, m.sc, k);
       m.farL = lerp(fm.farL, m.farL, k); m.farR = lerp(fm.farR, m.farR, k);
-      if (this.studio && this.fromGnd) {
+      if (this.fromGnd) {
         var G = this.gnd, Ag = this.fromGnd;
         for (i = 0; i < NJ * 3; i++) G[i] = lerp(Ag[i], G[i], k);
         m.flat = lerp(fm.flat === undefined ? m.flat : fm.flat, m.flat, k);
@@ -942,34 +929,34 @@
     this.hasPose = true;
   };
 
+  // One frame of the shared loop. Returns whether this figure needs another frame.
   FP._tick = function (dt) {
-    if (this.dead || !this.ctx || this.suspended) return;
+    if (this.dead || !this.ctx || this.suspended) return false;
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     if (dpr !== this.dpr || (!this.ro && (this._chk = (this._chk || 0) + 1) % 30 === 0)) this._measure();
-    if (!this.visible || this.W < 4 || this.H < 4) return;
-    // Battery: a stopped figure with nothing in flight only needs an occasional
-    // repaint for its breathing glow (none at all for thumbnails or reduced
-    // motion), and thumbnails run at 30 fps.
+    // (without a ResizeObserver the size is polled, so the loop keeps running)
+    if (!this.visible || this.W < 4 || this.H < 4) return !this.ro;
+    // Battery: a stopped figure with nothing in flight is drawn once and then left alone,
+    // and thumbnails run at 30 fps.
     var settled = !this.playing && this.morphT >= 1 && this.colT >= 1 && this.flash === 0 &&
-      this.ring < 0 && !this.sparks.length && Math.abs(this.energyT - this.energy) < 0.01;
+      this.ring < 0 && Math.abs(this.energyT - this.energy) < 0.01;
+    // While still, waiting time must not pile up into the first step after waking.
+    if (settled && this._still) { this._acc = 0; return !this.ro; }
     this._acc = (this._acc || 0) + dt;
-    if (settled) {
-      if (this.low || this.studio || reducedMotion()) { if (this._still) return; }
-      else if (this._acc < 1 / 8) return;
-    } else if (this.low && this._acc < 1 / 30) return;
+    // a little under 1/30 s, so frame-time jitter cannot stretch a step to three frames
+    if (this.low && !settled && this._acc < 1 / 30 - 0.004) return true;
     var step = Math.min(0.1, this._acc);
     this._acc = 0;
     var t0 = now();
     this._update(step);
-    this._draw();
+    this._drawStudio();
     this._still = settled;
     var st = this._stats;
     st.frames++; st.ms += now() - t0;
+    return !settled || !this.ro;
   };
 
   FP._update = function (dt) {
-    var reduced = reducedMotion();
-    this.rt += dt;
     this.energy += (this.energyT - this.energy) * (1 - Math.exp(-dt * 5));
     if (this.colT < 1) {
       this.colT = Math.min(1, this.colT + dt / COLOR_S);
@@ -977,521 +964,32 @@
       this.c1 = mix(this.c1a, this.c1b, k); this.c2 = mix(this.c2a, this.c2b, k);
     }
     this.flash *= Math.exp(-dt * 3.2);
-    if (this.flash < (this.studio ? 0.03 : 0.002)) this.flash = 0;
+    if (this.flash < 0.03) this.flash = 0;
     if (this.ring >= 0) { this.ring += dt / 0.8; if (this.ring > 1) this.ring = -1; }
     if (this._frozen) { this._computePose(); return; }
     if (this.morphT < 1) this.morphT = Math.min(1, this.morphT + dt / MORPH_S);
-    else if (this.playing) this.time += dt * (reduced ? 0.5 : 1);
+    else if (this.playing) this.time += dt * (reducedMotion() ? 0.5 : 1);
     this._computePose();
-    this._record(dt, reduced);
-    this._updateSparks(dt, reduced);
   };
 
-  FP._record = function (dt, reduced) {
-    if (this.low || reduced || this.studio) { this.hist.length = 0; return; }
-    var H = this.hist, pool = this.histPool;
-    while (H.length && (this.rt - H[0].t > HIST_AGE || H.length >= HIST_MAX)) pool.push(H.shift());
-    var e = pool.pop() || { t: 0, P: new Float32Array(NJ * 3), sc: 1 };
-    e.t = this.rt; e.P.set(this.cur); e.sc = this.meta.sc; e.dt = dt;
-    H.push(e);
-  };
-
-  /* ---------------------------------------------------------------- sparks */
-  FP._spawn = function (x, y, vx, vy, life, hot) {
-    if (this.sparks.length >= 160) return;
-    this.sparks.push({ x: x, y: y, vx: vx, vy: vy, life: life, max: life, hot: hot || 0 });
-  };
-
-  FP._updateSparks = function (dt, reduced) {
-    var S = this.sparks, sc = this.meta.sc, floorY = this.meta.floorY;
-    var i, s;
-    for (i = S.length - 1; i >= 0; i--) {
-      s = S[i];
-      s.life -= dt;
-      if (s.life <= 0) { S[i] = S[S.length - 1]; S.pop(); continue; }
-      var drag = Math.exp(-dt * 1.8);
-      s.vx *= drag; s.vy = s.vy * drag + sc * (s.hot < 0 ? -0.25 : 1.7) * dt;
-      s.x += s.vx * dt; s.y += s.vy * dt;
-      if (s.y > floorY && s.vy > 0) { s.y = floorY; s.vy *= -0.35; s.vx *= 0.75; }
-    }
-    if (this.low || reduced || this.studio || !this.playing || this.hist.length < 2) return;
-    var H = this.hist, prev = H[H.length - 2], P = this.cur, pdt = Math.max(1e-3, this.rt - prev.t);
-    var E = this.ex.emit || [], en = this.energy;
-    var emit = [HAL, HAR, TOL, TOR, HEAD];
-    for (i = 0; i < E.length; i++) if (emit.indexOf(E[i]) < 0) emit.push(E[i]);
-    for (i = 0; i < emit.length; i++) {
-      var j = emit[i] * 3;
-      var vx = (P[j] - prev.P[j]) / pdt, vy = (P[j + 1] - prev.P[j + 1]) / pdt;
-      var u = Math.sqrt(vx * vx + vy * vy) / sc;           // body-heights per second
-      var rate = en * 12 * Math.max(0, u - 0.5);
-      var acc = (this.emitAcc[emit[i]] || 0) + rate * dt;
-      while (acc >= 1) {
-        acc -= 1;
-        var a = Math.random() * TAU, sp = sc * (0.15 + Math.random() * 0.4);
-        this._spawn(P[j] + (Math.random() - 0.5) * 0.02 * sc, P[j + 1] + (Math.random() - 0.5) * 0.02 * sc,
-          vx * 0.3 + Math.cos(a) * sp, vy * 0.3 + Math.sin(a) * sp - sc * 0.25, 0.25 + Math.random() * 0.4, 0);
-      }
-      this.emitAcc[emit[i]] = acc;
-    }
-    // drifting embers keep a still pose alive
-    this.emberAcc += dt * (1 + 2.5 * en);
-    while (this.emberAcc >= 1) {
-      this.emberAcc -= 1;
-      var jj = ((Math.random() * 20) | 0) * 3;
-      this._spawn(P[jj], P[jj + 1], (Math.random() - 0.5) * 0.12 * sc, -sc * (0.05 + Math.random() * 0.12), 0.5 + Math.random() * 0.6, -1);
-    }
-  };
-
-  /* --------------------------------------------------------------- drawing */
-  FP._grads = function (ctx, P, c1, c2, boost) {
-    var hx = P[HEAD * 3], hy = P[HEAD * 3 + 1];
-    var fx = (P[ANL * 3] + P[ANR * 3]) / 2, fy = (P[ANL * 3 + 1] + P[ANR * 3 + 1]) / 2;
-    if (Math.abs(fx - hx) + Math.abs(fy - hy) < 1) fy = hy + 1;
-    var col = ctx.createLinearGradient(hx, hy, fx, fy);
-    col.addColorStop(0, rgba(c1)); col.addColorStop(0.45, rgba(mix(c1, c2, 0.5))); col.addColorStop(1, rgba(c2));
-    var wt = clamp(0.72 + 0.25 * boost, 0, 0.95);
-    var core = ctx.createLinearGradient(hx, hy, fx, fy);
-    core.addColorStop(0, rgba(mix(c1, WHITE, wt))); core.addColorStop(1, rgba(mix(c2, WHITE, wt)));
-    return { col: col, core: core };
-  };
-
-  FP._draw = function () {
-    if (this.studio) { this._drawStudio(); return; }
-    var ctx = this.ctx, W = this.W, H = this.H, dpr = this.dpr;
-    var P = this.cur, m = this.meta, sc = m.sc, low = this.low;
-    var reduced = reducedMotion();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, W, H);
-    if (!this.hasPose) return;
-    var c1 = this.c1, c2 = this.c2, en = this.energy, fl = this.flash;
-    var breath = 1 + 0.07 * Math.sin(this.rt * 2.2);
-    var glowI = (0.55 + 0.45 * en) * breath * (1 + 1.3 * fl);
-    var G = this._grads(ctx, P, c1, c2, fl);
-    var order = (this.morphT < 0.5 && this.fromEx) ? orderOf(this.fromEx, this.fromP, false) : orderOf(this.ex, phaseOf(this.ex, this.time), false);
-
-    if (!low) this._drawReflection(ctx, P, m, G, order, glowI);
-    this._drawFloor(ctx, P, m, c1, c2, glowI);
-    if (!low && !reduced) this._drawTrails(ctx, m, c1, c2);
-    if (!low) this._drawBloom(ctx, P, m, c1, c2, glowI, order);
-
-    var passes = low ? LOW_PASSES : HIGH_PASSES;
-    for (var gi = 0; gi < order.length; gi++) {
-      var g = order[gi];
-      var far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
-      this._drawGroup(ctx, g, P, sc, far, G, passes, glowI, c1, c2);
-    }
-    if (this.sparks.length) this._drawSparks(ctx, sc, c1, c2);
-    if (fl > 0.01 || this.ring >= 0) this._drawFlash(ctx, P, m, c1, c2, fl);
-  };
-
-  // Unit radial gradient used (scaled/rotated) for the torso's volumetric shading; one per context.
-  function torsoShade(ctx) {
-    if (ctx.__hiitShade) return ctx.__hiitShade;
-    var g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    g.addColorStop(0, 'rgba(10,3,24,0.36)');
-    g.addColorStop(0.6, 'rgba(10,3,24,0.2)');
-    g.addColorStop(1, 'rgba(10,3,24,0)');
-    try { ctx.__hiitShade = g; } catch (e) { /* ignore */ }
-    return g;
-  }
-  var HIGH_PASSES = [[0.034, 0.07], [0.017, 0.12], [0.007, 0.2]];
-  var LOW_PASSES = [[0.04, 0.09], [0.016, 0.2]];
-
-  FP._drawGroup = function (ctx, g, P, sc, far, G, passes, glowI, c1, c2) {
-    var am = 1 - 0.58 * far, rm = 1 - 0.16 * far, i;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = G.col;
-    for (i = 0; i < passes.length; i++) {
-      ctx.globalAlpha = clamp(passes[i][1] * am * glowI, 0, 1);
-      ctx.beginPath();
-      pathGroup(ctx, g, P, sc, rm, passes[i][0] * sc, true);
-      ctx.fill();
-    }
-    if (g === 'T') {
-      // torso: rim-lit shell (bright outline, coloured body, darker centre) - reads as a
-      // volume instead of a stick-figure cross
-      var rimW = Math.max(1, 0.011 * sc);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.beginPath();
-      pathGroup(ctx, g, P, sc, rm, 0, true, 1, true);
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = G.core;
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = rimW * 2;
-      ctx.stroke();
-      ctx.fillStyle = G.col;
-      ctx.fill();
-      // volumetric shading: elliptical dark core aligned with the spine
-      var px = P[PELVIS * 3], py = P[PELVIS * 3 + 1], nx = P[NECK * 3], ny = P[NECK * 3 + 1];
-      var sx = P[SHL * 3] - P[SHR * 3], sy = P[SHL * 3 + 1] - P[SHR * 3 + 1];
-      var ax = nx - px, ay = ny - py, al = Math.sqrt(ax * ax + ay * ay) || 1;
-      var halfW = Math.abs((sx * -ay + sy * ax) / al) * 0.5 + 0.045 * sc;
-      ctx.save();
-      ctx.translate((px + nx) / 2, (py + ny) / 2);
-      ctx.rotate(Math.atan2(ay, ax));
-      ctx.scale(al * 0.5 + 0.05 * sc, Math.max(halfW, 0.05 * sc));
-      ctx.fillStyle = torsoShade(ctx);
-      ctx.globalAlpha = 1;
-      ctx.fill();
-      ctx.restore();
-      // faint spine energy line
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = clamp(0.35 * glowI, 0, 1);
-      ctx.fillStyle = G.core;
-      ctx.beginPath();
-      pathGroup(ctx, g, P, sc, rm, 0, false, 0.22, true, true);
-      ctx.fill();
-      if (!this.low) this._drawFlow(ctx, g, P, sc, 0);
-      this._drawHead(ctx, P, sc, c1, glowI);
-      return;
-    }
-    // limb body: opaque-ish so near limbs occlude what is behind them
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 0.94;
-    ctx.beginPath();
-    pathGroup(ctx, g, P, sc, rm, 0, true);
-    ctx.fill();
-    if (far > 0.01) {
-      ctx.fillStyle = 'rgba(6,2,16,' + (0.5 * far).toFixed(3) + ')';
-      ctx.globalAlpha = 1;
-      ctx.fill();
-    }
-    // white-hot core
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = G.core;
-    ctx.globalAlpha = clamp((0.85 - 0.45 * far) * (0.8 + 0.2 * glowI), 0, 1);
-    ctx.beginPath();
-    pathGroup(ctx, g, P, sc, rm, 0, false, 0.36);
-    ctx.fill();
-    if (!this.low) this._drawFlow(ctx, g, P, sc, far);
-    // joint nodes
-    var N = NODES[g];
-    if (N.length) {
-      ctx.globalAlpha = clamp(0.9 - 0.5 * far, 0, 1);
-      ctx.fillStyle = 'rgba(255,255,255,1)';
-      ctx.beginPath();
-      for (i = 0; i < N.length; i++) circle(ctx, P[N[i] * 3], P[N[i] * 3 + 1], 0.0125 * sc * rm);
-      ctx.fill();
-      if (!this.low) {
-        ctx.globalAlpha = clamp(0.35 * am * glowI, 0, 1);
-        ctx.fillStyle = G.core;
-        ctx.beginPath();
-        for (i = 0; i < N.length; i++) circle(ctx, P[N[i] * 3], P[N[i] * 3 + 1], 0.03 * sc * rm);
-        ctx.fill();
-      }
-    }
-  };
-
-  // A short bright slice of the tube travelling along the chain: energy flowing through the body.
-  FP._drawFlow = function (ctx, g, P, sc, far) {
-    var ch = FLOW[g], n = ch.length, i, L = [0], tot = 0;
-    for (i = 1; i < n; i++) {
-      var dx = P[ch[i] * 3] - P[ch[i - 1] * 3], dy = P[ch[i] * 3 + 1] - P[ch[i - 1] * 3 + 1];
-      tot += Math.sqrt(dx * dx + dy * dy); L.push(tot);
-    }
-    if (tot < 4) return;
-    var ph = (this.rt * (0.55 + 0.5 * this.energy) + FLOW_OFS[g]) % 1;
-    var u = ph * 1.35 - 0.15, a0 = (u - 0.13) * tot, a1 = (u + 0.06) * tot;
-    if (a1 <= 0 || a0 >= tot) return;
-    a0 = Math.max(0, a0); a1 = Math.min(tot, a1);
-    ctx.beginPath();
-    var started = false;
-    for (i = 1; i < n; i++) {
-      var s0 = L[i - 1], s1 = L[i];
-      if (s1 < a0 || s0 > a1 || s1 - s0 < 1e-6) continue;
-      var t0 = (Math.max(a0, s0) - s0) / (s1 - s0), t1 = (Math.min(a1, s1) - s0) / (s1 - s0);
-      var x0 = P[ch[i - 1] * 3], y0 = P[ch[i - 1] * 3 + 1], x1 = P[ch[i] * 3], y1 = P[ch[i] * 3 + 1];
-      if (!started) { ctx.moveTo(lerp(x0, x1, t0), lerp(y0, y1, t0)); started = true; }
-      ctx.lineTo(lerp(x0, x1, t1), lerp(y0, y1, t1));
-    }
-    var fade = Math.sin(Math.PI * clamp(ph * 1.1, 0, 1));
-    var al = (0.35 + 0.5 * this.energy) * fade * (1 - 0.6 * far);
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(255,255,255,1)';
-    ctx.globalAlpha = clamp(al * 0.3, 0, 1);
-    ctx.lineWidth = 0.06 * sc;
-    ctx.stroke();
-    ctx.globalAlpha = clamp(al, 0, 1);
-    ctx.lineWidth = 0.018 * sc;
-    ctx.stroke();
-  };
-
-  FP._drawHead = function (ctx, P, sc, c1, glowI) {
-    var hx = P[HEAD * 3], hy = P[HEAD * 3 + 1], r = B.headR * sc;
-    ctx.globalCompositeOperation = 'lighter';
-    var g = ctx.createRadialGradient(hx - r * 0.2, hy - r * 0.25, 0, hx, hy, r);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)');
-    g.addColorStop(0.45, rgba(mix(c1, WHITE, 0.55), 0.55));
-    g.addColorStop(1, rgba(c1, 0));
-    ctx.globalAlpha = clamp(0.85 * (0.75 + 0.25 * glowI), 0, 1);
-    ctx.fillStyle = g;
-    ctx.beginPath(); circle(ctx, hx, hy, r); ctx.fill();
-    // visor: shows which way the athlete is facing
-    var fx = P[FACE * 3] - hx, fy = P[FACE * 3 + 1] - hy;
-    var l = clamp(Math.sqrt(fx * fx + fy * fy) / r, 0, 1);
-    var ux = hx - P[NECK * 3], uy = hy - P[NECK * 3 + 1], ul = Math.sqrt(ux * ux + uy * uy) || 1;
-    ux /= ul; uy /= ul;
-    ctx.strokeStyle = 'rgba(255,255,255,1)';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = Math.max(1, r * 0.17);
-    var arcA = clamp((l - 0.35) / 0.4, 0, 1);
-    if (arcA > 0) {
-      // biased toward the top of the head (eye line)
-      var sg = (fx * uy - fy * ux) > 0 ? 1 : -1, ang = Math.atan2(fy, fx) + 0.3 * sg;
-      ctx.globalAlpha = 0.9 * arcA;
-      ctx.beginPath(); ctx.arc(hx, hy, r * 0.72, ang - 0.6, ang + 0.6); ctx.stroke();
-    }
-    if (arcA < 1) {
-      var cx = hx + fx * 0.5 - ux * r * 0.05, cy = hy + fy * 0.5 - uy * r * 0.05;
-      var hl = r * 0.5 * (1 - 0.4 * l);
-      ctx.globalAlpha = 0.9 * (1 - arcA);
-      ctx.beginPath();
-      ctx.moveTo(cx + uy * hl, cy - ux * hl);
-      ctx.lineTo(cx - uy * hl, cy + ux * hl);
-      ctx.stroke();
-    }
-  };
-
-  FP._drawFloor = function (ctx, P, m, c1, c2, glowI) {
-    var W = this.W, y = m.floorY, sc = m.sc;
-    if (y > this.H + 4) return;
-    var cx = (P[PELVIS * 3] + P[CHEST * 3]) / 2;
-    var fc = mix(c2, c1, 0.25);
-    ctx.globalCompositeOperation = 'lighter';
-    var g = ctx.createLinearGradient(0, 0, W, 0);
-    var mid = clamp(cx / W, 0.2, 0.8);
-    g.addColorStop(0, rgba(fc, 0)); g.addColorStop(mid, rgba(mix(fc, WHITE, 0.35), 1)); g.addColorStop(1, rgba(fc, 0));
-    ctx.fillStyle = g;
-    if (!this.low) {
-      ctx.globalAlpha = clamp(0.1 * glowI, 0, 1);
-      ctx.fillRect(0, y - 0.022 * sc, W, 0.044 * sc);
-      ctx.globalAlpha = clamp(0.16 * glowI, 0, 1);
-      ctx.fillRect(0, y - 0.008 * sc, W, 0.016 * sc);
-    } else {
-      ctx.globalAlpha = clamp(0.18 * glowI, 0, 1);
-      ctx.fillRect(0, y - 0.015 * sc, W, 0.03 * sc);
-    }
-    ctx.globalAlpha = clamp(0.55 * glowI, 0, 1);
-    ctx.fillRect(0, y - 0.6, W, 1.2);
-    if (this.low) return;
-    // pool of light under the body
-    var minX = 1e9, maxX = -1e9;
-    for (var i = 0; i < NJ; i++) { var x = P[i * 3]; if (x < minX) minX = x; if (x > maxX) maxX = x; }
-    var rx = Math.max(0.25 * sc, (maxX - minX) * 0.62), ry = 0.07 * sc;
-    var pcx = (minX + maxX) / 2;
-    ctx.save();
-    ctx.translate(pcx, y);
-    ctx.scale(1, ry / rx);
-    var rg = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-    rg.addColorStop(0, rgba(mix(fc, WHITE, 0.2), 0.32));
-    rg.addColorStop(0.5, rgba(fc, 0.1));
-    rg.addColorStop(1, rgba(fc, 0));
-    ctx.globalAlpha = clamp(glowI, 0, 1);
-    ctx.fillStyle = rg;
-    ctx.beginPath(); ctx.arc(0, 0, rx, 0, TAU); ctx.fill();
-    ctx.restore();
-  };
-
-  FP._drawReflection = function (ctx, P, m, G, order, glowI) {
-    var y = m.floorY, H = this.H, W = this.W, sc = m.sc;
-    if (y >= H - 1) return;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(0, y, W, H - y); ctx.clip();
-    ctx.translate(0, y); ctx.scale(1, -0.7); ctx.translate(0, -y);
-    ctx.globalCompositeOperation = 'lighter';
-    for (var gi = 0; gi < order.length; gi++) {
-      var g = order[gi], far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
-      ctx.fillStyle = G.col;
-      ctx.globalAlpha = clamp(0.1 * (1 - 0.6 * far) * glowI, 0, 1);
-      ctx.beginPath(); pathGroup(ctx, g, P, sc, 0.8, 0, true); ctx.fill();
-      ctx.fillStyle = G.core;
-      ctx.globalAlpha = clamp(0.16 * (1 - 0.6 * far) * glowI, 0, 1);
-      ctx.beginPath(); pathGroup(ctx, g, P, sc, 0.3, 0, false); ctx.fill();
-    }
-    ctx.restore();
-    // fade with distance below the floor (only the reflection exists on the canvas yet)
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.globalAlpha = 1;
-    var fade = ctx.createLinearGradient(0, y, 0, y + 0.22 * sc);
-    fade.addColorStop(0, 'rgba(0,0,0,0)');
-    fade.addColorStop(1, 'rgba(0,0,0,1)');
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, y, W, H - y);
-  };
-
-  FP._drawBloom = function (ctx, P, m, c1, c2, glowI, order) {
-    var W = this.W, H = this.H, sc = m.sc;
-    var bw = Math.max(2, Math.ceil(W / 7)), bh = Math.max(2, Math.ceil(H / 7));
-    if (!this.bloom) {
-      this.bloom = (root.document && document.createElement) ? document.createElement('canvas') : null;
-      if (!this.bloom) return;
-      this.bctx = this.bloom.getContext('2d');
-      if (!this.bctx) { this.bloom = null; return; }
-    }
-    var b = this.bloom, bc = this.bctx;
-    if (b.width !== bw || b.height !== bh) { b.width = bw; b.height = bh; }
-    bc.setTransform(bw / W, 0, 0, bh / H, 0, 0);
-    bc.globalCompositeOperation = 'source-over';
-    bc.globalAlpha = 1;
-    bc.clearRect(0, 0, W, H);
-    var Gb = this._grads(bc, P, c1, c2, 0);
-    bc.fillStyle = Gb.col;
-    for (var gi = 0; gi < order.length; gi++) {
-      var g = order[gi], far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
-      bc.globalAlpha = 1 - 0.55 * far;
-      bc.beginPath(); pathGroup(bc, g, P, sc, 1, 0.02 * sc, true); bc.fill();
-    }
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.imageSmoothingEnabled = true;
-    ctx.globalAlpha = clamp(0.55 * glowI, 0, 1);
-    ctx.drawImage(b, 0, 0, W, H);
-    // second, wider halo: re-sample the same buffer slightly enlarged
-    var e = 0.05 * sc;
-    ctx.globalAlpha = clamp(0.32 * glowI, 0, 1);
-    ctx.drawImage(b, -e, -e, W + 2 * e, H + 2 * e);
-  };
-
-  FP._drawTrails = function (ctx, m, c1, c2) {
-    var Hs = this.hist, n = Hs.length, P = this.cur, sc = m.sc;
-    if (n < 3) return;
-    var tnow = this.rt, en = 0.55 + 0.45 * this.energy, i, j, k;
-    ctx.globalCompositeOperation = 'lighter';
-    // ghosts of recent poses (only the limb chains that actually moved)
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    var ages = [0.06, 0.12, 0.18];
-    var gc = mix(mix(c1, c2, 0.5), WHITE, 0.45);
-    for (k = 0; k < ages.length; k++) {
-      var e = null;
-      for (i = n - 1; i >= 0; i--) if (tnow - Hs[i].t >= ages[k]) { e = Hs[i]; break; }
-      if (!e) continue;
-      var Q = e.P, any = false;
-      ctx.beginPath();
-      for (i = 0; i < CHAINS.length; i++) {
-        var ch = CHAINS[i], mv = 0;
-        for (j = 0; j < ch.length; j++) {
-          var dx = Q[ch[j] * 3] - P[ch[j] * 3], dy = Q[ch[j] * 3 + 1] - P[ch[j] * 3 + 1];
-          mv = Math.max(mv, dx * dx + dy * dy);
-        }
-        if (mv < (0.04 * sc) * (0.04 * sc)) continue;
-        any = true;
-        ctx.moveTo(Q[ch[0] * 3], Q[ch[0] * 3 + 1]);
-        for (j = 1; j < ch.length; j++) ctx.lineTo(Q[ch[j] * 3], Q[ch[j] * 3 + 1]);
-      }
-      if (!any) continue;
-      // thin, bright afterimage strokes (dim wide strokes read as muddy shadows)
-      ctx.strokeStyle = rgba(gc);
-      ctx.globalAlpha = 0.26 * (1 - k / ages.length) * en;
-      ctx.lineWidth = Math.max(1, 0.011 * sc);
-      ctx.stroke();
-    }
-    // light-painting ribbons behind hands / feet / head
-    for (k = 0; k < TRAIL_J.length; k++) {
-      var jj = TRAIL_J[k] * 3, L = 0;
-      for (i = 1; i < n; i++) {
-        L += Math.abs(Hs[i].P[jj] - Hs[i - 1].P[jj]) + Math.abs(Hs[i].P[jj + 1] - Hs[i - 1].P[jj + 1]);
-      }
-      if (L < 0.08 * sc) continue;
-      // a trail that doubles back on itself (fast oscillation) reads as a solid bar: fade it out
-      var h0 = Hs[0].P, nx = P[jj] - h0[jj], ny = P[jj + 1] - h0[jj + 1];
-      var unfold = clamp((Math.sqrt(nx * nx + ny * ny) / L - 0.35) / 0.35, 0, 1);
-      if (unfold <= 0) continue;
-      var wmax = (TRAIL_J[k] === HEAD ? 0.03 : 0.022) * sc * clamp((L / sc - 0.06) / 0.3, 0, 1);
-      var xs = [], ys = [];
-      for (i = 0; i < n; i++) { xs.push(Hs[i].P[jj]); ys.push(Hs[i].P[jj + 1]); }
-      xs.push(P[jj]); ys.push(P[jj + 1]);
-      var N = xs.length, lx = [], ly = [], rx = [], ry = [];
-      for (i = 0; i < N; i++) {
-        var a = Math.max(0, i - 1), b = Math.min(N - 1, i + 1);
-        var tx = xs[b] - xs[a], ty = ys[b] - ys[a], tl = Math.sqrt(tx * tx + ty * ty) || 1;
-        var w = wmax * Math.pow(i / (N - 1), 1.3);
-        lx.push(xs[i] - ty / tl * w); ly.push(ys[i] + tx / tl * w);
-        rx.push(xs[i] + ty / tl * w); ry.push(ys[i] - tx / tl * w);
-      }
-      ctx.beginPath();
-      ctx.moveTo(lx[0], ly[0]);
-      for (i = 1; i < N; i++) ctx.lineTo(lx[i], ly[i]);
-      for (i = N - 1; i >= 0; i--) ctx.lineTo(rx[i], ry[i]);
-      ctx.closePath();
-      var tc = (TRAIL_J[k] === TOL || TRAIL_J[k] === TOR) ? c2 : c1;
-      var gr = ctx.createLinearGradient(xs[0], ys[0], xs[N - 1], ys[N - 1]);
-      gr.addColorStop(0, rgba(tc, 0));
-      gr.addColorStop(0.7, rgba(tc, 0.35));
-      gr.addColorStop(1, rgba(mix(tc, WHITE, 0.6), 0.8));
-      ctx.fillStyle = gr;
-      var far = (TRAIL_J[k] === HAL || TRAIL_J[k] === TOL) ? m.farL : 0;
-      ctx.globalAlpha = clamp(Math.min(1, L / (0.25 * sc)) * unfold * en * (1 - 0.5 * far), 0, 1);
-      ctx.fill();
-    }
-  };
-
-  FP._drawSparks = function (ctx, sc, c1, c2) {
-    var S = this.sparks, i, b;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    var lw = Math.max(0.8, 0.0075 * sc);
-    var cols = [mix(c2, WHITE, 0.1), mix(c1, WHITE, 0.3), mix(c1, WHITE, 0.7)];
-    for (b = 0; b < 3; b++) {
-      ctx.beginPath();
-      var any = false;
-      for (i = 0; i < S.length; i++) {
-        var s = S[i], a = s.life / s.max, bk = a > 0.66 ? 2 : a > 0.33 ? 1 : 0;
-        if (bk !== b) continue;
-        any = true;
-        var tx = s.vx * 0.02, ty = s.vy * 0.02, tl = Math.sqrt(tx * tx + ty * ty);
-        if (s.hot < 0) { tx *= 0.3; ty *= 0.3; }
-        if (tl < 1) { var f = 1 / (tl || 1); tx = (tx || 1) * f; ty *= f; }
-        ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - tx, s.y - ty);
-      }
-      if (!any) continue;
-      ctx.strokeStyle = rgba(cols[b]);
-      ctx.globalAlpha = 0.12 + 0.14 * b;
-      ctx.lineWidth = lw * 3;
-      ctx.stroke();
-      ctx.globalAlpha = 0.35 + 0.25 * b;
-      ctx.lineWidth = lw;
-      ctx.stroke();
-    }
-  };
-
-  FP._drawFlash = function (ctx, P, m, c1, c2, fl) {
-    var sc = m.sc, cx = P[CHEST * 3], cy = P[CHEST * 3 + 1];
-    ctx.globalCompositeOperation = 'lighter';
-    if (fl > 0.01) {
-      var r = sc * (0.75 - 0.25 * fl);
-      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      g.addColorStop(0, rgba(mix(c1, WHITE, 0.6), 0.5));
-      g.addColorStop(0.4, rgba(c1, 0.18));
-      g.addColorStop(1, rgba(c1, 0));
-      ctx.globalAlpha = clamp(fl, 0, 1);
-      ctx.fillStyle = g;
-      ctx.beginPath(); circle(ctx, cx, cy, r); ctx.fill();
-    }
-    if (this.ring >= 0 && !this.low) {
-      var e = this.ring, rx = sc * lerp(0.12, 1.3, 1 - Math.pow(1 - e, 3)), px = (P[PELVIS * 3] + P[CHEST * 3]) / 2;
-      ctx.save();
-      ctx.translate(px, m.floorY); ctx.scale(1, 0.14);
-      ctx.strokeStyle = rgba(mix(c1, WHITE, 0.5));
-      ctx.globalAlpha = clamp((1 - e) * (1 - e), 0, 1);
-      ctx.lineWidth = sc * 0.06 * (1 - e) + 1;
-      ctx.beginPath(); ctx.arc(0, 0, rx, 0, TAU); ctx.stroke();
-      ctx.restore();
+  // Draw the current state right away, outside the loop (after a resize or a look change).
+  FP._paint = function () {
+    if (this.ctx && this.hasPose && this.W >= 4 && this.H >= 4 && !this.suspended) {
+      try { this._computePose(); this._drawStudio(); } catch (e) { this._fail(e); }
     }
   };
 
   /* ================================================================= STUDIO */
-  // A matte, softly lit 3D mannequin (source-over only: no glow, sparks, trails or
-  // reflection). Each limb is a tapered capsule shaded across its width from its 3D
-  // orientation: wrapped-Lambert key light (upper-left-front) + sky fill, a satin
-  // Blinn highlight and a phase-tinted rim light on the opposite edge. Tapers use a
-  // conic gradient centred on the cone apex, so the shading follows the taper
-  // exactly. The torso is lofted from elliptical cross-sections; the floor gets soft
-  // contact shadows scaled by each body part's true height above it.
+  // A matte, softly lit 3D mannequin (the only look). Each limb is a tapered capsule
+  // shaded across its width from its 3D orientation: wrapped-Lambert key light
+  // (upper-left-front) + sky fill, a satin Blinn highlight and a phase-tinted rim light
+  // on the opposite edge. Tapers use a conic gradient centred on the cone apex, so the
+  // shading follows the taper exactly. The torso is lofted from elliptical
+  // cross-sections; the floor gets soft contact shadows scaled by each body part's true
+  // height above it.
 
-  var STYLES = ['neon', 'studio'];
-  function styleOf(s) { return s === 'studio' ? 'studio' : 'neon'; }
+  var STYLES = ['studio']; // the only look; setStyle() still takes it, for the scheme
+  function styleOf() { return 'studio'; }
   function schemeOf(s) { return s === 'light' ? 'light' : 'dark'; }
 
   // Lights in camera space (x right, y up, z toward the viewer): every exercise is lit
@@ -1514,14 +1012,6 @@
   // rimPow (rim width, 8 = narrow), rim2 (untinted kicker on the key side), spotR (head
   // highlight size), lowRim (rim strength in thumbnails).
   var MATERIALS = {
-    // dark stage: bright satin ceramic
-    porcelain: {
-      stage: 'dark', rampAt: [0.3, 0.7], litTo: WHITE,
-      body: [233, 235, 239], shade: [140, 147, 163], deepTo: [34, 38, 48], deepK: 0.45, lit: [250, 251, 252],
-      spec: [255, 255, 255], specK: 0.45, shin: 16, rimK: 0.8, rimW: 0.15,
-      far: [13, 15, 19], farK: 0.32, ao: [18, 21, 30], aoK: 0.42,
-      shadow: [0, 0, 0], shadowK: 1.25, floor: [255, 255, 255], floorK: 0.03, pool: 0.07, sweep: 0.5
-    },
     // dark stage: brushed mid-grey metal, crisp cool highlight, strong phase rim
     titanium: {
       stage: 'dark', rampAt: [0.32, 0.7], litTo: [226, 232, 242],
@@ -1531,17 +1021,6 @@
       rimK: 1.1, rimW: 0.25, rimPow: 5, rim2: [196, 208, 230], rim2K: 0.18, rim2Pow: 7, lowRim: 0.7,
       far: [6, 8, 12], farK: 0.3, ao: [4, 5, 8], aoK: 0.45,
       shadow: [0, 0, 0], shadowK: 1.35, floor: [214, 224, 244], floorK: 0.03, pool: 0.085, sweep: 0.55
-    },
-    // dark stage: the graphite mannequin re-lit for black, like black ceramic: crisp cool
-    // softbox reflections carry the form, a phase-tinted rim and a faint kicker outline it
-    ink: {
-      stage: 'dark', rampAt: [0.3, 0.62], litTo: [96, 104, 120],
-      body: [32, 34, 40], shade: [15, 16, 20], deepTo: [3, 4, 6], deepK: 0.5, lit: [96, 104, 120],
-      spec: [228, 236, 252], specK: 0.95, shin: 34, crisp: true, spec2: [84, 92, 110], spec2K: 0.25, shin2: 4, spotR: 0.4,
-      env: [[4, 5, 8], [128, 140, 166]], envK: 0.2, envSide: 0.6,
-      rimK: 1.3, rimW: 0.3, rimPow: 5, rim2: [140, 154, 182], rim2K: 0.4, rim2Pow: 6, lowRim: 1.1, lowLift: 0.28, lowLiftTo: [150, 160, 182],
-      far: [12, 13, 17], farK: 0.14, ao: [0, 0, 0], aoK: 0.35,
-      shadow: [0, 0, 0], shadowK: 1.4, floor: [196, 210, 240], floorK: 0.04, pool: 0.13, sweep: 0.6
     },
     // dark (warm charcoal) stage: matte warm stone / clay
     stone: {
@@ -1560,7 +1039,7 @@
       shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.03, pool: 0, sweep: 0.4
     }
   };
-  var DEFAULT_MAT = { dark: 'porcelain', light: 'graphite' };
+  var DEFAULT_MAT = { dark: 'stone', light: 'graphite' };
   // The material actually used for a requested name on a scheme.
   function materialFor(name, scheme) {
     var m = typeof name === 'string' && MATERIALS.hasOwnProperty(name) ? MATERIALS[name] : null;
@@ -1573,8 +1052,6 @@
     var body = parseColor(o.body, b.body), shade = parseColor(o.shade, b.shade);
     var lit = o.body ? mix(body, b.litTo, 0.4) : b.lit;
     m.ramp = [[0, mix(shade, b.deepTo, b.deepK)], [b.rampAt[0], shade], [b.rampAt[1], body], [1, lit]];
-    // thumbnails of very dark materials: lift the tones so the body still reads at ~56 px
-    m.rampLow = b.lowLift ? m.ramp.map(function (st) { return [st[0], mix(st[1], b.lowLiftTo, b.lowLift)]; }) : m.ramp;
     m.name = name;
     return m;
   }
@@ -1779,12 +1256,12 @@
 
   FP._stState = function () {
     var M = this._M || (this._M = {}), mat = this.mat;
-    M.ramp = this.low ? mat.rampLow : mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
+    M.ramp = mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
     M.rimC = mix(this.c1, WHITE, mat.rimW);
     M.rimK = mat.rimK * (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash) * (this.low ? (mat.lowRim || 0.45) : 1);
     M.rimPow = mat.rimPow || 8;
     M.spec2 = mat.spec2; M.spec2K = mat.spec2K || 0; M.shin2 = mat.shin2 || 1;
-    M.rim2 = mat.rim2; M.rim2K = (mat.rim2K || 0) * (this.low ? (mat.lowLift ? 1.4 : 0.8) : 1); M.rim2Pow = mat.rim2Pow || 6;
+    M.rim2 = mat.rim2; M.rim2K = (mat.rim2K || 0) * (this.low ? 0.8 : 1); M.rim2Pow = mat.rim2Pow || 6;
     M.spotR = mat.spotR || 0.55;
     M.env = mat.env; M.envK = mat.envK || 0; M.envSide = mat.envSide || 0; M.crisp = !!mat.crisp && !this.low;
     M.far = 0; M.farC = mat.far; M.dim = 1;
@@ -1805,7 +1282,7 @@
     var P = this.cur, m = this.meta, low = this.low, mat = this.mat;
     var M = this._stState();
     var ex = (this.morphT < 0.5 && this.fromEx) ? this.fromEx : this.ex;
-    var order = orderOf(ex, ex === this.ex ? phaseOf(ex, this.time) : this.fromP, true);
+    var order = orderOf(ex, ex === this.ex ? phaseOf(ex, this.time) : this.fromP);
     for (var gi = 0; gi < order.length; gi++) {
       var g = order[gi], far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
       if (!low && gi > 0) this._stOcclude(ctx, g, P, M);
@@ -1822,7 +1299,6 @@
     this._stGround(ctx, P, M);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    try { ctx.imageSmoothingQuality = 'low'; } catch (e) { /* ignore */ } // the default (neon's bloom relies on it)
   };
 
   // depth-scaled radius (near parts slightly larger, as in the projection)
@@ -2307,54 +1783,46 @@
     this.c1b = parseColor(primary, this.c1b); this.c2b = parseColor(secondary, this.c2b);
     this.colT = instant ? 1 : 0;
     if (instant) { this.c1 = this.c1b; this.c2 = this.c2b; }
+    this._still = false;
   };
-  FP.setPlaying = function (b) { if (!this.dead) this.playing = !!b; };
+  FP.setPlaying = function (b) { if (!this.dead) { this.playing = !!b; ensureLoop(); } };
   /** Stop drawing entirely (e.g. while covered by a sheet); resumes where it was. */
   FP.setSuspended = function (b) { if (!this.dead) { this.suspended = !!b; this._still = false; this._acc = 0; } };
-  FP.setEnergy = function (x) { if (!this.dead) this.energyT = clamp(num(x, this.energyT), 0, 1); };
+  FP.setEnergy = function (x) { if (!this.dead) { this.energyT = clamp(num(x, this.energyT), 0, 1); ensureLoop(); } };
+  /** A cue: the rim light flares and (high quality, full motion) a soft band of light sweeps across. */
   FP.pulse = function () {
     if (this.dead) return;
     this.flash = 1;
-    if (this.low || reducedMotion() || !this.hasPose) return;
-    this.ring = 0;
-    if (this.studio) return; // studio: rim-light brighten + a soft light sweep, no sparks
-    var P = this.cur, sc = this.meta.sc, cx = P[CHEST * 3], cy = P[CHEST * 3 + 1];
-    for (var i = 0; i < 44; i++) {
-      var j = ((Math.random() * 20) | 0) * 3;
-      var dx = P[j] - cx, dy = P[j + 1] - cy, dl = Math.sqrt(dx * dx + dy * dy) || 1;
-      var a = Math.random() * TAU, sp = sc * (0.6 + Math.random() * 1.6);
-      this._spawn(P[j], P[j + 1], (dx / dl) * sp * 0.7 + Math.cos(a) * sp * 0.5,
-        (dy / dl) * sp * 0.7 + Math.sin(a) * sp * 0.5 - sc * 0.6, 0.45 + Math.random() * 0.6, 1);
-    }
-  };
-  /** Switch render style live ('neon' | 'studio', scheme 'dark' | 'light') and repaint now. */
-  FP.setStyle = function (style, scheme) {
-    if (this.dead) return;
-    this._setStyle(style, scheme === undefined ? this.scheme : scheme);
-    this._still = false; this._acc = 0;
-    if (this.ctx && this.hasPose && this.W >= 4 && this.H >= 4 && !this.suspended) {
-      try { this._computePose(); this._draw(); } catch (e) { this._fail(e); }
-    }
+    if (!this.low && !reducedMotion() && this.hasPose) this.ring = 0;
+    ensureLoop();
   };
   /**
-   * Pick a studio material preset by name (see HIITFigure.MATERIALS) and repaint now.
-   * It applies while the scheme matches the preset's stage; otherwise (or for an unknown
-   * name / null) the scheme's default is used. The choice survives setStyle().
+   * Switch the scheme ('dark' | 'light') live, and the material too if one is given (as for
+   * setMaterial), then repaint once, now. The style is always 'studio'.
+   */
+  FP.setStyle = function (style, scheme, material) {
+    if (this.dead) return;
+    if (material !== undefined) this.material = typeof material === 'string' ? material : null;
+    this._setStyle(style, scheme === undefined ? this.scheme : scheme);
+    this._still = false; this._acc = 0;
+    this._paint();
+  };
+  /**
+   * Pick a material preset by name (see HIITFigure.MATERIALS) and repaint now. It applies
+   * while the scheme matches the preset's stage; otherwise (or for an unknown name / null)
+   * the scheme's default is used. The choice survives setStyle().
    */
   FP.setMaterial = function (name) {
-    if (this.dead) return;
-    this.material = typeof name === 'string' ? name : null;
-    this.setStyle(this.style, this.scheme);
+    if (!this.dead) this.setStyle(this.style, this.scheme, typeof name === 'string' ? name : null);
   };
-  /** Name of the studio material in use (null in neon). */
-  FP.getMaterial = function () { return this.mat ? this.mat.name : null; };
+  /** Name of the material in use. */
+  FP.getMaterial = function () { return this.mat.name; };
   FP._setStyle = function (style, scheme) {
     this.style = styleOf(style);
     this.scheme = schemeOf(scheme);
     this.studio = this.style === 'studio';
-    this.mat = this.studio ? buildMat(materialFor(this.material, this.scheme), this.matOpts) : null;
-    this.hist.length = 0; this.sparks.length = 0; this.ring = -1;
-    this.fromGnd = null;
+    this.mat = buildMat(materialFor(this.material, this.scheme), this.matOpts);
+    this.ring = -1;
   };
   FP.destroy = function () {
     if (this.dead) return;
@@ -2365,33 +1833,23 @@
     if (this.io) { try { this.io.disconnect(); } catch (e) { /* ignore */ } }
     if (this._onResize && root.removeEventListener) root.removeEventListener('resize', this._onResize);
     if (this.ctx) { try { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); } catch (e) { /* ignore */ } }
-    this.hist = []; this.sparks = []; this.bloom = null; this.bctx = null; this.obuf = null; this.gbuf = null;
+    this.obuf = null; this.gbuf = null;
     if (!registry.length && rafId) { caf(rafId); rafId = 0; lastT = 0; }
   };
   Object.defineProperty(FP, 'exercise', { get: function () { return exId(this.ex); } });
 
   // --- dev / test hooks (not part of the app contract) ---
-  // Jump the exercise clock to t seconds (morph completed), pre-rolling 0.35 s so trails
-  // and sparks exist, then freeze there (freeze=false keeps it running).
+  // Jump the exercise clock to t seconds (morph completed) and freeze there (freeze=false
+  // keeps it running).
   FP._debugSetTime = function (t, freeze) {
     this.morphT = 1; this.from = null;
-    this._frozen = false;
-    this.hist.length = 0; this.sparks.length = 0;
-    var reduced = reducedMotion(), steps = 21, dt = 1 / 60;
-    this.time = t - steps * dt;
-    var wasPlaying = this.playing;
-    this.playing = true;
-    for (var i = 0; i < steps; i++) {
-      this.rt += dt; this.time += dt;
-      this._computePose(); this._record(dt, reduced); this._updateSparks(dt, reduced);
-    }
     this.time = t;
-    this.playing = wasPlaying;
     this._computePose();
     this._frozen = freeze !== false;
+    this._still = false;
   };
   FP._debugStats = function () {
-    var s = this._stats, r = { frames: s.frames, avgMs: s.frames ? s.ms / s.frames : 0, sparks: this.sparks.length, errors: this.errors };
+    var s = this._stats, r = { frames: s.frames, avgMs: s.frames ? s.ms / s.frames : 0, errors: this.errors };
     s.frames = 0; s.ms = 0;
     return r;
   };
@@ -2399,13 +1857,8 @@
   root.HIITFigure = {
     EXERCISES: EXERCISES.slice(),
     STYLES: STYLES.slice(),
-    STUDIO: (function () {
-      function hex(c) { return '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1); }
-      function m(k) { return { body: hex(MATERIALS[k].body), shade: hex(MATERIALS[k].shade), lit: hex(MATERIALS[k].lit) }; }
-      return { dark: m(DEFAULT_MAT.dark), light: m(DEFAULT_MAT.light) };
-    })(),
-    // studio material presets by stage; the first of each list is the default
-    MATERIALS: { dark: ['porcelain', 'titanium', 'ink', 'stone'], light: ['graphite'] },
+    // material presets by stage; the first of each list is the default
+    MATERIALS: { dark: ['stone', 'titanium'], light: ['graphite'] },
     create: function (canvas, opts) { return new Figure(canvas, opts); },
     _dev: {
       EX: EX, JN: JN, B: B,
