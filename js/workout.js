@@ -459,28 +459,33 @@
     function say(text, show) { lines.push({ say: text, show: show }); }
     var nWord = numWord(n);
 
-    say('Welcome to today\u2019s hit session! Here\u2019s the plan.', 'intro');
+    // name the level once; with the longest list skip "Here's the plan" to keep it brisk
+    say('Welcome to today\u2019s hit session, ' + level.name.toLowerCase() + ' level.' +
+      (n < MAX_EXERCISES ? ' Here\u2019s the plan.' : ''), 'intro');
     if (warm) say('We start with a ' + lengthAdj(warm) + ' warm-up.', 'warmup');
-    say((warm ? 'After that, ' + nWord + ' exercises' : capFirst(nWord) + ' exercises today') + ', working from top to bottom.', 'exercises');
-    // one line per exercise, so the screen can follow along: "Then abs: crunches," "and Russian twists."
+    say(warm ? 'After that, ' + nWord + ' exercises.' : capFirst(nWord) + ' exercises today.', 'exercises');
+    // one line per exercise, so the screen can follow along. Each line is its own utterance, so
+    // each ends on a full stop (a comma leaves the voice hanging): "Then abs: crunches." "And Russian twists."
     groups.forEach(function (g, gi) {
       g.ids.forEach(function (id, i) {
-        var last = i === g.ids.length - 1;
-        var head = i > 0 ? (last ? 'and ' : '') : (gi > 0 ? 'Then ' + g.label.toLowerCase() : g.label) + ': ';
-        say(head + sayName(id) + (last ? '.' : ','), 'ex:' + id);
+        var nm = sayName(id);
+        var head = gi > 0 ? 'Then ' + g.label.toLowerCase() : g.label;
+        say((i === 0 ? head + ': ' + nm : i === g.ids.length - 1 ? 'And ' + nm : capFirst(nm)) + '.', 'ex:' + id);
       });
     });
-    say('Each exercise is ' + lengthNoun(level.work) + ' of work, then ' + lengthNoun(level.recover) +
-      (level.recoverType === 'jacks' ? ' of jumping jacks. No standing still!' : ' of rest.'), 'intervals');
+    say('Each exercise is ' + lengthNoun(level.work) + ' of hard work, then ' + lengthNoun(level.recover) +
+      (level.recoverType === 'jacks' ? ' of jumping jacks to keep your heart rate up. No standing still!' :
+        ' of rest. Push hard, but keep your form clean.'), 'intervals');
     var all = n === 2 ? 'both' : 'all ' + nWord;
     if (sets === 1) say('We\u2019ll do ' + all + ' just once.', 'sets');
-    else say('Going through ' + all + ' once is one set. We\u2019ll do ' + numWord(sets) + ' sets' +
+    else say('One round of ' + all + ' is a set. We\u2019ll do ' + numWord(sets) + ' sets' +
       (setBreak ? '.' : ', back to back.'), 'sets');
     if (setBreak) say('Between sets, you get a ' + lengthAdj(setBreak) + ' break.', 'setbreak');
     var mins = Math.max(1, Math.round(tl.total / 60));
     say('That\u2019s ' + (tl.total % 60 ? 'about ' : '') + (mins === 1 ? 'a minute' : numWord(mins) + ' minutes') +
       ' in all' + (warm ? ', warm-up included.' : '.'), 'total');
-    say('Let\u2019s make it count. When you\u2019re ready, tap Start ' + (warm ? 'warm-up.' : 'workout.'), 'ready');
+    say('Grab some water, and let\u2019s make it count. When you\u2019re ready, tap Start ' +
+      (warm ? 'warm-up.' : 'workout.'), 'ready');
 
     return {
       exercises: exercises,

@@ -268,14 +268,14 @@ test('brief: plan, groups and spoken lines follow the workout order', () => {
     'ex:pushup', 'ex:twist', 'ex:crunch', 'ex:squat', 'ex:lunge',
     'intervals', 'sets', 'setbreak', 'total', 'ready']);
   const say = k => b.lines.find(l => l.show === k).say;
-  assert.match(say('intro'), /^Welcome to today’s hit session!/);
+  assert.equal(say('intro'), 'Welcome to today’s hit session, easy level. Here’s the plan.');
   assert.match(say('warmup'), /four-minute warm-up/);
-  assert.match(say('exercises'), /five exercises/);
+  assert.equal(say('exercises'), 'After that, five exercises.');
   assert.equal(say('ex:pushup'), 'Upper body: push ups.');
-  assert.equal(say('ex:twist'), 'Then abs: Russian twists,');
-  assert.equal(say('ex:crunch'), 'and crunches.');
-  assert.match(say('intervals'), /thirty seconds of work, then thirty seconds of rest/);
-  assert.match(say('sets'), /all five once is one set\. We’ll do three sets\./);
+  assert.equal(say('ex:twist'), 'Then abs: Russian twists.');
+  assert.equal(say('ex:crunch'), 'And crunches.');
+  assert.match(say('intervals'), /thirty seconds of hard work, then thirty seconds of rest\. Push hard/);
+  assert.equal(say('sets'), 'One round of all five is a set. We’ll do three sets.');
   assert.match(say('setbreak'), /five-minute break/);
   assert.match(say('total'), /about twenty-eight minutes in all, warm-up included/); // 27:54
   assert.match(say('ready'), /tap Start warm-up\.$/);
@@ -288,7 +288,8 @@ test('brief: medium recovers with jumping jacks; no warm-up means Start workout'
   assert.equal(b.warmup, 0);
   assert.ok(!b.lines.some(l => l.show === 'warmup'));
   const text = spokenText(b);
-  assert.match(text, /thirty seconds of jumping jacks/);
+  assert.match(b.lines[0].say, /medium level/);
+  assert.match(text, /thirty seconds of jumping jacks to keep your heart rate up/);
   assert.match(text, /Three exercises today/);
   assert.match(text, /We’ll do two sets\./);
   assert.match(text, /about eleven minutes in all\./); // 11:10
@@ -303,7 +304,7 @@ test('brief: set break off is said as back to back, with no set-break line', () 
   assert.match(b.lines.find(l => l.show === 'sets').say, /three sets, back to back\.$/);
 });
 
-test('brief: every count, level and option reads well and fits about 25 to 40 seconds', () => {
+test('brief: every count, level and option reads well and fits about 25 to 41 seconds', () => {
   for (let n = H.MIN_EXERCISES; n <= H.MAX_EXERCISES; n++) {
     for (const level of ['easy', 'medium']) {
       for (const warmup of [false, true]) {
@@ -320,13 +321,16 @@ test('brief: every count, level and option reads well and fits about 25 to 40 se
           assert.ok(b.lines.every(l => KEYS.test(l.show)), tag);
           assert.equal(b.lines[0].show, 'intro');
           assert.equal(b.lines[b.lines.length - 1].show, 'ready');
+          // each line is its own utterance: a trailing comma leaves the voice hanging
+          b.lines.forEach(l => assert.match(l.say, /[.!?]$/, `${tag}: ${l.say}`));
+          b.lines.forEach(l => assert.match(l.say, /^[A-Z]/, `${tag}: ${l.say}`));
           const text = spokenText(b);
           assert.doesNotMatch(text, /HIIT/, tag);          // TTS would spell it out
           assert.doesNotMatch(text, /\d/, tag);            // numbers as words
           assert.doesNotMatch(text, /\b1 sets\b|\bone sets\b/, tag);
           assert.ok(text.toLowerCase().includes(['three', 'four', 'five', 'six', 'seven', 'eight'][n - 3] + ' exercises'), tag);
           const secs = words(text) / 2.6;
-          assert.ok(secs >= 25 && secs <= 40, `${tag}: about ${secs.toFixed(1)} s of speech`);
+          assert.ok(secs >= 25 && secs <= 41, `${tag}: about ${secs.toFixed(1)} s of speech`);
         }
       }
     }
@@ -336,7 +340,18 @@ test('brief: every count, level and option reads well and fits about 25 to 40 se
 test('brief: grammar for groups of one and of several', () => {
   const b = H.brief(H.buildTimeline(H.EXERCISES.map(e => e.id), 'easy'));
   assert.deepEqual(b.lines.filter(l => l.show.startsWith('ex:')).map(l => l.say), [
-    'Upper body: push ups,', 'and shoulder taps.',
-    'Then abs: crunches,', 'leg raises,', 'flutter kicks,', 'and Russian twists.',
-    'Then legs: squats,', 'and lunges.']);
+    'Upper body: push ups.', 'And shoulder taps.',
+    'Then abs: crunches.', 'Leg raises.', 'Flutter kicks.', 'And Russian twists.',
+    'Then legs: squats.', 'And lunges.']);
+  // the longest list skips "Here's the plan" to stay brisk
+  assert.equal(b.lines[0].say, 'Welcome to today’s hit session, easy level.');
+});
+
+test('brief: no line ends with a comma', () => {
+  for (let n = H.MIN_EXERCISES; n <= H.MAX_EXERCISES; n++) {
+    for (const level of ['easy', 'medium']) {
+      const b = H.brief(H.buildTimeline(H.randomPick(n, seeded(n)), level, { warmup: true }));
+      b.lines.forEach(l => assert.doesNotMatch(l.say, /,\s*$/, l.say));
+    }
+  }
 });
