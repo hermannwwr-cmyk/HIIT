@@ -2313,10 +2313,8 @@
     if (meta) meta.setAttribute('content', look === 'studio-dark' ? DARK_VARIANTS[darkVariant].meta : L.meta);
     bg.setStyle(L.style, L.scheme);
     bg.setFrameRate(L.fps || (currentScreen === 'workout' ? 0 : 30));
-    figs.forEach(function (f) {
-      if (f.setStyle) f.setStyle(L.style, L.scheme);
-      if (f.setMaterial && L.style === 'studio') f.setMaterial(figMaterial());
-    });
+    var mat = figMaterial();
+    figs.forEach(function (f) { f.setStyle(L.style, L.scheme, mat); }); // one repaint each
     H.EXERCISES.forEach(function (ex) { var gc = GROUP_COLORS[ex.group]; thumbs[ex.id].setColors(gc[0], gc[1]); });
     if (hero.shown) showHero(hero.shown);
     if (run && !run.finished && currentScreen === 'workout') {
