@@ -19,7 +19,7 @@
   --setup-a: #9b5cff; --setup-b: #22e5ff;
   --gold-a: #ffd23f; --gold-b: #ff2bd6;
   --break-a: #36ffc0; --break-b: #9b5cff;
-  --warm-a: #95d26b; --warm-b: #84af43;
+  --warm-a: #95d26b; --warm-b: #7cba5c;
 
   --g-upper: #ff4fd8;
   --g-abs: #2ee6ff;
@@ -37,8 +37,8 @@
   color-scheme: dark;
 }
 
-@property --c1 { syntax: '<color>'; inherits: true; initial-value: #9b5cff; }
-@property --c2 { syntax: '<color>'; inherits: true; initial-value: #22e5ff; }
+@property --c1 { syntax: '<color>'; inherits: true; initial-value: #ff5a36; }
+@property --c2 { syntax: '<color>'; inherits: true; initial-value: #4f7dff; }
 @property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 
 *, *::before, *::after { box-sizing: border-box; }

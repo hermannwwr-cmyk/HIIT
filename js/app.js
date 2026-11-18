@@ -18,7 +18,7 @@
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
     rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
-    warmup: { colors: ['#95d26b', '#84af43'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
+    warmup: { colors: ['#95d26b', '#7cba5c'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
     setrest: { colors: ['#36ffc0', '#9b5cff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
     done: { colors: ['#ffd23f', '#ff2bd6'], energy: 0.55, chip: '', flash: '' }
   };
@@ -39,20 +39,20 @@
       phase: {
         setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#c3c9d4', '#8790a3'], 0.3], work: [['#ff5a36', '#ff3b30'], 0.7],
         rest: [['#2fb8ff', '#3b82f6'], 0.2], jacks: [['#ffc23d', '#ff9f0a'], 0.6], setrest: [['#34d399', '#14b8a6'], 0.1],
-        warmup: [['#95d26b', '#84af43'], 0.4],
+        warmup: [['#95d26b', '#7cba5c'], 0.4],
         done: [['#ff5a36', '#ffb020'], 0.5]
       },
-      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'], warmup: ['#95d26b', '#84af43'] }
+      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'], warmup: ['#95d26b', '#7cba5c'] }
     },
     'studio-light': {
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
         setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
         rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#bd6b00', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
-        warmup: [['#44801c', '#3b6911'], 0.4],
+        warmup: [['#3f7d2a', '#2f6420'], 0.4],
         done: [['#d4380f', '#c76a0a'], 0.5]
       },
-      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'], warmup: ['#44801c', '#3b6911'] }
+      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'], warmup: ['#3f7d2a', '#2f6420'] }
     }
   };
   var htmlEl = document.documentElement;
@@ -73,7 +73,7 @@
     charcoal: {
       material: 'stone', meta: '#1a1918',
       phase: { setup: ['#d8c8b8', '#c9b8a6'], prep: ['#c9bfb2', '#8f867b'], work: ['#ff6b3d', '#f04a2a'], rest: ['#5fb3e8', '#6b8fd6'],
-        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'], warmup: ['#a2d280', '#8eaf5d'] }
+        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'], warmup: ['#a2d280', '#84bf6a'] }
     }
   };
   var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'charcoal';
@@ -482,7 +482,7 @@
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.progress = 1;
-    this.a = hexRgb('#9b5cff'); this.b = hexRgb('#ff2bd6');
+    this.a = hexRgb('#ff5a36'); this.b = hexRgb('#4f7dff');
     this.ta = this.a.slice(); this.tb = this.b.slice();
     this.beat = 0; this.hot = 0;
     this.paused = false;
