@@ -594,6 +594,7 @@ body[data-screen="brief"] { overflow: hidden; }
 .b-map { grid-area: map; display: flex; gap: 5px; min-width: 0; }
 .bm-b { display: grid; gap: 7px; min-width: 0; }
 .bm-b.tight .bm-l { visibility: hidden; } /* too narrow for its label (set by briefFitMap) */
+.bm-b.spill .bm-l { overflow: visible; } /* the warm-up's label may run on over the next block */
 .bm-bar { display: flex; gap: 1px; height: 10px; border-radius: 3px; overflow: hidden; }
 .bm-bar i { display: block; min-width: 0; }
 .bm-l { white-space: nowrap; overflow: hidden; }
@@ -647,6 +648,8 @@ body[data-screen="brief"] { overflow: hidden; }
 .b-beats { display: flex; gap: 3px; height: 32px; }
 .bb { display: grid; place-items: center; min-width: 0; border-radius: 6px; font-style: normal; }
 .b-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* phones: the summary line under the map already says this */
+@media (max-width: 759px), (max-height: 500px) { .b-facts { display: none; } }
 .b-fact { margin: 0; display: inline-flex; align-items: baseline; gap: 6px; }
 
 /* the coach's line, and Start */
@@ -701,6 +704,7 @@ body[data-screen="brief"] { overflow: hidden; }
   .b-grp { grid-template-columns: 58px minmax(0, 1fr); column-gap: 8px; }
   .b-row { gap: 10px; padding-right: 6px; }
   .b-row-meta { display: none; }
+  .b-row[data-group="warmup"] .b-row-meta { display: block; } /* keep the warm-up's length */
   .b-map { gap: 4px; }
   .bm-l { font-size: 10.5px !important; }
   .b-sum .bs-arrow { margin: 0 4px; }

@@ -627,10 +627,15 @@
   }
   /** A map label that doesn't fit its block (the warm-up's, on a phone) steps aside rather than collide. */
   function briefFitMap() {
-    var r = document.createRange();
-    Array.prototype.forEach.call(document.querySelectorAll('#bMap .bm-b'), function (d) {
+    var r = document.createRange(), blocks = document.querySelectorAll('#bMap .bm-b'), spill = 0;
+    Array.prototype.forEach.call(blocks, function (d, i) {
       r.selectNodeContents(d.querySelector('.bm-l'));
-      d.classList.toggle('tight', r.getBoundingClientRect().width > d.clientWidth - 8);
+      var need = r.getBoundingClientRect().width, room = d.clientWidth - 8;
+      // the warm-up always keeps its label: it may run on over the next block, whose label then gives way
+      var warm = d.classList.contains('bm-warmup');
+      d.classList.toggle('spill', warm && need > room);
+      d.classList.toggle('tight', !warm && (need > room || spill > 0));
+      spill = warm && need > room ? need - room : 0;
     });
   }
   window.addEventListener('resize', function () { if (currentScreen === 'brief') briefFitMap(); });
