@@ -274,7 +274,7 @@ test('brief: plan, groups and spoken lines follow the workout order', () => {
   assert.equal(say('ex:pushup'), 'Upper body: push ups.');
   assert.equal(say('ex:twist'), 'Then abs: Russian twists.');
   assert.equal(say('ex:crunch'), 'And crunches.');
-  assert.match(say('intervals'), /thirty seconds of hard work, then thirty seconds of rest\. Push hard/);
+  assert.match(say('intervals'), /thirty seconds of work, then thirty seconds of rest\. Push hard/);
   assert.equal(say('sets'), 'One round of all five is a set. We’ll do three sets.');
   assert.match(say('setbreak'), /five-minute break/);
   assert.match(say('total'), /about twenty-eight minutes in all, warm-up included/); // 27:54
