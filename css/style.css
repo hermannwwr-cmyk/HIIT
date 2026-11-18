@@ -26,8 +26,8 @@
   --g-legs: #ffb21f;
   --danger: #ff4d6d;
 
-  --display: 'Unbounded', 'Arial Black', 'Helvetica Neue', system-ui, sans-serif;
-  --ui: 'Chakra Petch', 'Segoe UI', 'Roboto', system-ui, sans-serif;
+  --display: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ui: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --r-lg: 22px;
   --r-md: 14px;
