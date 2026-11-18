@@ -73,6 +73,8 @@
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.5 2.5L5 13.5h6l-1 8 8.5-11h-6z"/></symbol>
   <symbol id="i-look" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5L8 12l6.5 6.5"/></symbol>
+  <symbol id="i-replay" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4v4h4"/></symbol>
   <symbol id="i-whistle" viewBox="0 0 24 24"><path d="M9.5 9H21v3.5l-4 1.2A6.5 6.5 0 1 1 9.5 9z"/><circle cx="9" cy="15.5" r="1.6"/><path d="M5 6l1.5 1.5M9 3.5V6M2.5 9.5H5"/></symbol>
 </svg>
 
@@ -200,6 +202,61 @@
     </div>
   </div>
 </main>
+
+<!-- ============ BRIEF ============ -->
+<!-- the coach's brief: today's plan at a glance, read aloud part by part before the workout -->
+<section id="brief" class="screen brief" hidden aria-labelledby="briefTitle">
+  <header class="b-top">
+    <button id="briefBack" class="icon-btn" type="button" aria-label="Back to setup"><svg aria-hidden="true"><use href="#i-back"/></svg></button>
+    <p class="b-kicker"><svg aria-hidden="true"><use href="#i-whistle"/></svg>Coach&rsquo;s brief</p>
+    <button id="bVoice" class="icon-btn" type="button" aria-pressed="true" aria-label="Voice coach"><svg aria-hidden="true"><use href="#i-voice"/></svg></button>
+  </header>
+
+  <div class="b-scroll" id="bScroll">
+    <div class="b-main">
+      <div class="b-intro">
+        <div class="b-head bp" data-part="intro">
+          <h1 id="briefTitle" class="b-title" tabindex="-1">Today&rsquo;s session</h1>
+          <p class="b-sub" id="bSub">Easy · 5 exercises · 3 sets</p>
+        </div>
+        <div class="b-total bp" data-part="total">
+          <p class="b-total-v" id="bTotal">27:56</p>
+          <p class="b-total-k">Finish around <b id="bFinish">6:42</b></p>
+        </div>
+        <!-- the whole session to scale: warm-up, sets and breaks -->
+        <div class="b-map" id="bMap" data-part="total" aria-hidden="true"></div>
+      </div>
+
+      <section class="b-plan" aria-labelledby="bPlanH">
+        <h2 class="sr-only" id="bPlanH">In order</h2>
+        <div class="b-seq" id="bSeq"></div>
+      </section>
+
+      <section class="b-round" aria-labelledby="bRoundH">
+        <div class="b-round-main" data-part="intervals">
+          <div class="b-round-top"><h2 class="b-h" id="bRoundH">Each set</h2><p class="b-pattern bp" id="bPattern"></p></div>
+          <div class="b-beats" id="bBeats" aria-hidden="true"></div>
+        </div>
+        <div class="b-facts">
+          <p class="b-fact bp" data-part="sets" id="bSets"></p>
+          <p class="b-fact bp" data-part="setbreak" id="bBreak"></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="b-dock">
+    <div class="b-coach" id="bCoach">
+      <span class="b-ico" aria-hidden="true"><svg><use href="#i-whistle"/></svg><span class="b-eq"><i></i><i></i><i></i></span></span>
+      <p class="b-coach-v" id="bCoachV"></p>
+      <button id="bReplay" class="link-btn b-replay" type="button" hidden><svg aria-hidden="true"><use href="#i-replay"/></svg><span>Replay</span></button>
+    </div>
+    <button id="bStart" class="start b-start" data-part="ready" type="button">
+      <span class="start-label" id="bStartLabel">Start warm-up</span>
+      <span class="start-time b-go" aria-hidden="true"><svg><use href="#i-play"/></svg></span>
+    </button>
+  </div>
+</section>
 
 <!-- ============ WORKOUT ============ -->
 <section id="workout" class="screen workout" hidden aria-label="Workout in progress">
