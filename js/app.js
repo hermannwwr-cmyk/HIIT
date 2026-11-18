@@ -1089,14 +1089,15 @@
   /**
    * The stage figure on the count: its loop runs on its own clock from BEGIN, which a stalled
    * frame (phone speech can block the page for 100–300 ms; a frame step is capped) or a jump
-   * within the step would leave off the beat for the rest of the count. Snap it back, without
-   * a dissolve, once it is more than 40 ms out of phase.
+   * within the step would leave off the beat for the rest of the count. Once it is more than
+   * 40 ms out of phase its clock is put right at once; up to 150 ms off, what it shows catches
+   * up over 120–240 ms instead of popping (a bigger jump follows a visible freeze or a seek).
    */
   function lockFig(seg, t) {
     if (!workFig || !workFig.setTime || !run.playing) return;
     var want = t - seg.start - seg.lead, per = warmPeriod(seg);
-    var d = (workFig.getTime() - want) / per;
-    if (Math.abs(d - Math.round(d)) * per > 0.04) workFig.setTime(want);
+    var d = (workFig.getTime() - want) / per, off = Math.abs(d - Math.round(d)) * per;
+    if (off > 0.04) workFig.setTime(want, off <= 0.15 ? 0.12 : 0);
   }
   function warmName(seg) {
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
