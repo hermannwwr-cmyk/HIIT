@@ -174,7 +174,6 @@
 
   EX.pushup = {
     period: 1.6, cam: { yaw: 8, pitch: 10 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
-    emit: [HEAD, CHEST, PELVIS],
     pose: function (p) {
       var J = {};
       var k = kf(p, [[0, 0], [0.07, 0], [0.5, 1], [0.56, 1], [0.93, 0], [1, 0]]);
@@ -200,7 +199,6 @@
 
   EX.crunch = {
     period: 1.8, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
-    emit: [HEAD, ELR, ELL],
     pose: function (p) {
       var J = {};
       // curl up (0.6 s), pause at the top, lower slowly (0.95 s)
@@ -219,7 +217,6 @@
 
   EX.legraise = {
     period: 2.2, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
-    emit: [TOL, TOR, ANR],
     pose: function (p) {
       var J = {};
       var k = kf(p, [[0, 0], [0.05, 0], [0.42, 1], [0.5, 1], [0.95, 0], [1, 0]]);
@@ -238,7 +235,6 @@
 
   EX.flutter = {
     period: 0.8, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
-    emit: [TOL, TOR],
     pose: function (p) {
       var J = {};
       var w = Math.sin(TAU * p);
@@ -256,7 +252,6 @@
 
   EX.squat = {
     period: 2.0, cam: { yaw: 10, pitch: 6 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
-    emit: [HAL, HAR, HEAD],
     pose: function (p) {
       var J = {};
       var k = kf(p, [[0, 0], [0.06, 0], [0.48, 1], [0.56, 1], [0.93, 0], [1, 0]]);
@@ -284,7 +279,6 @@
     var FX = [[0, 0], [0.1, 0], [0.3, D], [0.78, D], [0.95, 0], [1, 0]];
     EX.lunge = {
       period: 4.8, cam: { yaw: 10, pitch: 6 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
-      emit: [TOL, TOR, HEAD],
       pose: function (p) {
         var J = {};
         var half = p < 0.5 ? 0 : 1, q = (p - half * 0.5) * 2;
@@ -322,7 +316,6 @@
 
   EX.twist = {
     period: 2.0, cam: { yaw: 20, pitch: 35 }, far: { L: 0.5, R: 0 }, order: ['LL', 'T', 'LR', 'AL', 'AR'],
-    emit: [HAL, HAR],
     pose: function (p) {
       var J = {};
       // smooth through the centre (finite speed), a short dwell at each floor touch
@@ -351,7 +344,6 @@
 
   EX.jacks = {
     period: 0.8, cam: { yaw: 90, pitch: 4 }, far: { L: 0, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
-    emit: [HAL, HAR, TOL, TOR],
     pose: function (p) {
       var J = {};
       var w = kf(p, [[0, 0], [0.06, 0], [0.42, 1], [0.56, 1], [0.92, 0], [1, 0]]);
@@ -378,7 +370,6 @@
 
   EX.rest = {
     period: 4.0, cam: { yaw: 58, pitch: 5 }, far: { L: 0.3, R: 0 }, order: ['AL', 'LL', 'LR', 'T', 'AR'],
-    emit: [HAL, HAR],
     pose: function (p) {
       var J = {};
       var b = 0.5 - 0.5 * Math.cos(TAU * p);           // breath: inhale peaks at p = 0.5
@@ -414,7 +405,6 @@
   // shoulder; hips stay level and square (only a 1 cm weight shift onto the support hand).
   EX.shouldertap = {
     period: 2.4, cam: { yaw: 18, pitch: 20 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
-    emit: [HAL, HAR, HEAD],
     orderAt: function (p) { return p < 0.5 ? ['LL', 'LR', 'T', 'AL', 'AR'] : ['LL', 'LR', 'T', 'AR', 'AL']; },
     pose: function (p) {
       var J = {};
@@ -466,7 +456,6 @@
     var PK = [[0, 0], [u1, 0], [0.5, 1], [1 - u1, 0], [1, 0]];
     return {
       period: period, cam: { yaw: 22, pitch: 6 }, far: { L: 0.45, R: 0 }, order: ['AL', 'T', 'LL', 'LR', 'AR'], center: true,
-      emit: [TOL, TOR, HAL, HAR],
       orderAt: function (p) {
         // the lifted leg and a forward-swung far arm pass in front of the torso
         var lifted = Math.sin(TAU * p) >= 0 ? 'LR' : 'LL', standing = lifted === 'LR' ? 'LL' : 'LR';
@@ -540,9 +529,8 @@
   // and down, chest lifted, trunk upright, feet shoulder-width. Each count of 4 the clasped
   // hands rise on beat 1, hold at the top on beat 2 and lower slowly over beats 3 and 4.
   EX.pecstretch = {
-    period: 4.0, cam: { yaw: -57, pitch: 8 }, far: { L: 1, R: 0 }, order: SIDE_ORDER, center: true,
-    sorder: ['LL', 'LR', 'T', 'AL', 'AR'], // the arms are behind the back: nearer the camera than the torso
-    emit: [HAL, HAR],
+    // the arms are behind the back: nearer the camera than the torso, so drawn after it
+    period: 4.0, cam: { yaw: -57, pitch: 8 }, far: { L: 1, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'], center: true,
     pose: function (p) {
       var J = {};
       var b = kf(p, STRETCH_K);
@@ -576,7 +564,6 @@
     var dz = 0.02, py = 0.51, xf = px + Math.sqrt(LF * LF - (py - 0.05) * (py - 0.05) - dz * dz);
     return {
       period: 4.0, cam: sideCam(m, 10, 6), far: sideFar(m), order: m ? SIDE_ORDER_M : SIDE_ORDER,
-      emit: [m ? TOL : TOR],
       pose: function (p) {
         var J = {};
         var b = kf(p, STRETCH_K);                          // ease in on beat 1, hold on beat 2
@@ -613,7 +600,6 @@
     return {
       period: 4.0, cam: sideCam(m, 10, 6), far: sideFar(m),
       order: m ? ['LR', 'AR', 'T', 'LL', 'AL'] : ['LL', 'AL', 'T', 'LR', 'AR'], // far hand rests on the far (front) thigh
-      emit: [HEAD],
       pose: function (p) {
         var J = {};
         var b = kf(p, STRETCH_K);
@@ -642,9 +628,8 @@
 
   // Draw order of an exercise's limb groups (some vary with the phase, e.g. a lifted knee
   // or a forward-swung arm passing in front of the torso).
-  // (sorder: pecstretch's draw order, until its table entry folds it into `order`)
   function orderOf(ex, p) {
-    return ex.orderAt ? ex.orderAt(p) : (ex.sorder || ex.order);
+    return ex.orderAt ? ex.orderAt(p) : ex.order;
   }
   function phaseOf(ex, t) { return ((t / ex.period) % 1 + 1) % 1; }
 
