@@ -163,9 +163,10 @@
   // name it ("Next warm-up: squats. Chest up, sit back."), a breath, then a
   // spoken "5, 4, 3, 2, 1, begin", and only then the count. A leg switch
   // counts down from 3 (countdown: 3); jog pace changes run straight on. The
-  // first lead also holds the coach's welcome.
+  // first lead fits "Let's warm up. First, jogging on the spot, nice and easy."
+  // (the welcome is in the brief, before the warm-up starts).
   var WARMUP_STEPS = [
-    { move: 'jog', pace: 'slow', duration: 10, lead: 12 },
+    { move: 'jog', pace: 'slow', duration: 10, lead: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
     { move: 'jog', pace: 'slow', duration: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
@@ -407,6 +408,92 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
+  // ---- The coach's brief: what today's session holds, read aloud before it starts ----
+  var ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  var TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  /** 28 → "twenty-eight": words every speech voice reads the same way (digits from 100 up). */
+  function numWord(n) {
+    n = Math.round(n);
+    if (n < 0 || n > 99) return String(n);
+    if (n < 20) return ONES[n];
+    return TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : '');
+  }
+  function capFirst(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  /** How the coach says an exercise mid-sentence: "push ups", "Russian twists". */
+  function sayName(id) {
+    var e = BY_ID[id];
+    return e ? e.name.toLowerCase().replace(/\brussian\b/, 'Russian') : '';
+  }
+  /** "five-minute", "forty-five-second": a length used as an adjective (rounded to minutes from 60 s). */
+  function lengthAdj(sec) {
+    return sec < 60 ? numWord(sec) + '-second' : numWord(Math.round(sec / 60)) + '-minute';
+  }
+  /** "thirty seconds", "a minute", "two minutes". */
+  function lengthNoun(sec) {
+    if (sec === 60) return 'a minute';
+    if (sec > 60 && sec % 60 === 0) return numWord(sec / 60) + ' minutes';
+    return numWord(sec) + ' seconds';
+  }
+
+  /**
+   * The coach's brief for a timeline from buildTimeline(): the plan for the
+   * screen, and the spoken lines in order. Each line says which part of the
+   * screen to highlight while it is spoken (`show`): 'intro', 'warmup',
+   * 'exercises', 'ex:<id>', 'intervals', 'sets', 'setbreak', 'total', 'ready'.
+   * Spoken text says "hit", never the letters H-I-I-T, and numbers as words.
+   */
+  function brief(tl) {
+    var level = tl.level || LEVELS.easy;
+    var ids = tl.exercises || [];
+    var n = ids.length;
+    var sets = level.sets;
+    var warm = tl.warmupSeconds || 0;
+    var setBreak = sets > 1 && tl.setRest > 0 ? tl.setRest : 0;
+    var exercises = ids.map(function (id) { return { id: id, name: BY_ID[id].name, group: BY_ID[id].group }; });
+    var groups = GROUP_ORDER.map(function (g) {
+      return { group: g, label: GROUPS[g].label, ids: ids.filter(function (id) { return BY_ID[id].group === g; }) };
+    }).filter(function (g) { return g.ids.length; });
+
+    var lines = [];
+    function say(text, show) { lines.push({ say: text, show: show }); }
+    var nWord = numWord(n);
+
+    say('Welcome to today\u2019s hit session! Here\u2019s the plan.', 'intro');
+    if (warm) say('We start with a ' + lengthAdj(warm) + ' warm-up.', 'warmup');
+    say((warm ? 'After that, ' + nWord + ' exercises' : capFirst(nWord) + ' exercises today') + ', working from top to bottom.', 'exercises');
+    // one line per exercise, so the screen can follow along: "Then abs: crunches," "and Russian twists."
+    groups.forEach(function (g, gi) {
+      g.ids.forEach(function (id, i) {
+        var last = i === g.ids.length - 1;
+        var head = i > 0 ? (last ? 'and ' : '') : (gi > 0 ? 'Then ' + g.label.toLowerCase() : g.label) + ': ';
+        say(head + sayName(id) + (last ? '.' : ','), 'ex:' + id);
+      });
+    });
+    say('Each exercise is ' + lengthNoun(level.work) + ' of work, then ' + lengthNoun(level.recover) +
+      (level.recoverType === 'jacks' ? ' of jumping jacks. No standing still!' : ' of rest.'), 'intervals');
+    var all = n === 2 ? 'both' : 'all ' + nWord;
+    if (sets === 1) say('We\u2019ll do ' + all + ' just once.', 'sets');
+    else say('Going through ' + all + ' once is one set. We\u2019ll do ' + numWord(sets) + ' sets' +
+      (setBreak ? '.' : ', back to back.'), 'sets');
+    if (setBreak) say('Between sets, you get a ' + lengthAdj(setBreak) + ' break.', 'setbreak');
+    var mins = Math.max(1, Math.round(tl.total / 60));
+    say('That\u2019s ' + (tl.total % 60 ? 'about ' : '') + (mins === 1 ? 'a minute' : numWord(mins) + ' minutes') +
+      ' in all' + (warm ? ', warm-up included.' : '.'), 'total');
+    say('Let\u2019s make it count. When you\u2019re ready, tap Start ' + (warm ? 'warm-up.' : 'workout.'), 'ready');
+
+    return {
+      exercises: exercises,
+      groups: groups,
+      level: { id: level.id, name: level.name, work: level.work, recover: level.recover,
+        recoverType: level.recoverType, sets: sets },
+      setBreak: setBreak,
+      warmup: warm,
+      total: tl.total,
+      lines: lines
+    };
+  }
+
   var api = {
     GROUPS: GROUPS, GROUP_ORDER: GROUP_ORDER, EXERCISES: EXERCISES, JACKS: JACKS, REST: REST,
     SET_BREAK_TIPS: SET_BREAK_TIPS,
@@ -416,7 +503,7 @@
     WARMUP_MOVES: WARMUP_MOVES, WARMUP_STEPS: WARMUP_STEPS, WARMUP_SECONDS: WARMUP_SECONDS,
     get: get, sanitize: sanitize, coverage: coverage, validate: validate,
     randomPick: randomPick, resize: resize, order: order,
-    buildTimeline: buildTimeline, segmentAt: segmentAt, formatTime: formatTime, clampCount: clampCount
+    buildTimeline: buildTimeline, brief: brief, segmentAt: segmentAt, formatTime: formatTime, clampCount: clampCount
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

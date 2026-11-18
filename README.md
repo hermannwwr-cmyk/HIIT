@@ -45,7 +45,7 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 
 ### Warm-up
 
-When a workout starts, the coach welcomes you ("Welcome to today's HIIT session") and a 4:16 SAF-style warm-up runs first:
+When a workout starts, the coach welcomes you ("Welcome to today's HIIT session") and a 4:14 SAF-style warm-up runs first:
 
 | Step | How long |
 | --- | --- |
