@@ -177,7 +177,7 @@
     pose: function (p) {
       var J = {};
       var k = kf(p, [[0, 0], [0.07, 0], [0.5, 1], [0.56, 1], [0.93, 0], [1, 0]]);
-      var al = lerp(19.1, 1.5, k);            // body line angle (pivot on the toes); chest ~8 cm off the floor at the bottom
+      var al = lerp(19.3, 2, k);              // body line angle (pivot on the toes); chest ~9 cm off the floor at the bottom
       var bd = dir(al), fa = (al + 61) * DEG; // foot ~80 deg to the floor at the top, ~62 at the bottom
       var ank = [B.foot * Math.cos(fa), 0.012 + B.foot * Math.sin(fa), 0];
       var P = addS(ank, bd, B.shin + B.thigh - 0.0003);
@@ -189,9 +189,9 @@
         J['kn' + s] = r[0]; J['an' + s] = r[1]; J['to' + s] = [0, 0.012, 0.06 * sg];
         // shoulder blades spread at the top (push the floor away), squeezed together at the bottom
         J['sh' + s] = add(J['sh' + s], add(mul(J.F, 0.002 - 0.017 * k), mul(Z, -0.007 * k * sg)));
-        // hands just outside the shoulders, under the lower chest: forearms vertical and elbows
-        // ~45 deg from the body at the bottom
-        armIK(J, s, [0.69, 0.035, 0.16 * sg], [-0.8, 0.85, 1.0 * sg], [1, -0.35, 0]);
+        // hands just outside the shoulders: under them at the top (arms straight), beside the
+        // chest at the bottom, forearms ~10 deg off vertical and elbows ~45-50 deg from the body
+        armIK(J, s, [0.72, 0.035, 0.16 * sg], [-0.65, 0.85, 1.0 * sg], [1, -0.35, 0]);
       }
       return J;
     }
@@ -412,7 +412,7 @@
   // Shoulder taps: high plank (pushup top), one hand at a time taps the opposite
   // shoulder; hips stay level and square (only a 1 cm weight shift onto the support hand).
   EX.shouldertap = {
-    period: 2.4, cam: { yaw: 30, pitch: 22 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
+    period: 2.4, cam: { yaw: 18, pitch: 20 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
     emit: [HAL, HAR, HEAD],
     orderAt: function (p) { return p < 0.5 ? ['LL', 'LR', 'T', 'AL', 'AR'] : ['LL', 'LR', 'T', 'AR', 'AL']; },
     pose: function (p) {
@@ -425,7 +425,7 @@
       var ank = [B.foot * Math.cos(fa), 0.012 + B.foot * Math.sin(fa), 0];
       var P = addS(ank, bd, B.shin + B.thigh - 0.0008);
       P[2] -= tg * 0.006 * sine(clamp(tap * 1.6, 0, 1)); // weight onto the support hand
-      torso(J, P, bd, bd, dir(al + 8), Z, Z, 0);
+      torso(J, P, bd, bd, dir(al + 3), Z, Z, 0); // neck long, head in line with the body
       var F = J.F, up = mul(F, -1);
       for (var i = 0; i < 2; i++) {
         var s = SIDES[i][0], sg = SIDES[i][1];
@@ -539,7 +539,7 @@
   // and down, chest lifted, trunk upright, feet shoulder-width. Each count of 4 the clasped
   // hands rise on beat 1, hold at the top on beat 2 and lower slowly over beats 3 and 4.
   EX.pecstretch = {
-    period: 4.0, cam: { yaw: -72, pitch: 8 }, far: { L: 1, R: 0 }, order: SIDE_ORDER, center: true,
+    period: 4.0, cam: { yaw: -57, pitch: 8 }, far: { L: 1, R: 0 }, order: SIDE_ORDER, center: true,
     sorder: ['LL', 'LR', 'T', 'AL', 'AR'], // the arms are behind the back: nearer the camera than the torso
     emit: [HAL, HAR],
     pose: function (p) {
