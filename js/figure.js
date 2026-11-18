@@ -1147,9 +1147,9 @@
     },
     // light stage: satin graphite on warm paper
     graphite: {
-      stage: 'light', rampAt: [0.3, 0.62], litTo: [130, 136, 148],
-      body: [58, 63, 73], shade: [32, 35, 41], deepTo: [6, 7, 9], deepK: 0.5, lit: [130, 136, 148],
-      spec: [182, 188, 200], specK: 0.55, shin: 14, rimK: 0.18, rimW: 0.35, rimS: 0.75, rimD: 0.0055,
+      stage: 'light', rampAt: [0.22, 0.5], litTo: [132, 138, 150],
+      body: [74, 79, 90], shade: [48, 52, 60], deepTo: [6, 7, 9], deepK: 0.3, lit: [132, 138, 150],
+      spec: [182, 188, 200], specK: 0.55, shin: 14, rimK: 0.18, rimW: 0.5, rimS: 0.6, rimD: 0.0055,
       far: [236, 234, 228], farK: 0.2, farDim: 0.02, ao: [0, 0, 0], aoK: 0.5,
       shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.03, pool: 0, sweep: 0.4
     }
@@ -1324,20 +1324,24 @@
   //        palm station along the hand;
   //   leg: thigh top (the hip; and how far inside the joint), thigh end, knee ball, shin
   //        start, calf (at calfAt along the shin), ankle ball.
-  var ST_ARM = { delt: 0.042, deltDown: 0.026, deltIn: 0.004, up: [0.035, 0.0272], elbow: 0.029, fore: [0.0268, 0.0178],
+  var ST_ARM = { delt: 0.039, deltDown: 0.026, deltIn: 0.009, up: [0.035, 0.0272], elbow: 0.029, fore: [0.0268, 0.0178],
     wrist: 0.0178, hand: [0.0152, 0.0245, 0.0125, 0.0185], palmAt: 0.5 };
   var ST_LEG = { hip: 0.063, hipIn: 0.008, thigh: 0.0375, knee: 0.039, shin: 0.0352, calf: 0.0385, calfAt: 0.28, ankle: 0.0228 };
   var ST_NECK = [0.04, 0.036]; // base, top
+  // The torso is shaded as if it tilted toward or away from the viewer only this much: its
+  // broad, flat front keeps facing the camera, so a torso leaning back or forward does not
+  // turn into a dark vest next to the round limbs.
+  var ST_TILT = 0.45;
   var ST_PELVIS = [0.082, 0.05, 0.05, 0.016]; // ellipsoid semi-axes: side, forward, up; lift of its centre
   // head: centre offset up / forward from the head joint, cranium semi-axes (up, forward,
   // side), jaw [forward, up offset from the cranium centre, semi-axes up, forward, side]
   var ST_HEAD = { up: 0.006, fwd: 0.014, skull: [0.069, 0.061, 0.053], jaw: [0.026, -0.04, 0.032, 0.034, 0.04] };
   var TORSO = [ // anchor (0 pelvis+u1*o | 1 chest+u2*o), o, half-width (R), half-depth (F), forward, hips->shoulders blend
     [0, 0.0, 0.092, 0.066, -0.008, 0],
-    [0, 0.08, 0.074, 0.054, 0.004, 0.4],
+    [0, 0.08, 0.068, 0.054, 0.004, 0.4],
     [1, 0.0, 0.093, 0.062, 0.012, 0.8],
-    [1, 0.064, 0.106, 0.067, 0.016, 1],
-    [1, 0.14, 0.106, 0.056, 0.006, 1],
+    [1, 0.09, 0.111, 0.067, 0.016, 1],
+    [1, 0.14, 0.1, 0.056, 0.006, 1],
     [1, 0.166, 0.058, 0.044, 0.0, 1]
   ];
   // Occlusion silhouettes (rough) per group, for the soft shadow a near part casts on what is behind it.
@@ -1715,8 +1719,8 @@
     this._stFoot(ctx, s, P, M);
   };
 
-  // Sneaker-like foot: heel->toe capsule + instep over an accent midsole (a slightly larger
-  // copy pushed toward the sole and drawn first, so only its edge shows).
+  // Sneaker-like foot: heel->toe capsule + instep over an accent midsole (a copy pushed
+  // toward the sole and drawn first, so only its edge shows).
   FP._stFoot = function (ctx, s, P, M) {
     var kn = s === 'L' ? KNL : KNR, an = kn + 1, to = kn + 2, sc = M.sc;
     var A = [P[an * 3] / sc, -P[an * 3 + 1] / sc, P[an * 3 + 2]];
@@ -1732,7 +1736,9 @@
     function cap(p, r, q, r2, acc) {
       self._stCap(ctx, M, p[0] * sc, -p[1] * sc, p[2], r * M.rk * z, q[0] * sc, -q[1] * sc, q[2], r2 * M.rk * z, 3, acc);
     }
-    if (!M.low) cap(addS(heel, fd, 0.006), 0.0255, addS(toe, fd, 0.006), 0.0155, M.acc2);
+    // same size as the foot, only pushed toward the sole: it shows as an edge on the sole
+    // side and shrinks away as the sole turns toward or away from the viewer (never a ring)
+    if (!M.low) cap(addS(heel, fd, 0.009), 0.0225, addS(toe, fd, 0.009), 0.0125, M.acc2);
     cap(heel, 0.0225, toe, 0.0125);
     cap(ins0, 0.024, ins1, 0.0185);
   };
@@ -1790,7 +1796,7 @@
     var ux = uu[0] * sc, uy = -uu[1] * sc, ul = Math.sqrt(ux * ux + uy * uy) || 1;
     ux /= ul; uy /= ul;
     var tx0 = sub(nek, pel);
-    ctx.fillStyle = cylGrad(ctx, M, ppx - ux * pw, ppy - uy * pw, pw, ppx + ux * pw, ppy + uy * pw, pw, tx0[0], tx0[1], tx0[2]);
+    ctx.fillStyle = cylGrad(ctx, M, ppx - ux * pw, ppy - uy * pw, pw, ppx + ux * pw, ppy + uy * pw, pw, tx0[0], tx0[1], tx0[2] * ST_TILT);
     ctx.beginPath();
     ctx.ellipse(ppx, ppy, pe.rx, pe.ry, pe.th, 0, TAU);
     ctx.fill();
@@ -1800,7 +1806,7 @@
       mx /= (n - 2); my /= (n - 2);
       var al = len(ax) || 1, sx2 = ax[0] / al * sc, sy2 = -ax[1] / al * sc, sl = Math.sqrt(sx2 * sx2 + sy2 * sy2) || 1;
       var hl = Math.max(4, sl * al * 0.5);
-      ctx.fillStyle = cylGrad(ctx, M, mx - sx2 / sl * hl, my - sy2 / sl * hl, wmax, mx + sx2 / sl * hl, my + sy2 / sl * hl, wmax, ax[0], ax[1], ax[2]);
+      ctx.fillStyle = cylGrad(ctx, M, mx - sx2 / sl * hl, my - sy2 / sl * hl, wmax, mx + sx2 / sl * hl, my + sy2 / sl * hl, wmax, ax[0], ax[1], ax[2] * ST_TILT);
       ctx.beginPath(); outline(); ctx.fill();
     } else {
       // loft: one slab per pair of stations (clipped), each shaded with a conic gradient
@@ -1824,7 +1830,7 @@
         ctx.clip();
         // the steep shoulder->neck slab just continues the chest shading (a separate
         // gradient there would show a seam across the trapezius)
-        if (j < n - 1 || !lastG) lastG = slabGrad(ctx, M, Lp[i], Lp[j], Rp[i], Rp[j], tax[0], tax[1], tax[2]);
+        if (j < n - 1 || !lastG) lastG = slabGrad(ctx, M, Lp[i], Lp[j], Rp[i], Rp[j], tax[0], tax[1], tax[2] * ST_TILT);
         ctx.fillStyle = lastG;
         ctx.beginPath(); outline(); ctx.fill();
         ctx.restore();
