@@ -580,20 +580,29 @@ body[data-screen="brief"] { overflow: hidden; }
 /* title, total time, and the session to scale */
 .b-intro {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "head total" "map map";
+  grid-template-areas: "head total" "map map" "sum sum";
   align-items: end; gap: 16px 14px;
 }
 .b-head { grid-area: head; min-width: 0; }
 .b-title { margin: 0; outline: none; }
 .b-sub { margin: 8px 0 0; }
+.b-sub > span:not(.b-dot) { white-space: nowrap; }
 .b-total { grid-area: total; text-align: right; }
+.b-total-l { margin: 0 0 4px; }
 .b-total-v { margin: 0; font-variant-numeric: tabular-nums; }
 .b-total-k { margin: 6px 0 0; white-space: nowrap; }
 .b-map { grid-area: map; display: flex; gap: 5px; min-width: 0; }
-.bm-b { display: grid; gap: 7px; min-width: max-content; } /* a block never gets narrower than its label */
+.bm-b { display: grid; gap: 7px; min-width: 0; }
+.bm-b.tight .bm-l { visibility: hidden; } /* too narrow for its label (set by briefFitMap) */
 .bm-bar { display: flex; gap: 1px; height: 10px; border-radius: 3px; overflow: hidden; }
 .bm-bar i { display: block; min-width: 0; }
-.bm-l { white-space: nowrap; }
+.bm-l { white-space: nowrap; overflow: hidden; }
+/* one line with the pattern and the sets, on screen at once */
+.b-sum { grid-area: sum; margin: -4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.bs, .bs-g { display: inline-flex; align-items: center; white-space: nowrap; }
+.bs + .bs::before { content: "·"; margin: 0 9px; }
+.b-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2.5px; margin-right: 6px; flex: none; }
+.bs-arrow { margin: 0 6px; }
 
 /* the sequence: a coloured rail per muscle group */
 .b-seq { display: grid; gap: 4px; }
@@ -630,6 +639,7 @@ body[data-screen="brief"] { overflow: hidden; }
 /* one set to scale */
 .b-round { display: grid; gap: 12px; }
 .b-round-main { display: grid; gap: 12px; }
+.b-round-main { container-type: inline-size; }
 .b-round-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
 .b-pattern { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .b-pattern > span:not(.bp-arrow) { display: inline-flex; align-items: center; gap: 7px; }
@@ -646,7 +656,7 @@ body[data-screen="brief"] { overflow: hidden; }
   padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
 }
 .b-coach { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 42px; }
-.b-coach-v { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.b-coach-v { margin: 0; }
 .b-coach-v.swap { animation: swapIn .45s cubic-bezier(.2,.9,.3,1); }
 .b-ico { display: grid; place-items: center; height: 18px; }
 .b-ico > * { grid-area: 1 / 1; }
@@ -664,32 +674,37 @@ body[data-screen="brief"] { overflow: hidden; }
   .b-main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas: "intro plan" "round plan";
-    grid-template-rows: auto auto;
+    grid-template-rows: auto 1fr;
     align-items: start;
     column-gap: clamp(28px, 4vw, 56px);
   }
   .b-intro { grid-area: intro; }
   .b-plan { grid-area: plan; }
   .b-round { grid-area: round; }
-  .b-plan { align-self: center; }
   .b-dock { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); column-gap: clamp(28px, 4vw, 56px); align-items: center; }
 }
 @media (min-width: 760px) and (min-aspect-ratio: 5/4) and (min-height: 700px) {
-  /* the plan sits in the middle of a big screen, not stuck to its top */
-  .b-main { min-height: 100%; align-content: center; }
-  .b-scroll { padding-block: 24px 32px; }
+  .b-scroll { padding-block: 20px 28px; }
   .b-dock { padding-bottom: max(28px, env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-height: 500px) and (min-aspect-ratio: 5/4) {
   .b-top { min-height: 46px; }
   .b-coach { min-height: 0; }
+  .b-scroll { padding-bottom: 28px; }
+}
+/* a narrow card: the pattern stacks, no arrow left hanging */
+@container (max-width: 290px) {
+  .b-pattern { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .b-pattern .bp-arrow { display: none; }
 }
 @media (max-width: 360px) {
   .b-grp { grid-template-columns: 58px minmax(0, 1fr); column-gap: 8px; }
   .b-row { gap: 10px; padding-right: 6px; }
   .b-row-meta { display: none; }
   .b-map { gap: 4px; }
-  .bm-l { font-size: 10px !important; letter-spacing: -.01em !important; }
+  .bm-l { font-size: 10.5px !important; }
+  .b-sum .bs-arrow { margin: 0 4px; }
+  .bs + .bs::before { margin: 0 6px; }
 }
 
 /* ---------- WORKOUT ---------- */

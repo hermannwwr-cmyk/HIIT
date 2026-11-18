@@ -286,6 +286,13 @@
 [data-look="studio"] .b-sub { font: 500 15px/1.3 var(--ui); color: var(--dim); }
 [data-look="studio"] .b-total-v { font: 300 clamp(40px, 11vw, 56px)/.9 var(--ui); letter-spacing: -.05em; color: var(--text); }
 [data-look="studio"] .b-total-k { font: 500 13px/1.2 var(--ui); color: var(--mute); }
+[data-look="studio"] .b-total-l { font: 500 12px/1 var(--ui); letter-spacing: .02em; color: var(--mute); }
+[data-look="studio"] .b-sum { font: 500 14px/1.25 var(--ui); color: var(--dim); }
+[data-look="studio"] .b-sum .bs::before, [data-look="studio"] .bs-arrow { color: var(--mute); }
+[data-look="studio"] .b-sw-w { background: var(--work-a); }
+[data-look="studio"] .b-sw-r { background: color-mix(in srgb, var(--rest-a) 55%, transparent); }
+[data-look="studio"] .b-sw-j { background: var(--jacks-a); }
+[data-look="studio"] .brief .bs.on { color: var(--text); }
 [data-look="studio"] .b-total-k b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 [data-look="studio"] .bm-l { font: 500 11.5px/1 var(--ui); color: var(--mute); }
 [data-look="studio"] .bm-warmup .bm-bar { background: var(--warm-a); }
@@ -332,7 +339,7 @@
 [data-look="studio"][data-scheme="dark"] .bb-work { background: color-mix(in srgb, var(--work-a) 82%, #000); }
 [data-look="studio"] .bb-rest { background: color-mix(in srgb, var(--rest-a) 26%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--rest-a) 38%, transparent) inset; }
 [data-look="studio"][data-scheme="dark"] .bb-rest { background: color-mix(in srgb, var(--rest-a) 34%, var(--surface-solid)); }
-[data-look="studio"] .bb-jacks { background: color-mix(in srgb, var(--jacks-a) 30%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--jacks-a) 45%, transparent) inset; }
+[data-look="studio"] .bb-jacks { background: color-mix(in srgb, var(--jacks-a) 80%, transparent); }
 [data-look="studio"] .b-fact {
   padding: 8px 12px; border-radius: 999px;
   font: 500 13px/1 var(--ui); color: var(--dim);
@@ -342,6 +349,7 @@
 [data-look="studio"] .b-fact b { font: 600 15px/1 var(--ui); color: var(--text); font-variant-numeric: tabular-nums; }
 
 [data-look="studio"] .b-coach-v { font: 500 15px/1.35 var(--ui); color: var(--dim); text-wrap: pretty; }
+[data-look="studio"] .b-coach-v.long { font-size: 14px; }
 [data-look="studio"] .b-ico svg { color: var(--accent); }
 [data-look="studio"] .b-eq i { background: var(--accent); }
 [data-look="studio"] .brief.talking .b-eq i { animation: bEq .9s ease-in-out infinite; }
@@ -353,7 +361,17 @@
 
 /* the part the coach is talking about: everything else steps back; the part itself lifts */
 [data-look="studio"] .brief .bp { transition: opacity .35s ease, background .3s, border-color .3s, box-shadow .3s, color .3s; }
-[data-look="studio"] .brief.dim .bp:not(.on):not(.on .bp) { opacity: .32; }
+[data-look="studio"] .brief.dim .bp:not(.on):not(.on .bp) { opacity: .55; }
+/* group labels and their rails, and the card's heading, step back with their rows */
+[data-look="studio"] .brief .b-grp-h, [data-look="studio"] .brief .b-list::before, [data-look="studio"] .brief .b-round .b-h { transition: opacity .35s ease; }
+[data-look="studio"] .brief.dim .b-grp:not(:has(.on)):not(.on .b-grp) .b-list::before,
+[data-look="studio"] .brief.dim .b-grp:not(:has(.on)):not(.on .b-grp) .b-grp-h,
+[data-look="studio"] .brief.dim .b-round:not(:has(.on)) .b-h { opacity: .55; }
+[data-look="studio"] .b-round { transition: border-color .3s, box-shadow .3s; }
+[data-look="studio"] .brief .b-round:has(.b-round-main.on) {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: var(--shadow-1), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 [data-look="studio"] .brief .b-row.on {
   background: color-mix(in srgb, var(--gc) 9%, var(--surface-2));
   border-color: color-mix(in srgb, var(--gc) 55%, transparent);
@@ -387,13 +405,15 @@
   [data-look="studio"] .bm-l { font-size: 14px; }
   [data-look="studio"] .b-h, [data-look="studio"] .b-grp-h { font-size: 16px; }
   [data-look="studio"] .b-grp { grid-template-columns: 104px minmax(0, 1fr); column-gap: 14px; }
-  [data-look="studio"] .b-grp-h { padding-top: 24px; }
-  [data-look="studio"] .b-list { gap: 8px; padding-left: 14px; }
-  [data-look="studio"] .b-seq, [data-look="studio"] .b-exs { gap: 10px; }
-  [data-look="studio"] .b-row { grid-template-columns: 68px minmax(0, 1fr) auto auto; gap: 16px; padding: 4px 14px 4px 4px; border-radius: 18px; }
-  [data-look="studio"] .b-thumb { width: 68px; height: 68px; border-radius: 15px; }
+  [data-look="studio"] .b-grp-h { padding-top: 19px; }
+  [data-look="studio"] .b-list { gap: 4px; padding-left: 14px; }
+  [data-look="studio"] .b-seq, [data-look="studio"] .b-exs { gap: 8px; }
+  [data-look="studio"] .b-row { grid-template-columns: 56px minmax(0, 1fr) auto auto; gap: 16px; padding: 3px 14px 3px 3px; border-radius: 16px; }
+  [data-look="studio"] .b-thumb { width: 56px; height: 56px; border-radius: 13px; }
+  [data-look="studio"] .b-sum { font-size: 17px; }
+  [data-look="studio"] .b-total-l { font-size: 14px; }
   [data-look="studio"] .b-num { width: 26px; height: 26px; font-size: 13px; }
-  [data-look="studio"] .b-row-name { font-size: 22px; }
+  [data-look="studio"] .b-row-name { font-size: 20px; }
   [data-look="studio"] .b-row-meta { font-size: 15px; }
   [data-look="studio"] .b-row-time { font-size: 18px; }
   [data-look="studio"] .b-row-info { font-size: 20px; }
@@ -404,7 +424,7 @@
   [data-look="studio"] .bb { font-size: 17px; border-radius: 9px; }
   [data-look="studio"] .b-fact { font-size: 16px; padding: 11px 16px; }
   [data-look="studio"] .b-fact b { font-size: 19px; }
-  [data-look="studio"] .b-coach-v { font-size: 18px; }
+  [data-look="studio"] .b-coach-v, [data-look="studio"] .b-coach-v.long { font-size: 17px; }
   [data-look="studio"] .b-kicker { font-size: 13px; }
   [data-look="studio"] .b-start { min-height: 68px; font-size: 19px; }
 }
@@ -412,7 +432,7 @@
 @media (max-height: 500px) and (min-aspect-ratio: 5/4) {
   [data-look="studio"] .b-title { font-size: 28px; }
   [data-look="studio"] .b-total-v { font-size: 44px; }
-  [data-look="studio"] .b-coach-v { -webkit-line-clamp: 1; }
+  [data-look="studio"] .b-coach-v, [data-look="studio"] .b-coach-v.long { font-size: 13.5px; line-height: 1.3; }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-look="studio"] .brief.talking .b-eq i { animation: none; height: 10px; }

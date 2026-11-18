@@ -514,7 +514,9 @@
 
   function renderBrief(tl, b) {
     var lv = b.level, segs = tl.segments, warm = !!b.warmup;
-    $('bSub').textContent = lv.name + ' · ' + plural(b.exercises.length, 'exercise') + ' · ' + plural(lv.sets, 'set');
+    // each part keeps together on a narrow phone ("8 exercises" never splits)
+    $('bSub').innerHTML = [lv.name, plural(b.exercises.length, 'exercise'), plural(lv.sets, 'set')]
+      .map(function (x) { return '<span>' + esc(x) + '</span>'; }).join('<span class="b-dot" aria-hidden="true"> · </span>');
     $('bTotal').textContent = H.formatTime(b.total);
     $('bTotal').setAttribute('aria-label', 'Total ' + H.formatTime(b.total));
     briefClock();
@@ -532,6 +534,7 @@
     blocks.forEach(function (bk) {
       var kind = bk.key === 'warmup' ? 'warmup' : /^break/.test(bk.key) ? 'break' : 'set';
       var d = mk('div', 'bm-b bp bm-' + kind);
+      d.title = kind === 'warmup' ? 'Warm-up ' + H.formatTime(bk.dur) : kind === 'break' ? 'Break ' + H.formatTime(bk.dur) : 'Set ' + bk.set;
       d.dataset.part = kind === 'warmup' ? 'warmup' : kind === 'break' ? 'setbreak' : 'sets';
       d.style.flex = bk.dur + ' 1 0';
       var bar = mk('div', 'bm-bar');
@@ -563,7 +566,7 @@
       var info = mk('span', 'b-row-info');
       info.innerHTML = '<svg aria-hidden="true"><use href="#i-info"/></svg>';
       btn.appendChild(info);
-      btn.setAttribute('aria-label', (num ? num + '. ' : '') + name + (time ? ', ' + time : '') + '. How to');
+      btn.setAttribute('aria-label', (num ? num + '. ' : '') + name + ', ' + meta + '. How to');
       btn.addEventListener('click', function () { briefStopTalk(true); openGuide(id, 'brief', btn); });
       li.appendChild(btn);
       return li;
@@ -572,7 +575,8 @@
       var g = mk('div', 'b-grp');
       g.dataset.group = group;
       if (part) g.dataset.part = part;
-      var h = mk('h3', 'b-grp-h', label);
+      // the warm-up is not a muscle group: its row names it, the rail stays (no label twice)
+      var h = mk(label ? 'h3' : 'span', 'b-grp-h', label);
       g.appendChild(h);
       var ol = mk('ol', 'b-list');
       items.forEach(function (li) { ol.appendChild(li); });
@@ -580,7 +584,7 @@
       return g;
     }
     if (warm) {
-      seq.appendChild(grp('warmup', 'Warm-up', [row('jog', 'warmup', 0, 'Warm-up', 'Jog, jacks & stretches', 'warmup', H.formatTime(b.warmup))]));
+      seq.appendChild(grp('warmup', '', [row('jog', 'warmup', 0, 'Warm-up', H.formatTime(b.warmup) + ' · jog, jacks & stretches', 'warmup')]));
     }
     var exWrap = mk('div', 'b-exs');
     exWrap.dataset.part = 'exercises';
@@ -589,7 +593,8 @@
       exWrap.appendChild(grp(g.group, g.label, g.ids.map(function (id) {
         var ex = H.get(id);
         n++;
-        return row(id, g.group, n, ex.name, ex.muscles, 'ex:' + id);
+        // the two main muscles: a third one only gets cut off on a phone
+        return row(id, g.group, n, ex.name, ex.muscles.split(' · ').slice(0, 2).join(' · '), 'ex:' + id);
       })));
     });
     seq.appendChild(exWrap);
@@ -608,12 +613,27 @@
       if (s.type === 'work') { i.dataset.part = 'ex:' + s.exercise; i.dataset.group = H.get(s.exercise).group; i.textContent = String(s.slot + 1); }
       beats.appendChild(i);
     });
+    // the same in one line up top, so the pattern is on screen at once even when the card is below the fold
+    $('bSum').innerHTML =
+      '<span class="bs bp" data-part="intervals"><i class="b-sw b-sw-w"></i>' + lv.work + ' s exercise <span class="bs-arrow" aria-hidden="true">→</span> <i class="b-sw b-sw-' + (jacks ? 'j' : 'r') + '"></i>' +
+        lv.recover + ' s ' + (jacks ? 'jumping jacks' : 'rest') + '</span>' +
+      '<span class="bs-g"><span class="bs bp" data-part="sets">×' + lv.sets + ' ' + (lv.sets === 1 ? 'set' : 'sets') + '</span>' +
+      (b.setBreak ? '<span class="bs bp" data-part="setbreak">' + H.formatTime(b.setBreak) + ' breaks</span>' : '') + '</span>';
     $('bSets').innerHTML = '<b>×' + lv.sets + '</b> ' + (lv.sets === 1 ? 'set' : 'sets');
     $('bBreak').innerHTML = '<b>' + H.formatTime(b.setBreak) + '</b> break between sets';
     $('bBreak').hidden = !b.setBreak;
 
     $('bStartLabel').textContent = warm ? 'Start warm-up' : 'Start workout';
   }
+  /** A map label that doesn't fit its block (the warm-up's, on a phone) steps aside rather than collide. */
+  function briefFitMap() {
+    var r = document.createRange();
+    Array.prototype.forEach.call(document.querySelectorAll('#bMap .bm-b'), function (d) {
+      r.selectNodeContents(d.querySelector('.bm-l'));
+      d.classList.toggle('tight', r.getBoundingClientRect().width > d.clientWidth - 8);
+    });
+  }
+  window.addEventListener('resize', function () { if (currentScreen === 'brief') briefFitMap(); });
 
   /** Setup's Start: build today's plan and let the coach brief it. */
   function openBrief() {
@@ -628,6 +648,8 @@
     $('brief').classList.remove('talking');
     $('bCoachV').textContent = '';
     showScreen('brief');
+    briefFitMap();
+    try { document.fonts.ready.then(function () { if (currentScreen === 'brief') briefFitMap(); }); } catch (e) { /* no font API: fine */ }
     $('bScroll').scrollTop = 0;
     // Back from here returns to setup, not out of the app
     try { if (!(history.state && history.state.brief)) history.pushState({ brief: 1 }, ''); } catch (e) { /* sandboxed: fine */ }
@@ -694,6 +716,7 @@
     if (!A.get('voice') || !A.voiceSupported()) { briefDone(false); return; }
     brief.talking = true;
     scr.classList.add('talking');
+    briefCaption(brief.data.lines[0].say); // on screen at once; the voice follows
     var tok = brief.tok;
     brief.timer = setTimeout(function () { if (tok === brief.tok) briefLine(0); }, 450); // let the screen land first
   }
@@ -707,9 +730,7 @@
     brief.i = i;
     var ln = lines[i];
     briefShow(ln.show);
-    var cv = $('bCoachV');
-    cv.textContent = ln.say.replace(/\bhit\b/g, 'HIIT'); // spelt "hit" for the voice only
-    cv.classList.remove('swap'); void cv.offsetWidth; cv.classList.add('swap');
+    briefCaption(ln.say);
     A.say(ln.say);
     var t0 = performance.now(), heard = false, est = briefReadMs(ln.say);
     function next(gap) { brief.timer = setTimeout(function () { if (tok === brief.tok) briefLine(i + 1); }, gap); }
@@ -727,6 +748,14 @@
       if (t >= est) next(0); else brief.timer = setTimeout(poll, 80);
     })();
   }
+  /** The coach's line as a caption: the whole line, smaller when it is a long one. */
+  function briefCaption(say) {
+    var cv = $('bCoachV'), text = say.replace(/\bhit\b/g, 'HIIT'); // spelt "hit" for the voice only
+    if (cv.textContent === text) return;
+    cv.textContent = text;
+    cv.classList.toggle('long', text.length > 80);
+    cv.classList.remove('swap'); void cv.offsetWidth; cv.classList.add('swap');
+  }
   /** The brief is over (or the voice is off): everything shows at full strength. */
   function briefDone(spoke) {
     brief.tok++;
@@ -735,7 +764,7 @@
     $('brief').classList.remove('talking');
     briefShow(null);
     var voice = A.get('voice') && A.voiceSupported();
-    $('bCoachV').textContent = !voice ? 'Voice coach is off. Here’s today’s plan.' : spoke ? 'That’s the plan. Ready when you are.' : 'Here’s today’s plan.';
+    briefCaption(!voice ? 'Voice coach is off. Here’s today’s plan.' : spoke ? 'That’s the plan. Ready when you are.' : 'Here’s today’s plan.');
     $('bReplay').hidden = !voice;
   }
   /** Stop the coach mid-brief; `show` leaves the plan fully visible (otherwise the caller moves on). */

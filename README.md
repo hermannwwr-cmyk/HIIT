@@ -47,7 +47,7 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 
 **Start** opens the brief before anything runs: today's plan on one screen, and the coach reading it aloud ("Welcome to today's HIIT session! Here's the plan…").
 
-- **On screen:** total time and when you'll finish, the session to scale (warm-up, sets, 5:00 breaks), the exercises in order on coloured upper body / abs / legs rails with live mini demos, one set drawn as 30 s on / 30 s off, and the number of sets.
+- **On screen:** total time and when you'll finish, the session to scale (warm-up, sets, 5:00 breaks) with a one-line summary ("30 s exercise → 30 s rest · ×3 sets · 5:00 breaks"), the exercises in order on coloured upper body / abs / legs rails with live mini demos, one set drawn as 30 s on / 30 s off, and the number of sets.
 - **While the coach speaks,** the part being talked about lights up and the rest steps back; the current line is shown under it as a caption. If the voice can't play, the highlights still step through at reading pace. With the voice off (the mic button), the plan simply shows in full.
 - **Start warm-up** (or **Start workout** with the warm-up off) can be tapped at any time; the coach stops and the workout begins. Tap an exercise for its trainer's guide. **‹**, Esc or the browser's Back return to setup.
 
