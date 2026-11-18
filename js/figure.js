@@ -11,9 +11,11 @@
  *   }
  *   opts: { exercise:'pushup', primary:'#ff2bd6', secondary:'#ffb000', quality:'high'|'low', energy:0..1,
  *           scheme:'dark'|'light', material: preset name, used while the scheme matches its stage,
- *           body, shade (material overrides: lit body colour, core-shadow colour) }
+ *           body, shade (material overrides: lit body colour, core-shadow colour),
+ *           fps: frame-rate cap (default 60, 'low' 30), maxDpr: resolution cap (default 3, 'low' 2),
+ *           clear: [dx, dy, r] ('low' only) a circle in from the bottom-right corner to keep the figure out of }
  *   instance.setExercise(id, {instant, time}) / getTime() / setColors(primary, secondary, instant)
- *   instance.setPlaying(bool) / setEnergy(x) / pulse() / setSuspended(bool) / destroy()
+ *   instance.setPlaying(bool) / setEnergy(x, instant) / pulse() / setSuspended(bool) / destroy()
  *   instance.setStyle(style, scheme[, material]) - switch scheme (and material) live; repaints once, now
  *   instance.setMaterial(name) / getMaterial() - material preset; repaints immediately
  *
@@ -31,7 +33,7 @@
   var DEG = Math.PI / 180;
   var EXERCISES = ['pushup', 'crunch', 'legraise', 'flutter', 'squat', 'lunge', 'twist', 'jacks', 'rest',
     'shouldertap', 'jog-slow', 'jog-quick', 'pecstretch', 'hamstring-l', 'hamstring-r', 'calf-l', 'calf-r'];
-  var MORPH_S = 0.45;
+  var MORPH_S = 0.25; // exercise change: cross-dissolve length (s)
   var COLOR_S = 0.3;
 
   /* ------------------------------------------------------------------ math */
@@ -690,32 +692,45 @@
     }
     return out;
   }
-  // Bounding box of the whole cycle in view space (y up), cached per exercise.
+  // Bounding box of the whole cycle in view space (y up), cached per exercise, with two
+  // more for thumbnails: .raw (the same, not centred) and .key (the key pose alone).
   var TMPV = new Float32Array(NJ * 3);
+  function growBox(b, ex, p) {
+    project(safePose(ex, p, p * ex.period), ex, TMPV);
+    for (var i = 0; i < NJ; i++) {
+      if (i === FACE) continue;
+      var x = TMPV[i * 3], y = TMPV[i * 3 + 1], r = i === HEAD ? B.headR : 0.03;
+      if (x - r < b.x0) b.x0 = x - r; if (x + r > b.x1) b.x1 = x + r;
+      if (y - r < b.y0) b.y0 = y - r; if (y + r > b.y1) b.y1 = y + r;
+    }
+    return b;
+  }
+  function padBox(b, ex) {
+    return { x0: b.x0 - 0.05, x1: b.x1 + 0.05, y0: Math.min(b.y0, camSetup(ex).floorV) - 0.06, y1: b.y1 + 0.05 };
+  }
   function exBox(ex) {
     if (ex._box) return ex._box;
-    var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, N = 72;
-    for (var n = 0; n < N; n++) {
-      project(safePose(ex, n / N, n / N * ex.period), ex, TMPV);
-      for (var i = 0; i < NJ; i++) {
-        if (i === FACE) continue;
-        var x = TMPV[i * 3], y = TMPV[i * 3 + 1], r = i === HEAD ? B.headR : 0.03;
-        if (x - r < x0) x0 = x - r; if (x + r > x1) x1 = x + r;
-        if (y - r < y0) y0 = y - r; if (y + r > y1) y1 = y + r;
-      }
-    }
+    var b = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9 }, N = 72;
+    for (var n = 0; n < N; n++) growBox(b, ex, n / N);
+    var raw = padBox(b, ex);
     // Standing movements: frame symmetrically around the standing pose so the
     // athlete starts (and rests) in the centre, not offset by the step/hip hinge.
     if (ex.id === 'squat' || ex.id === 'lunge' || ex.id === 'jacks' || ex.id === 'rest' || ex.center) {
       var hx = 0;
       for (var m = 0; m < 24; m++) { project(safePose(ex, m / 24, m / 24 * ex.period), ex, TMPV); hx += TMPV[PELVIS * 3] / 24; }
-      var half = Math.max(hx - x0, x1 - hx);
-      x0 = hx - half; x1 = hx + half;
+      var half = Math.max(hx - b.x0, b.x1 - hx);
+      b.x0 = hx - half; b.x1 = hx + half;
     }
-    var fv = camSetup(ex).floorV;
-    ex._box = { x0: x0 - 0.05, x1: x1 + 0.05, y0: Math.min(y0, fv) - 0.06, y1: y1 + 0.05 };
+    ex._box = padBox(b, ex);
+    ex._box.raw = raw;
+    ex._box.key = padBox(growBox({ x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9 }, ex, KEY_PHASE[ex.id] || 0), ex);
     return ex._box;
   }
+  // The pose that best shows each move (phase 0..1): what a thumbnail frames, and shows
+  // while it is not playing.
+  var KEY_PHASE = { pushup: 0, shouldertap: 0.17, crunch: 0.5, legraise: 0.42, flutter: 0.17, twist: 0,
+    squat: 0.5, lunge: 0.33, jacks: 0.33 };
+  function keyTime(ex) { return (KEY_PHASE[exId(ex)] || 0) * ex.period; }
   // Studio contact shadows: screen position of each joint dropped straight onto the
   // floor (x, 0, z), plus its true height above the floor (body units).
   function groundProject(J, ex, f, out) {
@@ -816,8 +831,14 @@
     this.ctx = null;
     try { this.ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null; } catch (e) { this.ctx = null; }
     this.low = opts.quality === 'low';
+    // Frame-rate cap (fps) and backing-store resolution cap (maxDpr). Thumbnails: 30 fps, 2x.
+    this.fps = clamp(num(opts.fps, this.low ? 30 : 60), 1, 240);
+    this.maxDpr = clamp(num(opts.maxDpr, this.low ? 2 : 3), 1, 4);
+    // thumbnails: a circle [dx, dy, r] (CSS px, centre in from the bottom-right corner) kept clear
+    this.clear = opts.clear && opts.clear.length === 3 ? [num(opts.clear[0], 0), num(opts.clear[1], 0), num(opts.clear[2], 0)] : null;
     this.ex = getEx(opts.exercise);
-    this.time = 0;
+    // a thumbnail that is never played shows the move's key pose
+    this.time = this.low ? keyTime(this.ex) : 0;
     this.playing = true;
     this.energy = this.energyT = clamp(num(opts.energy, 1), 0, 1);
     var c1 = parseColor(opts.primary, [255, 43, 214]), c2 = parseColor(opts.secondary, [255, 176, 0]);
@@ -855,7 +876,13 @@
     if (canvas && root.IntersectionObserver) {
       try {
         this.io = new root.IntersectionObserver(function (entries) {
-          for (var i = 0; i < entries.length; i++) self.visible = entries[i].isIntersecting;
+          for (var i = 0; i < entries.length; i++) {
+            var v = entries[i].isIntersecting;
+            // shown again: what the canvas still holds was not on screen, so an exercise
+            // change made meanwhile does not dissolve from it (see _drawStudio)
+            if (v && !self.visible) self._unseen = true;
+            self.visible = v;
+          }
           ensureLoop();
         });
         this.io.observe(canvas);
@@ -889,7 +916,7 @@
     var c = this.canvas;
     if (!c) return false;
     var w = c.clientWidth, h = c.clientHeight;
-    var dpr = Math.min(2, root.devicePixelRatio || 1);
+    var dpr = this._dprCap();
     var bw = Math.max(1, Math.round(w * dpr)), bh = Math.max(1, Math.round(h * dpr));
     if (w === this.W && h === this.H && dpr === this.dpr && c.width === bw && c.height === bh) return false;
     if (c.width !== bw || c.height !== bh) {
@@ -900,40 +927,94 @@
         c.style.width = w + 'px'; c.style.height = h + 'px';
       }
     }
-    // A morph in flight carries on (a phone's URL bar collapsing resizes the stage): its
-    // start pose, in screen space, moves from the old fit to the new one.
-    var morph = this.morphT < 1 && this.from && this.fromEx;
-    var f0 = morph && this.W >= 4 && this.H >= 4 ? this._fit(this.fromEx) : null;
+    // A cross-dissolve in flight carries on (a phone's URL bar collapsing resizes the
+    // stage): its snapshot keeps the fit it was taken with and is mapped to the new one.
     this.W = w; this.H = h; this.dpr = dpr;
     this._fitCache = null;
-    if (morph) {
-      if (f0 && w >= 4 && h >= 4) this._refit(f0, this._fit(this.fromEx));
-      else { this.morphT = 1; this.from = null; }
-    }
+    if (w < 4 || h < 4) this._xf = null;
     this._still = false; // the next tick must repaint
     return true;
   };
+  // Device pixels per CSS px for the backing store.
+  FP._dprCap = function () { return Math.min(this.maxDpr, root.devicePixelRatio || 1); };
 
-  // Map the morph's start pose (and its contact shadows) from fit a to fit b.
-  FP._refit = function (a, b) {
-    var k = b.sc / a.sc, fm = this.fromMeta;
-    function move(A) {
-      for (var i = 0; i < NJ * 3; i += 3) { A[i] = b.ox + (A[i] - a.ox) * k; A[i + 1] = b.oy + (A[i + 1] - a.oy) * k; }
+  // Framing: scale (px per body unit) and origin of an exercise on this canvas, cached
+  // until the canvas resizes. The box is the exercise's whole cycle (exBox), centred.
+  //
+  // Every exercise is drawn at about the same body scale, so the athlete does not grow or
+  // shrink from one move to the next: the reference is the scale that fits a standing body
+  // (the 'rest' pose) with FIT_PAD padding; an exercise gets its own best fit clamped to
+  // FIT_LO..FIT_HI times that. A move too wide for that (the squat's reach) gives up side
+  // padding, down to FIT_EDGE, before it gives up size; the top and bottom keep FIT_PAD,
+  // since on the workout stage the ring and the controls overlap the canvas there (so jacks,
+  // arms overhead, stays at ~0.85).
+  //
+  // Thumbnails ('low') fill their canvas instead, see _fitThumb.
+  var FIT_PAD = 0.06, FIT_EDGE = 0.02, FIT_LO = 0.94, FIT_HI = 1.03, THUMB_PAD = 0.02;
+  function boxScale(b, w, h, pad, padY) {
+    var px = Math.max(1, w * pad), py = Math.max(1, h * (padY === undefined ? pad : padY));
+    return Math.max(1e-3, Math.min((w - 2 * px) / (b.x1 - b.x0), (h - 2 * py) / (b.y1 - b.y0)));
+  }
+  // Thumbnail framing: the key pose (what a card shows while it is not playing) fills the
+  // canvas with THUMB_PAD padding, as far as the whole cycle still fits on the canvas once
+  // it plays. opts.clear = [dx, dy, r] is a circle (CSS px, centre dx, dy in from the
+  // bottom-right corner: the card's info button) the key pose is kept out of: the frame
+  // slides up and left from the centre, then shrinks, until no part of the body is under it.
+  var THUMB_BONES = [[HEAD, HEAD, 0.075], [NECK, CHEST, 0.09], [CHEST, PELVIS, 0.1], [SHL, SHR, 0.06], [HIPL, HIPR, 0.07],
+    [SHL, ELL, 0.05], [ELL, WRL, 0.045], [WRL, HAL, 0.04], [SHR, ELR, 0.05], [ELR, WRR, 0.045], [WRR, HAR, 0.04],
+    [HIPL, KNL, 0.065], [KNL, ANL, 0.05], [ANL, TOL, 0.04], [HIPR, KNR, 0.065], [KNR, ANR, 0.05], [ANR, TOR, 0.04]];
+  var THUMB_T = [0.5, 0.375, 0.25, 0.125, 0];
+  FP._fitThumb = function (ex, box, W, H) {
+    var g = 0.065 * (LOW_RK - 1); // limbs are drawn thicker here (see _stState)
+    function grown(b) { return { x0: b.x0 - g, x1: b.x1 + g, y0: b.y0, y1: b.y1 + g }; }
+    var kb = grown(box.key), cb = grown(box.raw);
+    var px = Math.max(1, W * THUMB_PAD), py = Math.max(1, H * THUMB_PAD);
+    // tx, ty: where the key pose sits in the free space (0 = left / top, 0.5 = centred)
+    function place(s, tx, ty) {
+      var ox = px + (W - 2 * px - (kb.x1 - kb.x0) * s) * tx - kb.x0 * s;
+      var oy = py + (H - 2 * py - (kb.y1 - kb.y0) * s) * ty + kb.y1 * s;
+      // keep the whole cycle on the canvas
+      return { sc: s, ox: clamp(ox, 1 - cb.x0 * s, W - 1 - cb.x1 * s), oy: clamp(oy, 1 + cb.y1 * s, H - 1 + cb.y0 * s) };
     }
-    move(this.from);
-    if (this.fromGnd) move(this.fromGnd);
-    if (fm) { fm.floorY = b.oy + (fm.floorY - a.oy) * k; fm.sc *= k; }
+    var s0 = Math.min(boxScale(kb, W, H, THUMB_PAD), boxScale(cb, W, H, 0.01));
+    var cl = this.clear;
+    if (!cl) return place(s0, 0.5, 0.5);
+    var V = project(safePose(ex, KEY_PHASE[ex.id] || 0, keyTime(ex)), ex, new Float32Array(NJ * 3));
+    var qx = W - cl[0], qy = H - cl[1];
+    function free(f) {
+      for (var i = 0; i < THUMB_BONES.length; i++) {
+        var a = THUMB_BONES[i][0] * 3, b = THUMB_BONES[i][1] * 3, r = cl[2] + THUMB_BONES[i][2] * LOW_RK * f.sc;
+        var ax = f.ox + V[a] * f.sc, ay = f.oy - V[a + 1] * f.sc, dx = V[b] * f.sc + f.ox - ax, dy = f.oy - V[b + 1] * f.sc - ay;
+        var t = clamp(((qx - ax) * dx + (qy - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+        var ex2 = ax + dx * t - qx, ey2 = ay + dy * t - qy;
+        if (ex2 * ex2 + ey2 * ey2 < r * r) return false;
+      }
+      return true;
+    }
+    for (var k = 0, s = s0; k < 30; k++, s *= 0.97) {
+      // the most centred placement that keeps the button clear
+      for (var d = 0; d <= 8; d++) {
+        for (var i = Math.max(0, d - 4); i <= Math.min(4, d); i++) {
+          var f = place(s, THUMB_T[i], THUMB_T[d - i]);
+          if (free(f)) return f;
+        }
+      }
+    }
+    return place(s0, 0.5, 0.5);
   };
-
   FP._fit = function (ex) {
     var fc = this._fitCache || (this._fitCache = {});
     var id = exId(ex);
     if (fc[id]) return fc[id];
-    var b = exBox(ex), W = this.W, H = this.H;
-    var px = Math.max(4, W * 0.06), py = Math.max(4, H * 0.06);
-    var sc = Math.max(1e-3, Math.min((W - 2 * px) / (b.x1 - b.x0), (H - 2 * py) / (b.y1 - b.y0)));
-    var f = { sc: sc, ox: W / 2 - (b.x0 + b.x1) / 2 * sc, oy: H / 2 + (b.y0 + b.y1) / 2 * sc };
-    f.floorY = f.oy - camSetup(ex).floorV * sc;
+    var b = exBox(ex), W = this.W, H = this.H, f;
+    if (this.low) f = this._fitThumb(ex, b, W, H);
+    else {
+      var ref = boxScale(exBox(EX.rest), W, H, FIT_PAD);
+      var sc = Math.min(clamp(boxScale(b, W, H, FIT_PAD), ref * FIT_LO, ref * FIT_HI), boxScale(b, W, H, FIT_EDGE, FIT_PAD));
+      f = { sc: sc, ox: W / 2 - (b.x0 + b.x1) / 2 * sc, oy: H / 2 + (b.y0 + b.y1) / 2 * sc };
+    }
+    f.floorY = f.oy - camSetup(ex).floorV * f.sc;
+    if (!this.low) shadowGrid(ex, f, W, H);
     fc[id] = f;
     return f;
   };
@@ -951,41 +1032,31 @@
     }
     m.floorY = f.floorY; m.sc = f.sc; m.farL = ex.far.L; m.farR = ex.far.R;
     groundProject(J, ex, f, this.gnd); m.flat = camSetup(ex).sp;
-    if (this.morphT < 1 && this.from) {
-      var k = cubic(this.morphT), A = this.from, fm = this.fromMeta;
-      for (i = 0; i < NJ * 3; i++) P[i] = lerp(A[i], P[i], k);
-      m.floorY = lerp(fm.floorY, m.floorY, k); m.sc = lerp(fm.sc, m.sc, k);
-      m.farL = lerp(fm.farL, m.farL, k); m.farR = lerp(fm.farR, m.farR, k);
-      if (this.fromGnd) {
-        var G = this.gnd, Ag = this.fromGnd;
-        for (i = 0; i < NJ * 3; i++) G[i] = lerp(Ag[i], G[i], k);
-        m.flat = lerp(fm.flat === undefined ? m.flat : fm.flat, m.flat, k);
-      }
-    }
     this.hasPose = true;
   };
 
   // One frame of the shared loop. Returns whether this figure needs another frame.
   FP._tick = function (dt) {
     if (this.dead || !this.ctx || this.suspended) return false;
-    var dpr = Math.min(2, root.devicePixelRatio || 1);
-    if (dpr !== this.dpr || (!this.ro && (this._chk = (this._chk || 0) + 1) % 30 === 0)) this._measure();
+    if (this._dprCap() !== this.dpr || (!this.ro && (this._chk = (this._chk || 0) + 1) % 30 === 0)) this._measure();
     // (without a ResizeObserver the size is polled, so the loop keeps running)
     if (!this.visible || this.W < 4 || this.H < 4) return !this.ro;
     // Battery: a stopped figure with nothing in flight is drawn once and then left alone,
-    // and thumbnails run at 30 fps.
+    // and nothing draws faster than its fps cap (a 90/120 Hz display would otherwise
+    // double the cost for motion nobody can tell apart).
     var settled = !this.playing && this.morphT >= 1 && this.colT >= 1 && this.flash === 0 &&
       this.ring < 0 && Math.abs(this.energyT - this.energy) < 0.01;
     // While still, waiting time must not pile up into the first step after waking.
     if (settled && this._still) { this._acc = 0; return !this.ro; }
     this._acc = (this._acc || 0) + dt;
-    // a little under 1/30 s, so frame-time jitter cannot stretch a step to three frames
-    if (this.low && !settled && this._acc < 1 / 30 - 0.004) return true;
+    // a little under the frame interval, so frame-time jitter cannot stretch a step to
+    // one display frame more than needed
+    if (!settled && this._acc < 1 / this.fps - 0.004) return true;
     var step = Math.min(0.1, this._acc);
     this._acc = 0;
     var t0 = now();
     this._update(step);
-    this._drawStudio();
+    this._draw();
     this._still = settled;
     var st = this._stats;
     st.frames++; st.ms += now() - t0;
@@ -1003,15 +1074,16 @@
     if (this.flash < 0.03) this.flash = 0;
     if (this.ring >= 0) { this.ring += dt / 0.8; if (this.ring > 1) this.ring = -1; }
     if (this._frozen) { this._computePose(); return; }
+    // the new move already plays while it dissolves in
     if (this.morphT < 1) this.morphT = Math.min(1, this.morphT + dt / MORPH_S);
-    else if (this.playing) this.time += dt * (reducedMotion() ? 0.5 : 1);
+    if (this.playing) this.time += dt * (reducedMotion() ? 0.5 : 1);
     this._computePose();
   };
 
   // Draw the current state right away, outside the loop (after a resize or a look change).
   FP._paint = function () {
     if (this.ctx && this.hasPose && this.W >= 4 && this.H >= 4 && !this.suspended) {
-      try { this._computePose(); this._drawStudio(); } catch (e) { this._fail(e); }
+      try { this._computePose(); this._draw(); } catch (e) { this._fail(e); }
     }
   };
 
@@ -1316,6 +1388,7 @@
     return g;
   }
 
+  var LOW_RK = 1.3; // limb thickness in thumbnails ('low'), relative to the body scale
   FP._stState = function () {
     var M = this._M || (this._M = {}), mat = this.mat;
     M.ramp = mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
@@ -1330,10 +1403,62 @@
     M.env = mat.env; M.envK = mat.envK || 0; M.envSide = mat.envSide || 0; M.crisp = !!mat.crisp && !this.low;
     M.far = 0; M.farC = mat.far; M.dim = 1;
     M.sc = this.meta.sc; M.low = this.low;
-    M.rk = M.sc * (this.low ? 1.12 : 1); // thumbnails: slightly thicker limbs so they read at ~56 px
+    M.rk = M.sc * (this.low ? LOW_RK : 1); // thumbnails: thicker limbs so they read at ~52 px
     M.conic = typeof this.ctx.createConicGradient === 'function';
     M.zRef = this.cur[PELVIS * 3 + 2];
     return M;
+  };
+
+  // One frame: the pose (_drawStudio), cross-dissolved with the outgoing frame while an
+  // exercise change is in flight.
+  //
+  // The first frame drawn after setExercise() copies what the canvas still shows (the
+  // outgoing frame, or a dissolve already under way) into a buffer. Each frame then draws
+  // the new pose and adds the copy over it in premultiplied space, new * k + old * (1 - k)
+  // ('destination-in', then 'lighter'), so where the two bodies overlap the result stays
+  // opaque, and nothing squashes or swaps draw order halfway as a joint-space morph between
+  // two cameras does. On a resize the copy is mapped from the fit it was taken with to the
+  // current one.
+  FP._draw = function () {
+    var xf = this.morphT < 1 && !!this.from && !!this.fromEx && this.hasPose;
+    // shown again after being off screen: nothing visible to dissolve from
+    if (xf && this._unseen) { this.morphT = 1; this.from = null; xf = false; }
+    if (xf && (!this._xf || this._xf.from !== this.from)) xf = this._xfSnap();
+    if (!xf) this._xf = null;
+    this._noOcc = !this.low && Math.min(this.W, this.H) < OCC_MIN;
+    this._drawStudio();
+    if (xf) this._xfBlend();
+    if (this.visible) this._unseen = false;
+  };
+  FP._xfSnap = function () {
+    var c = this.canvas, s = this._buf('xbuf');
+    if (!s || !c.width || !c.height) return false;
+    if (s.c.width !== c.width || s.c.height !== c.height) { s.c.width = c.width; s.c.height = c.height; }
+    s.x.setTransform(1, 0, 0, 1, 0, 0);
+    s.x.globalCompositeOperation = 'copy';
+    s.x.globalAlpha = 1;
+    s.x.drawImage(c, 0, 0);
+    s.x.globalCompositeOperation = 'source-over';
+    var f = this._fit(this.fromEx);
+    this._xf = { from: this.from, w: c.width, h: c.height, dpr: this.dpr, ox: f.ox, oy: f.oy, sc: f.sc };
+    return true;
+  };
+  FP._xfBlend = function () {
+    var ctx = this.ctx, X = this._xf, c = this.canvas, k = sine(this.morphT);
+    var f = this._fit(this.fromEx), m = f.sc / X.sc, d = this.dpr, s = m * d / X.dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.globalAlpha = k;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 1 - k;
+    ctx.imageSmoothingEnabled = true;
+    ctx.setTransform(s, 0, 0, s, d * (f.ox - X.ox * m), d * (f.oy - X.oy * m));
+    ctx.drawImage(this.xbuf.c, 0, 0, X.w, X.h, 0, 0, X.w, X.h);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
   };
 
   FP._drawStudio = function () {
@@ -1345,8 +1470,7 @@
     if (!this.hasPose) return;
     var P = this.cur, m = this.meta, low = this.low, mat = this.mat;
     var M = this._stState();
-    var ex = (this.morphT < 0.5 && this.fromEx) ? this.fromEx : this.ex;
-    var order = this._stOrder(orderOf(ex, ex === this.ex ? phaseOf(ex, this.time) : this.fromP), P, M);
+    var order = this._stOrder(orderOf(this.ex, phaseOf(this.ex, this.time)), P, M);
     var box = this._box || (this._box = [0, 0, 0, 0]); // screen box of what is drawn so far
     box[0] = box[1] = 1e9; box[2] = box[3] = -1e9;
     for (var gi = 0; gi < order.length; gi++) {
@@ -1361,7 +1485,7 @@
       else if (g === 'H') this._stHead(ctx, P, M);
       else if (g[0] === 'A') this._stArm(ctx, g[1], P, M);
       else this._stLeg(ctx, g[1], P, M);
-      if (!low) growBox(box, P, g, M.sc);
+      if (!low) growDrawn(box, P, g, M.sc);
     }
     M.far = 0; M.dim = 1;
     if (!low) this._stRim(ctx, M, box);
@@ -1403,7 +1527,7 @@
   };
 
   // Grow the screen box b [x0, y0, x1, y1] by draw group g.
-  function growBox(b, P, g, sc) {
+  function growDrawn(b, P, g, sc) {
     var C = ST_CHAIN[g], i, j, r;
     if (C) { r = 0.07 * sc; for (i = 0; i < 4; i++) { j = C[i] * 3; boxPt(b, P[j], P[j + 1], r); } return; }
     if (g === 'H') { boxPt(b, P[HEAD * 3], P[HEAD * 3 + 1], 0.085 * sc); return; }
@@ -1794,8 +1918,12 @@
   // is rasterised into a coarse buffer and composited upscaled (= blurred, no filter or
   // shadowBlur needed) with source-atop, so only body pixels darken. Only the overlap of
   // its bounding box with the box of what is drawn so far (D) is touched. The torso's
-  // shadow includes the head's.
+  // shadow includes the head's. It is the costliest pass of a frame (a smoothed upscale
+  // over each part's box), and below OCC_MIN CSS px it is skipped: at that size its soft
+  // edge is a pixel or two and the overlaps still read from the draw order and the rim light.
+  var OCC_MIN = 200;
   FP._stOcclude = function (ctx, g, P, M, D) {
+    if (this._noOcc) return;
     var sc = M.sc, mat = this.mat, i, n, L;
     var ob = this._buf('obuf');
     if (!ob) return;
@@ -1842,6 +1970,7 @@
     ctx.globalCompositeOperation = 'source-atop';
     ctx.globalAlpha = mat.aoK;
     ctx.imageSmoothingEnabled = true;
+    // bilinear: these fields are smooth, so 'high' (bicubic in Chrome) looks the same and costs more
     try { ctx.imageSmoothingQuality = 'low'; } catch (err) { /* ignore */ }
     ctx.drawImage(b, bx0, by0, bx1 - bx0, by1 - by0, bx0 * cell - o2 + ox, by0 * cell - o2 + oy, (bx1 - bx0) * cell, (by1 - by0) * cell);
     ctx.globalAlpha = 1;
@@ -1896,8 +2025,10 @@
     }
     sy /= n; sh /= n;
     var B = this._blobs || (this._blobs = []), nb = 0;
+    // (every blob fades out continuously before it is dropped: a blob that vanishes at some
+    // height or strength in one step makes the shadow pop from one frame to the next)
     function blob(x, y, rx, a) {
-      if (a < 0.006 || rx < 0.3) return;
+      if (a < 0.001 || rx < 0.3) return;
       var o = B[nb] || (B[nb] = {});
       o.x = x; o.y = y; o.rx = rx; o.a = a; nb++;
     }
@@ -1909,7 +2040,7 @@
         var x = lerp(G[a3], G[b3], t) + h * 0.3 * sc, y = lerp(G[a3 + 1], G[b3 + 1], t);
         var k1 = clamp(1 - h / 0.06, 0, 1);
         blob(x, y, (r * 1.3 + 0.012 + h * 0.3) * sc, K * 0.3 * k1 * k1);
-        blob(x, y, (r * 2.6 + 0.03 + h * 0.8) * sc, K * 0.1 * Math.exp(-h / 0.16));
+        blob(x, y, (r * 2.6 + 0.03 + h * 0.8) * sc, K * 0.1 * Math.exp(-h / 0.16) * clamp((0.4 - h) / 0.2, 0, 1));
       }
     } else {
       // thumbnails: one soft contact shadow under the lowest parts
@@ -1960,8 +2091,33 @@
     }
   };
 
+  // Shadow grid of an exercise on this canvas, stored on its fit f: one cell size for the
+  // whole cycle (so the sampling never changes between frames) and the largest grid it can
+  // need. The bound: the floor footprint of the joints over the cycle, widened by the
+  // largest blob _stGround makes (the broad one under the body, or a raised torso part's).
+  var TMPG = new Float32Array(NJ * 3);
+  function shadowGrid(ex, f, W, H) {
+    var sc = f.sc, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, N = 24;
+    for (var n = 0; n < N; n++) {
+      groundProject(safePose(ex, n / N, n / N * ex.period), ex, f, TMPG);
+      for (var i = 0; i < NJ; i++) {
+        if (i === FACE) continue;
+        var x = TMPG[i * 3], y = TMPG[i * 3 + 1];
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    var flat = clamp(camSetup(ex).sp * 1.25 + 0.12, 0.16, 0.5);
+    var rx = Math.max((x1 - x0) / 2 + 0.16 * sc, 0.7 * sc);
+    var bw = Math.min(x1 - x0 + 2 * rx, W + 16), bh = Math.min(y1 - y0 + 2 * rx * flat, H + 16);
+    var cell = Math.max(clamp(0.011 * sc, 1.5, 5), Math.sqrt(bw * bh / SH_MAX));
+    f.shCell = cell;
+    f.shW = Math.ceil((W + 16) / cell) + 3; f.shH = Math.ceil((H + 16) / cell) + 3;
+  }
+
   // Analytic soft shadow: transmittance product of smooth elliptical falloffs, evaluated
-  // per coarse cell over the blobs' bounding box. Returns false if it could not run.
+  // per coarse cell over the blobs' bounding box. The cells sit on a fixed lattice (origin
+  // on whole cells, size fixed per exercise), so a moving blob slides across them instead
+  // of the samples jumping with the box. Returns false if it could not run.
   FP._stShadowBuf = function (ctx, B, nb, flat, col) {
     var buf = this._buf('gbuf');
     if (!buf || !ctx.createImageData) return false;
@@ -1973,13 +2129,13 @@
     }
     bx0 = Math.max(bx0, -8); bx1 = Math.min(bx1, this.W + 8); by0 = Math.max(by0, -8); by1 = Math.min(by1, this.H + 8);
     if (bx1 <= bx0 || by1 <= by0) return true;
-    var cell = clamp(0.011 * this.meta.sc, 1.5, 5);
-    var gw = Math.ceil((bx1 - bx0) / cell) + 3, gh = Math.ceil((by1 - by0) / cell) + 3;
-    while (gw * gh > SH_MAX) { cell *= 1.25; gw = Math.ceil((bx1 - bx0) / cell) + 3; gh = Math.ceil((by1 - by0) / cell) + 3; }
+    var fit = this._fit(this.ex), cell = fit.shCell;
+    // cell (c, r) centre = o + (c + 0.5) * cell, with one empty cell of margin all round
+    var ox = (Math.floor(bx0 / cell) - 1) * cell, oy = (Math.floor(by0 / cell) - 1) * cell;
+    var gw = Math.min(fit.shW, Math.ceil((bx1 - ox) / cell) + 1), gh = Math.min(fit.shH, Math.ceil((by1 - oy) / cell) + 1);
     var T = this._shT;
     if (!T || T.length < gw * gh) T = this._shT = new Float32Array(Math.max(gw * gh, 4096));
     for (i = 0; i < gw * gh; i++) T[i] = 1;
-    var ox = bx0 - cell, oy = by0 - cell; // cell (c, r) centre = o + (c + 0.5) * cell
     for (i = 0; i < nb; i++) {
       b = B[i];
       var ry = b.rx * flat, ix = 1 / b.rx, iy = 1 / ry, a = clamp(b.a, 0, 1);
@@ -1997,20 +2153,29 @@
         }
       }
     }
-    var cv = buf.c, x = buf.x;
-    if (cv.width < gw || cv.height < gh) { cv.width = Math.max(cv.width, gw); cv.height = Math.max(cv.height, gh); this._shImg = null; }
-    var img = this._shImg;
-    if (!img || img.width !== gw || img.height !== gh) img = this._shImg = x.createImageData(gw, gh);
-    var D = img.data, cr = col[0] | 0, cg = col[1] | 0, cb = col[2] | 0;
-    for (i = 0; i < gw * gh; i++) {
-      var al = (1 - T[i]) * 255, k = i * 4;
-      D[k] = cr; D[k + 1] = cg; D[k + 2] = cb; D[k + 3] = al > 255 ? 255 : al;
+    // one ImageData at the largest grid this exercise can need; each frame writes its part
+    var cv = buf.c, x = buf.x, img = this._shImg;
+    if (!img || img.width < fit.shW || img.height < fit.shH) {
+      img = this._shImg = x.createImageData(Math.max(fit.shW, img ? img.width : 0), Math.max(fit.shH, img ? img.height : 0));
     }
-    x.putImageData(img, 0, 0);
+    if (cv.width < img.width + 2 || cv.height < img.height + 2) {
+      cv.width = Math.max(cv.width, img.width + 2); cv.height = Math.max(cv.height, img.height + 2);
+    }
+    var D = img.data, stride = img.width * 4, cr = col[0] | 0, cg = col[1] | 0, cb = col[2] | 0;
+    for (var rr = 0; rr < gh; rr++) {
+      for (var cc = 0, k = rr * stride, ti = rr * gw; cc < gw; cc++, k += 4, ti++) {
+        var al = (1 - T[ti]) * 255;
+        D[k] = cr; D[k + 1] = cg; D[k + 2] = cb; D[k + 3] = al > 255 ? 255 : al;
+      }
+    }
+    // The buffer is reused: clear a band beyond the part written now, or the smoothing of
+    // the upscale below pulls in whatever an earlier, larger grid left there.
+    x.clearRect(0, 0, gw + 2, gh + 2);
+    x.putImageData(img, 0, 0, 0, 0, gw, gh);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
-    try { ctx.imageSmoothingQuality = 'high'; } catch (err) { /* ignore */ }
+    try { ctx.imageSmoothingQuality = 'low'; } catch (err) { /* ignore */ } // (bilinear, as in _stOcclude)
     ctx.drawImage(cv, 0, 0, gw, gh, ox, oy, gw * cell, gh * cell);
     return true;
   };
@@ -2104,7 +2269,13 @@
   FP.setPlaying = function (b) { if (!this.dead) { this.playing = !!b; ensureLoop(); } };
   /** Stop drawing entirely (e.g. while covered by a sheet); resumes where it was. */
   FP.setSuspended = function (b) { if (!this.dead) { this.suspended = !!b; this._still = false; this._acc = 0; } };
-  FP.setEnergy = function (x) { if (!this.dead) { this.energyT = clamp(num(x, this.energyT), 0, 1); ensureLoop(); } };
+  /** Rim-light energy 0..1; eases there unless instant (a hand-over from another figure). */
+  FP.setEnergy = function (x, instant) {
+    if (this.dead) return;
+    this.energyT = clamp(num(x, this.energyT), 0, 1);
+    if (instant) { this.energy = this.energyT; this._still = false; }
+    ensureLoop();
+  };
   /** A cue: the rim light flares and (high quality, full motion) a soft band of light sweeps across. */
   FP.pulse = function () {
     if (this.dead) return;
@@ -2149,7 +2320,7 @@
     if (this.io) { try { this.io.disconnect(); } catch (e) { /* ignore */ } }
     if (this._onResize && root.removeEventListener) root.removeEventListener('resize', this._onResize);
     if (this.ctx) { try { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); } catch (e) { /* ignore */ } }
-    this.obuf = null; this.gbuf = null;
+    this.obuf = null; this.gbuf = null; this.xbuf = null; this._xf = null;
     if (!registry.length && rafId) { caf(rafId); rafId = 0; lastT = 0; }
   };
   Object.defineProperty(FP, 'exercise', { get: function () { return exId(this.ex); } });

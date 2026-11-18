@@ -112,7 +112,7 @@ js/audio.js         Web Audio sound effects and speechSynthesis voice coach
 icons/              app icon: favicon.svg / favicon-32.png (browser tab), apple-touch-icon.png (iPhone),
                     icon-192/512 + maskable-512 (Android); icon.svg and maskable.svg are the sources
 manifest.webmanifest  name, colours and icons for "Add to Home Screen" (opens full screen)
-tests/              node:test unit tests for workout.js and the site's icon/manifest files
+tests/              node:test unit tests for workout.js, the mannequin (figure.js) and the icon/manifest files
 dev/figure-test.html  gallery of every exercise animation for checking the figures
 scripts/build.mjs   bundles everything into one HTML file in dist/
 ```
