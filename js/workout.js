@@ -473,7 +473,8 @@
         say((i === 0 ? head + ': ' + nm : i === g.ids.length - 1 ? 'And ' + nm : capFirst(nm)) + '.', 'ex:' + id);
       });
     });
-    say('Each exercise is ' + lengthNoun(level.work) + ' of hard work, then ' + lengthNoun(level.recover) +
+    // Easy says "Push hard" next, so its first sentence doesn't repeat "hard"
+    say('Each exercise is ' + lengthNoun(level.work) + (level.recoverType === 'jacks' ? ' of hard work, then ' : ' of work, then ') + lengthNoun(level.recover) +
       (level.recoverType === 'jacks' ? ' of jumping jacks to keep your heart rate up. No standing still!' :
         ' of rest. Push hard, but keep your form clean.'), 'intervals');
     var all = n === 2 ? 'both' : 'all ' + nWord;
