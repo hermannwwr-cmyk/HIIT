@@ -79,17 +79,16 @@
   };
   function palFor(id) { return id === 'rest' ? PAL.rest : id === 'jacks' ? PAL.jacks : PAL.work; }
   var qs = new URLSearchParams(location.search);
-  // ?style=neon|studio&scheme=dark|light[&material=porcelain|titanium|ink|stone][&stage=navy|black|charcoal]
-  var style = qs.get('style') === 'studio' ? 'studio' : 'neon';
+  // ?scheme=dark|light[&material=stone|titanium|graphite][&stage=navy|black|charcoal]
   var scheme = qs.get('scheme') === 'light' ? 'light' : 'dark';
   var material = qs.get('material') || null;
   var STAGES = ['graphite', 'navy', 'black', 'charcoal'];
   var stage = STAGES.indexOf(qs.get('stage')) > 0 ? qs.get('stage') : 'graphite';
   function applyTheme() {
     [document.documentElement, document.body].forEach(function (n) {
-      n.classList.toggle('studio-dark', style === 'studio' && scheme === 'dark');
-      n.classList.toggle('studio-light', style === 'studio' && scheme === 'light');
-      STAGES.forEach(function (k) { n.classList.toggle('stage-' + k, k === stage && k !== 'graphite' && style === 'studio' && scheme === 'dark'); });
+      n.classList.toggle('studio-dark', scheme === 'dark');
+      n.classList.toggle('studio-light', scheme === 'light');
+      STAGES.forEach(function (k) { n.classList.toggle('stage-' + k, k === stage && k !== 'graphite' && scheme === 'dark'); });
     });
   }
   applyTheme();
@@ -109,7 +108,7 @@
   function make(canvas, ex, q, pal) {
     pal = pal || palFor(ex);
     var f = F.create(canvas, { exercise: ex, primary: pal[0], secondary: pal[1], quality: q, energy: ex === 'rest' ? 0.4 : 1,
-      style: style, scheme: scheme, material: material });
+      scheme: scheme, material: material });
     all.push(f);
     return f;
   }
@@ -128,8 +127,8 @@
     var sheet = el('div', 'sheet', app);
     sheet.style.gridTemplateColumns = '90px repeat(' + phases.length + ', ' + size + 'px)' + (lowcol ? ' ' + lowcol + 'px' : '');
     if (qs.get('title')) {
-      el('div', 'title', sheet, style === 'studio' ? (F.create(document.createElement('canvas'), { style: style, scheme: scheme, material: material }).getMaterial() +
-        (scheme === 'dark' ? ' on ' + stage : '')) : 'neon');
+      el('div', 'title', sheet, F.create(document.createElement('canvas'), { scheme: scheme, material: material }).getMaterial() +
+        (scheme === 'dark' ? ' on ' + stage : ''));
     }
     el('div', '', sheet);
     phases.forEach(function (p) { el('div', 'colh', sheet, Math.round(p * 100) + '%'); });
@@ -183,21 +182,20 @@
     b.onclick = function () { all.forEach(function (f) { f.setColors(PAL[k][0], PAL[k][1]); }); };
   });
 
-  var styRow = el('div', 'row', ctr), styBtns = [];
-  [['neon', 'dark', 'Neon'], ['studio', 'dark', 'Studio dark'], ['studio', 'light', 'Studio light']].forEach(function (o) {
-    var b = el('button', '', styRow, o[2]);
-    b.classList.toggle('on', o[0] === style && (o[0] === 'neon' || o[1] === scheme));
+  var schRow = el('div', 'row', ctr), schBtns = [];
+  [['dark', 'Dark'], ['light', 'Light']].forEach(function (o) {
+    var b = el('button', '', schRow, o[1]);
+    b.classList.toggle('on', o[0] === scheme);
     b.onclick = function () {
-      style = o[0]; scheme = o[1]; applyTheme();
-      all.forEach(function (f) { f.setStyle(style, scheme); });
-      styBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
-      var u = new URL(location.href); u.searchParams.set('style', style); u.searchParams.set('scheme', scheme);
-      history.replaceState(null, '', u);
+      scheme = o[0]; applyTheme();
+      all.forEach(function (f) { f.setStyle('studio', scheme); });
+      schBtns.forEach(function (x) { x.classList.toggle('on', x === b); });
+      var u = new URL(location.href); u.searchParams.set('scheme', scheme); history.replaceState(null, '', u);
     };
-    styBtns.push(b);
+    schBtns.push(b);
   });
 
-  // studio material presets (dark stage) and candidate dark backgrounds
+  // material presets (dark stage) and candidate dark backgrounds
   var matRow = el('div', 'row', ctr), matBtns = [];
   F.MATERIALS.dark.forEach(function (name) {
     var b = el('button', '', matRow, name);

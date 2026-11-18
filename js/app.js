@@ -183,7 +183,7 @@
   // ================================================================ SETUP
   var thumbs = {};
   var cards = {};
-  var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', energy: 0.7 });
+  var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', fit: 'fill', fps: 30, energy: 0.7 });
   var hero = { hover: null, shown: null };
 
   var groupLists = {};
@@ -236,7 +236,9 @@
       grid.appendChild(li);
       cards[ex.id] = btn;
       var gc = GROUP_COLORS[ex.group];
-      thumbs[ex.id] = makeFig(btn.querySelector('canvas'), { exercise: ex.id, primary: gc[0], secondary: gc[1], quality: 'low', energy: 0.6 });
+      // the ⓘ button (.ex-info, 26-28 px, from 22 px inside the corner) sits on the thumbnail's
+      // bottom-right corner: keep the figure out from under it
+      thumbs[ex.id] = makeFig(btn.querySelector('canvas'), { exercise: ex.id, primary: gc[0], secondary: gc[1], quality: 'low', energy: 0.6, clear: [9, 9, 15] });
     });
   }
 
@@ -401,7 +403,7 @@
     sheet.hidden = false;
     sheet.scrollTop = 0;
     suspendBehindSheet(true);
-    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: figIdFor(id), primary: gc[0], secondary: gc[1], quality: 'high', energy: 0.9 });
+    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: figIdFor(id), primary: gc[0], secondary: gc[1], quality: 'high', fit: 'fill', energy: 0.9 });
     guide.fig.setExercise(figIdFor(id));
     guide.fig.setColors(gc[0], gc[1]);
     guide.fig.setPlaying(true);
@@ -835,7 +837,7 @@
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
-    if (!nextFig) nextFig = makeFig($('nextFig'), { exercise: tl.exercises[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.45 });
+    if (!nextFig) nextFig = makeFig($('nextFig'), { exercise: tl.exercises[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', fps: 30, energy: 0.45 });
     run.mode = null;
     guardHistory();
     buildProgress(tl);
@@ -1070,6 +1072,33 @@
     if (seg.move === 'hamstring' || seg.move === 'calf') return seg.move + '-' + (seg.side === 'right' ? 'r' : 'l');
     return seg.move;
   }
+  /**
+   * How the stage figure shows a warm-up step at clock time t. Counted moves loop on the
+   * count: one jumping jack per beat, a squat over two beats (down on 1, up on 2), a stretch
+   * per count of 4 (deepest on beat 2). Through the lead-in the move is demonstrated, then
+   * the figure waits in its start pose for the countdown (`ready`); startMove() starts the
+   * loop on BEGIN, so beat 1 is the first rep.
+   */
+  function warmFigOpts(seg, t) {
+    var o = {};
+    if (seg.counts) o.period = warmPeriod(seg);
+    if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + 1; }
+    return o;
+  }
+  function warmPeriod(seg) { return seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat; }
+  /**
+   * The stage figure on the count: its loop runs on its own clock from BEGIN, which a stalled
+   * frame (phone speech can block the page for 100–300 ms; a frame step is capped) or a jump
+   * within the step would leave off the beat for the rest of the count. Once it is more than
+   * 40 ms out of phase its clock is put right at once; up to 150 ms off, what it shows catches
+   * up over 120–240 ms instead of popping (a bigger jump follows a visible freeze or a seek).
+   */
+  function lockFig(seg, t) {
+    if (!workFig || !workFig.setTime || !run.playing) return;
+    var want = t - seg.start - seg.lead, per = warmPeriod(seg);
+    var d = (workFig.getTime() - want) / per, off = Math.abs(d - Math.round(d)) * per;
+    if (off > 0.04) workFig.setTime(want, off <= 0.15 ? 0.12 : 0);
+  }
   function warmName(seg) {
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
     return exName(seg.move) + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') : '');
@@ -1210,7 +1239,8 @@
 
     if (restMode) showUpNext(seg);
     else if (workFig) {
-      workFig.setExercise(seg.type === 'warmup' ? warmFigId(seg) : seg.exercise);
+      if (seg.type === 'warmup') workFig.setExercise(warmFigId(seg), warmFigOpts(seg, elapsedNow()));
+      else workFig.setExercise(seg.exercise);
       workFig.setColors(c[0], c[1]);
       workFig.setEnergy(ph.energy);
       if (!run.quiet) workFig.pulse();
@@ -1523,6 +1553,7 @@
     if (seg.type === 'warmup' && seg.counts && moving(seg)) {
       var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start - seg.lead) / seg.beat + 1e-6)));
       if (bi !== run.lastBeat) { var pb = run.lastBeat; run.lastBeat = bi; onBeat(seg, bi, pb); }
+      lockFig(seg, t);
     }
     updateCoach(seg, t);
 
@@ -1647,6 +1678,13 @@
     $('dLabel').textContent = seg.counts ? 'Count' : 'Time left';
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
+    if (workFig) {
+      // the go: the figure's loop starts now, phase-locked to the count. It was waiting in
+      // the start pose; jumped in mid-move, it cuts straight to the right point of the loop.
+      var fo = warmFigOpts(seg, elapsedNow());
+      fo.time = Math.max(0, fo.time); fo.ready = 0; fo.instant = !loud;
+      workFig.setExercise(warmFigId(seg), fo);
+    }
     if (!loud) return;
     // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
     if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
@@ -1782,9 +1820,14 @@
         // the figure exactly where and how big it will be
         peek.classList.add('is-fig');
         var fid = sg.type === 'warmup' ? warmFigId(sg) : sg.exercise;
-        if (!peekFig) peekFig = makeFig($('peekFig'), { exercise: fid, primary: dest.colors[0], secondary: dest.colors[1], quality: 'high', energy: 0.7 });
-        else peekFig.setExercise(fid);
-        peekFig.setColors(dest.colors[0], dest.colors[1]);
+        // (a preview at 30 fps; same quality and size as the stage figure, so the hand-over is
+        // seamless). A warm-up step shows its tempo and count-in as they will be on arrival.
+        var fo = sg.type === 'warmup' ? warmFigOpts(sg, sg.start) : {};
+        fo.instant = true;
+        if (!peekFig) peekFig = makeFig($('peekFig'), { exercise: fid, primary: dest.colors[0], secondary: dest.colors[1], quality: 'high', fps: 30, energy: PHASE[sg.type].energy });
+        peekFig.setExercise(fid, fo);
+        peekFig.setColors(dest.colors[0], dest.colors[1], true);
+        peekFig.setEnergy(PHASE[sg.type].energy, true);
         peekFig.setPlaying(true);
       }
     }
@@ -1875,8 +1918,14 @@
           // the real figure continues exactly where the preview was: same move, pose and colours
           var nowSeg = run.tl.segments[run.segIdx];
           if (nowSeg && nowSeg.index === dest.seg.index) {
-            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, { instant: true, time: hand });
+            // a warm-up step keeps its tempo and count-in; on the preview's clock, which runs at
+            // most the length of the swipe ahead (the count-in only waits longer, and BEGIN
+            // re-times the loop to the count)
+            var ho = dest.seg.type === 'warmup' ? warmFigOpts(dest.seg, elapsedNow()) : {};
+            ho.instant = true; ho.time = hand;
+            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, ho);
             workFig.setColors(dest.colors[0], dest.colors[1], true);
+            workFig.setEnergy(PHASE[dest.seg.type].energy, true);
           }
         }
         stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
@@ -2033,7 +2082,7 @@
       li.innerHTML = '<span>' + esc(ex.name) + '</span><b>' + H.formatTime(st.perEx[id] || 0) + '</b>';
       list.appendChild(li);
     });
-    if (!doneFig) doneFig = makeFig($('doneFig'), { exercise: 'jacks', primary: PHASE.done.colors[0], secondary: PHASE.done.colors[1], quality: 'high', energy: 1 });
+    if (!doneFig) doneFig = makeFig($('doneFig'), { exercise: 'jacks', primary: PHASE.done.colors[0], secondary: PHASE.done.colors[1], quality: 'high', fps: 30, energy: 1 });
     else { doneFig.setExercise('jacks'); doneFig.setPlaying(true); }
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
@@ -2313,10 +2362,8 @@
     if (meta) meta.setAttribute('content', look === 'studio-dark' ? DARK_VARIANTS[darkVariant].meta : L.meta);
     bg.setStyle(L.style, L.scheme);
     bg.setFrameRate(L.fps || (currentScreen === 'workout' ? 0 : 30));
-    figs.forEach(function (f) {
-      if (f.setStyle) f.setStyle(L.style, L.scheme);
-      if (f.setMaterial && L.style === 'studio') f.setMaterial(figMaterial());
-    });
+    var mat = figMaterial();
+    figs.forEach(function (f) { f.setStyle(L.style, L.scheme, mat); }); // one repaint each
     H.EXERCISES.forEach(function (ex) { var gc = GROUP_COLORS[ex.group]; thumbs[ex.id].setColors(gc[0], gc[1]); });
     if (hero.shown) showHero(hero.shown);
     if (run && !run.finished && currentScreen === 'workout') {
