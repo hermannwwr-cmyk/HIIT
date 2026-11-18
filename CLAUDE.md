@@ -59,6 +59,16 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   - unlock speech with a silent word on the first user gesture.
 - `voiceWorks()` reports whether recent lines actually started; the countdown falls back to louder ticks when they didn't. `onVoiceProblem` lets the app show a notice when the viewer can't speak at all.
 
+**Mannequin (`js/figure.js`).** It is a 3D skeleton with FK and 2-bone IK, a per-exercise camera, and one "studio" Canvas-2D renderer.
+- Exercises live in the `EX` table: `period`, `cam`, draw `order`, and `pose(p)` built from keyframes.
+- All instances share one `requestAnimationFrame` loop, which sleeps while no figure needs frames.
+- Warm-up moves stay on the count:
+  - `app.js` `warmFigOpts()` passes `setExercise(id, {time, period, ready})`. That gives the move's tempo, plus a count-in that waits in a breathing ready pose until BEGIN.
+  - `update()` re-syncs through `setTime()` when the figure drifts more than 40 ms off the count.
+- Exercise changes cross-dissolve over 0.25 s. The stage uses one body scale for every move; the setup hero and the How-to sheet use `fit: 'fill'`.
+- Bench: `dev/figure-test.html?sheet=1&style=studio&scheme=light&material=graphite&ph=0,0.25,0.5,0.75` renders a contact sheet of every exercise. Use `&scheme=dark&material=stone&stage=charcoal` for dark.
+- `tests/figure.test.js` checks for duplicate top-level function names, finite poses, no IK clamping, seamless loops and the clock.
+
 **Test and debug hook.** `window.__hiit` exposes `run`, `ring`, `seek(t)`, `advance(sec)`, `start()`, `finish()`, `guide(id)` and `look(name)`. Changes are checked by driving `index.html` with Playwright and these hooks, often with a mocked `speechSynthesis`.
 
 ## Deploy
