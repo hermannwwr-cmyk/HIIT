@@ -219,7 +219,7 @@ test('warm-up: jog slow/quick ×2, then 5 counts of 4 for each move, then get re
     'hamstring:left', 'hamstring:right', 'calf:left', 'calf:right']);
   // every new move (and the very first jog) gets a lead-in before it starts; a leg switch a shorter one
   wu.slice(0, 4).forEach((s, i) => assert.equal(s.duration, s.lead + 10));
-  assert.deepEqual(wu.map(s => s.lead), [12, 0, 0, 0, 8.5, 10, 9.5, 10, 6.5, 10, 6.5]);
+  assert.deepEqual(wu.map(s => s.lead), [12, 0, 0, 0, 11, 11, 11, 12, 7.5, 12, 7.5]);
   // a spoken 5-4-3-2-1 before every new move, 3-2-1 for a leg switch, none for a jog pace change
   assert.deepEqual(wu.map(s => s.countdown), [5, 0, 0, 0, 5, 5, 5, 5, 3, 5, 3]);
   wu.slice(4).forEach(s => { assert.equal(s.counts, 5); assert.equal(s.beats, 4); assert.equal(s.duration, s.lead + s.counts * s.beats * s.beat); });
@@ -229,7 +229,7 @@ test('warm-up: jog slow/quick ×2, then 5 counts of 4 for each move, then get re
   assert.equal(tl.segments[wu.length + 1].type, 'work');
   assert.equal(tl.warmupEnd, H.WARMUP_SECONDS);
   assert.equal(tl.warmupSeconds, H.WARMUP_SECONDS);
-  assert.equal(H.formatTime(H.WARMUP_SECONDS), '4:05');
+  assert.equal(H.formatTime(H.WARMUP_SECONDS), '4:16');
   const plain = H.buildTimeline(ids, 'easy');
   assert.equal(tl.total, plain.total + H.WARMUP_SECONDS);
   assert.equal(tl.intervals, plain.intervals);
