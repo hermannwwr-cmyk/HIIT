@@ -183,7 +183,7 @@
   // ================================================================ SETUP
   var thumbs = {};
   var cards = {};
-  var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', fps: 30, energy: 0.7 });
+  var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', fit: 'fill', fps: 30, energy: 0.7 });
   var hero = { hover: null, shown: null };
 
   var groupLists = {};
@@ -403,7 +403,7 @@
     sheet.hidden = false;
     sheet.scrollTop = 0;
     suspendBehindSheet(true);
-    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: figIdFor(id), primary: gc[0], secondary: gc[1], quality: 'high', energy: 0.9 });
+    if (!guide.fig) guide.fig = makeFig($('csFig'), { exercise: figIdFor(id), primary: gc[0], secondary: gc[1], quality: 'high', fit: 'fill', energy: 0.9 });
     guide.fig.setExercise(figIdFor(id));
     guide.fig.setColors(gc[0], gc[1]);
     guide.fig.setPlaying(true);

@@ -13,7 +13,8 @@
  *           scheme:'dark'|'light', material: preset name, used while the scheme matches its stage,
  *           body, shade (material overrides: lit body colour, core-shadow colour),
  *           fps: frame-rate cap (default 60, 'low' 30), maxDpr: resolution cap (default 3, 'low' 2),
- *           clear: [dx, dy, r] ('low' only) a circle in from the bottom-right corner to keep the figure out of }
+ *           clear: [dx, dy, r] ('low' only) a circle in from the bottom-right corner to keep the figure out of,
+ *           fit: 'shared' (default: one body scale for every move) | 'fill' (each move fills the canvas) }
  *   instance.setExercise(id, {instant, time}) / getTime() / setColors(primary, secondary, instant)
  *   instance.setPlaying(bool) / setEnergy(x, instant) / pulse() / setSuspended(bool) / destroy()
  *   instance.setStyle(style, scheme[, material]) - switch scheme (and material) live; repaints once, now
@@ -836,6 +837,8 @@
     this.maxDpr = clamp(num(opts.maxDpr, this.low ? 2 : 3), 1, 4);
     // thumbnails: a circle [dx, dy, r] (CSS px, centre in from the bottom-right corner) kept clear
     this.clear = opts.clear && opts.clear.length === 3 ? [num(opts.clear[0], 0), num(opts.clear[1], 0), num(opts.clear[2], 0)] : null;
+    // framing (see _fit): 'shared' (one body scale for every move) or 'fill' (each move fills the canvas)
+    this.fill = opts.fit === 'fill';
     this.ex = getEx(opts.exercise);
     // a thumbnail that is never played shows the move's key pose
     this.time = this.low ? keyTime(this.ex) : 0;
@@ -939,18 +942,24 @@
   FP._dprCap = function () { return Math.min(this.maxDpr, root.devicePixelRatio || 1); };
 
   // Framing: scale (px per body unit) and origin of an exercise on this canvas, cached
-  // until the canvas resizes. The box is the exercise's whole cycle (exBox), centred.
+  // until the canvas resizes. The box is the exercise's whole cycle (exBox).
   //
-  // Every exercise is drawn at about the same body scale, so the athlete does not grow or
-  // shrink from one move to the next: the reference is the scale that fits a standing body
-  // (the 'rest' pose) with FIT_PAD padding; an exercise gets its own best fit clamped to
-  // FIT_LO..FIT_HI times that. A move too wide for that (the squat's reach) gives up side
-  // padding, down to FIT_EDGE, before it gives up size; the top and bottom keep FIT_PAD,
-  // since on the workout stage the ring and the controls overlap the canvas there (so jacks,
-  // arms overhead, stays at ~0.85).
+  // Shared scale (the default: workout stage, swipe preview, Up next): every exercise is
+  // drawn at about the same body scale, so the athlete does not grow or shrink from one
+  // move to the next. The reference is the scale that fits a standing body (the 'rest'
+  // pose) with FIT_PAD padding; an exercise gets its own best fit clamped to FIT_LO..FIT_HI
+  // times that. A move too wide for that (the squat's reach) gives up side padding, down to
+  // FIT_EDGE, before it gives up size; the top and bottom keep FIT_PAD, since on the workout
+  // stage the ring and the controls overlap the canvas there (so jacks, arms overhead, stays
+  // at ~0.85). A move on the floor is lowered FLOOR_K of the way from the middle to the
+  // floor a standing body stands on, so it does not float in the upper half of a square
+  // canvas, nor crowd the controls under it on the stage.
+  //
+  // opts.fit = 'fill' (showcases that show one move at a time: the setup hero, the How-to
+  // sheet): each move's box fits the canvas, centred, up to FILL_MAX times the reference.
   //
   // Thumbnails ('low') fill their canvas instead, see _fitThumb.
-  var FIT_PAD = 0.06, FIT_EDGE = 0.02, FIT_LO = 0.94, FIT_HI = 1.03, THUMB_PAD = 0.02;
+  var FIT_PAD = 0.06, FIT_EDGE = 0.02, FIT_LO = 0.94, FIT_HI = 1.03, FLOOR_K = 0.6, FILL_MAX = 1.25, THUMB_PAD = 0.02;
   function boxScale(b, w, h, pad, padY) {
     var px = Math.max(1, w * pad), py = Math.max(1, h * (padY === undefined ? pad : padY));
     return Math.max(1e-3, Math.min((w - 2 * px) / (b.x1 - b.x0), (h - 2 * py) / (b.y1 - b.y0)));
@@ -958,12 +967,13 @@
   // Thumbnail framing: the key pose (what a card shows while it is not playing) fills the
   // canvas with THUMB_PAD padding, as far as the whole cycle still fits on the canvas once
   // it plays. opts.clear = [dx, dy, r] is a circle (CSS px, centre dx, dy in from the
-  // bottom-right corner: the card's info button) the key pose is kept out of: the frame
-  // slides up and left from the centre, then shrinks, until no part of the body is under it.
+  // bottom-right corner: the card's info button) the body is kept out of, in every pose of
+  // the cycle (THUMB_N samples): the frame slides up and left from the centre, then
+  // shrinks, until no part of the body passes under it.
   var THUMB_BONES = [[HEAD, HEAD, 0.075], [NECK, CHEST, 0.09], [CHEST, PELVIS, 0.1], [SHL, SHR, 0.06], [HIPL, HIPR, 0.07],
     [SHL, ELL, 0.05], [ELL, WRL, 0.045], [WRL, HAL, 0.04], [SHR, ELR, 0.05], [ELR, WRR, 0.045], [WRR, HAR, 0.04],
     [HIPL, KNL, 0.065], [KNL, ANL, 0.05], [ANL, TOL, 0.04], [HIPR, KNR, 0.065], [KNR, ANR, 0.05], [ANR, TOR, 0.04]];
-  var THUMB_T = [0.5, 0.375, 0.25, 0.125, 0];
+  var THUMB_T = [0.5, 0.375, 0.25, 0.125, 0], THUMB_N = 24;
   FP._fitThumb = function (ex, box, W, H) {
     var g = 0.065 * (LOW_RK - 1); // limbs are drawn thicker here (see _stState)
     function grown(b) { return { x0: b.x0 - g, x1: b.x1 + g, y0: b.y0, y1: b.y1 + g }; }
@@ -979,15 +989,20 @@
     var s0 = Math.min(boxScale(kb, W, H, THUMB_PAD), boxScale(cb, W, H, 0.01));
     var cl = this.clear;
     if (!cl) return place(s0, 0.5, 0.5);
-    var V = project(safePose(ex, KEY_PHASE[ex.id] || 0, keyTime(ex)), ex, new Float32Array(NJ * 3));
+    // the whole cycle (a picked card plays), key pose first since it is the likeliest to collide
+    var poses = [project(safePose(ex, KEY_PHASE[ex.id] || 0, keyTime(ex)), ex, new Float32Array(NJ * 3))];
+    for (var n = 0; n < THUMB_N; n++) poses.push(project(safePose(ex, n / THUMB_N, n / THUMB_N * ex.period), ex, new Float32Array(NJ * 3)));
     var qx = W - cl[0], qy = H - cl[1];
     function free(f) {
-      for (var i = 0; i < THUMB_BONES.length; i++) {
-        var a = THUMB_BONES[i][0] * 3, b = THUMB_BONES[i][1] * 3, r = cl[2] + THUMB_BONES[i][2] * LOW_RK * f.sc;
-        var ax = f.ox + V[a] * f.sc, ay = f.oy - V[a + 1] * f.sc, dx = V[b] * f.sc + f.ox - ax, dy = f.oy - V[b + 1] * f.sc - ay;
-        var t = clamp(((qx - ax) * dx + (qy - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
-        var ex2 = ax + dx * t - qx, ey2 = ay + dy * t - qy;
-        if (ex2 * ex2 + ey2 * ey2 < r * r) return false;
+      for (var j = 0; j < poses.length; j++) {
+        var V = poses[j];
+        for (var i = 0; i < THUMB_BONES.length; i++) {
+          var a = THUMB_BONES[i][0] * 3, b = THUMB_BONES[i][1] * 3, r = cl[2] + THUMB_BONES[i][2] * LOW_RK * f.sc;
+          var ax = f.ox + V[a] * f.sc, ay = f.oy - V[a + 1] * f.sc, dx = V[b] * f.sc + f.ox - ax, dy = f.oy - V[b + 1] * f.sc - ay;
+          var t = clamp(((qx - ax) * dx + (qy - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+          var ex2 = ax + dx * t - qx, ey2 = ay + dy * t - qy;
+          if (ex2 * ex2 + ey2 * ey2 < r * r) return false;
+        }
       }
       return true;
     }
@@ -1009,9 +1024,13 @@
     var b = exBox(ex), W = this.W, H = this.H, f;
     if (this.low) f = this._fitThumb(ex, b, W, H);
     else {
-      var ref = boxScale(exBox(EX.rest), W, H, FIT_PAD);
-      var sc = Math.min(clamp(boxScale(b, W, H, FIT_PAD), ref * FIT_LO, ref * FIT_HI), boxScale(b, W, H, FIT_EDGE, FIT_PAD));
-      f = { sc: sc, ox: W / 2 - (b.x0 + b.x1) / 2 * sc, oy: H / 2 + (b.y0 + b.y1) / 2 * sc };
+      var ref = boxScale(exBox(EX.rest), W, H, FIT_PAD), own = boxScale(b, W, H, FIT_PAD);
+      var sc = this.fill ? Math.min(own, ref * FILL_MAX) :
+        Math.min(clamp(own, ref * FIT_LO, ref * FIT_HI), boxScale(b, W, H, FIT_EDGE, FIT_PAD));
+      var oy = H / 2 + (b.y0 + b.y1) / 2 * sc; // centred
+      // shared: lowered toward the floor a standing body stands on (FLOOR_K of the way)
+      if (!this.fill) oy = lerp(oy, Math.max(oy, H - Math.max(1, H * FIT_PAD) + b.y0 * sc), FLOOR_K);
+      f = { sc: sc, ox: W / 2 - (b.x0 + b.x1) / 2 * sc, oy: oy };
     }
     f.floorY = f.oy - camSetup(ex).floorV * f.sc;
     if (!this.low) shadowGrid(ex, f, W, H);
