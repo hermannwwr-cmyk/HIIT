@@ -178,28 +178,33 @@
     pose: function (p) {
       var J = {};
       var k = kf(p, [[0, 0], [0.07, 0], [0.5, 1], [0.56, 1], [0.93, 0], [1, 0]]);
-      var al = lerp(19.1, 0.6, k);            // body line angle (pivot on the toes)
-      var bd = dir(al), fa = (al + 74) * DEG;
+      var al = lerp(19.1, 1.5, k);            // body line angle (pivot on the toes); chest ~8 cm off the floor at the bottom
+      var bd = dir(al), fa = (al + 61) * DEG; // foot ~80 deg to the floor at the top, ~62 at the bottom
       var ank = [B.foot * Math.cos(fa), 0.012 + B.foot * Math.sin(fa), 0];
-      var P = addS(ank, bd, B.shin + B.thigh - 0.0006);
+      var P = addS(ank, bd, B.shin + B.thigh - 0.0003);
       torso(J, P, bd, bd, dir(al + 8), Z, Z, 0);
       for (var i = 0; i < 2; i++) {
         var s = SIDES[i][0], sg = SIDES[i][1];
         var a = [ank[0], ank[1], 0.06 * sg];
         var r = ik(J['hip' + s], a, B.thigh, B.shin, J.F);
         J['kn' + s] = r[0]; J['an' + s] = r[1]; J['to' + s] = [0, 0.012, 0.06 * sg];
-        armIK(J, s, [0.712, 0.035, 0.15 * sg], [-1, 0.85, 0.75 * sg], [1, -0.35, 0]);
+        // shoulder blades spread at the top (push the floor away), squeezed together at the bottom
+        J['sh' + s] = add(J['sh' + s], add(mul(J.F, 0.002 - 0.017 * k), mul(Z, -0.007 * k * sg)));
+        // hands just outside the shoulders, under the lower chest: forearms vertical and elbows
+        // ~45 deg from the body at the bottom
+        armIK(J, s, [0.69, 0.035, 0.16 * sg], [-0.8, 0.85, 1.0 * sg], [1, -0.35, 0]);
       }
       return J;
     }
   };
 
   EX.crunch = {
-    period: 1.5, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
+    period: 1.8, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
     emit: [HEAD, ELR, ELL],
     pose: function (p) {
       var J = {};
-      var k = kf(p, [[0, 0], [0.06, 0], [0.42, 1], [0.54, 1], [0.92, 0], [1, 0]]);
+      // curl up (0.6 s), pause at the top, lower slowly (0.95 s)
+      var k = kf(p, [[0, 0], [0.33, 1], [0.43, 1], [0.95, 0], [1, 0]]);
       var u1 = dir(180 - 7 * k), u2 = dir(180 - 34 * k), u3 = dir(178 - 44 * k);
       torso(J, [0, 0.066, 0], u1, u2, u3, Z, Z, 0);
       for (var i = 0; i < 2; i++) {
@@ -232,17 +237,18 @@
   };
 
   EX.flutter = {
-    period: 0.5, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
+    period: 0.8, cam: { yaw: 14, pitch: 16 }, far: { L: 1, R: 0 }, order: SIDE_ORDER,
     emit: [TOL, TOR],
     pose: function (p) {
       var J = {};
       var w = Math.sin(TAU * p);
-      torso(J, [0, 0.066, 0], dir(178), dir(167), dir(150), Z, Z, 0);
+      // head and shoulders down (lifting them is the harder variant), lower back pressed flat
+      torso(J, [0, 0.066, 0], dir(181.5), dir(180), dir(179), Z, Z, 0);
       for (var i = 0; i < 2; i++) {
         var s = SIDES[i][0], sg = SIDES[i][1];
-        var th = 9 + 8 * w * sg;
+        var th = 12 + 9 * w * sg;
         legFK(J, s, dir(th + 1.5, -0.03 * sg), dir(th - 1.5, -0.015 * sg), dir(th + 30));
-        armIK(J, s, [-0.03, 0.032, 0.165 * sg], [-0.3, 1, 0.6 * sg], [1, -0.2, 0]);
+        armFK(J, s, [1, -0.12, 0.2 * sg], [1, -0.02, 0.08 * sg], [1, -0.1, 0.02 * sg]);
       }
       return J;
     }
@@ -312,25 +318,27 @@
   })();
 
   EX.twist = {
-    period: 1.4, cam: { yaw: 38, pitch: 22 }, far: { L: 0.5, R: 0 }, order: ['LL', 'T', 'LR', 'AL', 'AR'],
+    period: 2.0, cam: { yaw: 20, pitch: 35 }, far: { L: 0.5, R: 0 }, order: ['LL', 'T', 'LR', 'AL', 'AR'],
     emit: [HAL, HAR],
     pose: function (p) {
       var J = {};
-      var s0 = Math.sin(TAU * p), s = (s0 < 0 ? -1 : 1) * Math.pow(Math.abs(s0), 0.7);
+      // smooth through the centre (finite speed), a short dwell at each floor touch
+      var s = Math.sin(Math.PI / 2 * Math.sin(TAU * p));
       var psi = 55 * s * DEG, bend = 12 * s * DEG, X = [1, 0, 0];
-      // V-sit: torso leaned back ~40 deg, side-bends + rotates toward the hands
-      var u1 = rot(lean(-40), X, bend), u2 = rot(lean(-31), X, bend * 1.2), u3 = rot(lean(-14), X, bend * 0.8);
+      // V-sit: back straight, leaned back ~42 deg; the ribcage rotates (and tips a little) toward the hands
+      var u1 = rot(lean(-42), X, bend), u2 = rot(lean(-42), X, bend * 1.2), u3 = rot(lean(-35), X, bend * 0.8);
       var R = rot(rot(Z, X, bend * 1.2), u2, -psi);
       torso(J, [0, 0.085, 0], u1, u2, u3, R, Z, 0);
       J.face = addS(J.head, norm(cross(u3, rot(R, u2, -psi * 0.2))), B.headR);
-      // clasped hands sweep a wide arc: in front of the belly -> floor beside each hip
+      // clasped hands sweep a wide arc over the thighs: in front of the belly -> floor beside each hip
       var a = s * 82 * DEG, ca = Math.cos(a);
-      var tgt = [-0.03 + 0.15 * ca, 0.07 + 0.13 * ca, 0.21 * Math.sin(a)];
+      var tgt = [-0.03 + 0.11 * ca, 0.047 + 0.223 * ca, 0.21 * Math.sin(a)];
       var F = J.F;
+      // knuckles point ahead over the knees in the middle, down to the floor at each side
+      var hd = lerp3([1, 0.12, 0], norm(add(mul(F, 0.4), mul(u2, -0.9))), s * s);
       for (var i = 0; i < 2; i++) {
         var sd = SIDES[i][0], sg = SIDES[i][1];
-        armIK(J, sd, addS(tgt, R, 0.022 * sg), add(add(mul(u2, -0.5), mul(R, sg)), mul(F, -0.2)),
-          add(mul(F, 0.4), mul(u2, -0.9)));
+        armIK(J, sd, addS(tgt, R, 0.022 * sg), add(add(mul(u2, -0.5), mul(R, sg)), mul(F, -0.2)), hd);
         legFK(J, sd, [Math.cos(40 * DEG), Math.sin(40 * DEG), -0.12 * s - 0.03 * sg],
           [Math.cos(-8 * DEG), Math.sin(-8 * DEG), -0.07 * s - 0.035 * sg], [Math.cos(-30 * DEG), Math.sin(-30 * DEG), -0.02 * s]);
       }
@@ -402,15 +410,16 @@
   // Shoulder taps: high plank (pushup top), one hand at a time taps the opposite
   // shoulder; hips stay level and square (only a 1 cm weight shift onto the support hand).
   EX.shouldertap = {
-    period: 1.6, cam: { yaw: 58, pitch: 18 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
+    period: 2.4, cam: { yaw: 30, pitch: 22 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
     emit: [HAL, HAR, HEAD],
     orderAt: function (p) { return p < 0.5 ? ['LL', 'LR', 'T', 'AL', 'AR'] : ['LL', 'LR', 'T', 'AR', 'AL']; },
     pose: function (p) {
       var J = {};
       var half = p < 0.5 ? 0 : 1, q = (p - half * 0.5) * 2;
       var tapS = half ? 'L' : 'R', tg = half ? -1 : 1, othS = half ? 'R' : 'L';
-      var tap = kf(q, [[0, 0], [0.1, 0], [0.42, 1], [0.56, 1], [0.88, 0], [1, 0]]);
-      var al = 19.1, bd = dir(al), fa = (al + 74) * DEG;
+      // slow, controlled taps: lift and reach (0.4 s), touch, put the hand back down (0.4 s)
+      var tap = kf(q, [[0, 0], [0.08, 0], [0.43, 1], [0.55, 1], [0.92, 0], [1, 0]]);
+      var al = 19.6, bd = dir(al), fa = (al + 61) * DEG; // the push-up's top position
       var ank = [B.foot * Math.cos(fa), 0.012 + B.foot * Math.sin(fa), 0];
       var P = addS(ank, bd, B.shin + B.thigh - 0.0008);
       P[2] -= tg * 0.006 * sine(clamp(tap * 1.6, 0, 1)); // weight onto the support hand
@@ -421,15 +430,15 @@
         var a = [ank[0], ank[1], 0.072 * sg];
         var r = ik(J['hip' + s], a, B.thigh, B.shin, J.F);
         J['kn' + s] = r[0]; J['an' + s] = r[1]; J['to' + s] = [0, 0.012, 0.072 * sg];
-        var W = [0.69, 0.035, 0.125 * sg];
+        var W = [0.735, 0.035, 0.12 * sg]; // hands under the shoulders
         if (s !== tapS || tap <= 0) { armIK(J, s, W, [-1, 0.85, 0.75 * sg], [1, -0.35, 0]); continue; }
         // tapping hand: lifts off, crosses under the chin, palm lands on the front of the
         // opposite shoulder
         var sh = J['sh' + othS];
         var T = add(addS(addS(sh, F, 0.05), Z, tg * 0.035), mul(bd, 0.03));
-        var e = tap, wr = lerp3(W, T, sine(e));
-        wr = addS(wr, Y, 0.07 * Math.sin(Math.PI * e));
-        var pole = norm(add(mul([-1, 0.85, 0.75 * sg], 1 - e), mul([-0.35, -0.55, 0.9 * sg], e)));
+        var e = tap, wr = lerp3(W, T, e);
+        wr = addS(wr, Y, 0.04 * Math.sin(Math.PI * e));
+        var pe = clamp(e * 3, 0, 1), pole = norm(add(mul([-1, 0.85, 0.75 * sg], 1 - pe), mul([-0.3, -0.6, 1 * sg], pe)));
         var hd = norm(add(mul([1, -0.35, 0], 1 - e), mul(add(mul(Z, -tg), mul(up, 0.45)), e)));
         armIK(J, s, wr, pole, hd);
       }
