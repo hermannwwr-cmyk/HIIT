@@ -629,7 +629,7 @@
 [data-look="studio"][data-scheme="dark"][data-dark="charcoal"] .ctl-main { background: #ece6de; }
 
 /* ---------- warm-up (Studio) ---------- */
-[data-look="studio"] .strip .s-warmup, [data-look="studio"] .strip-legend .k-warmup { background: color-mix(in srgb, var(--warm-a) 55%, transparent); opacity: 1; }
+[data-look="studio"] .strip .s-warmup, [data-look="studio"] .strip-legend .k-warmup { background: color-mix(in srgb, var(--warm-a) 70%, transparent); opacity: 1; }
 /* dark: a thin tint of yellow-green over charcoal reads khaki, so the cells carry most of the colour */
 [data-look="studio"][data-scheme="dark"] .strip .s-warmup, [data-look="studio"][data-scheme="dark"] .strip-legend .k-warmup { background: color-mix(in srgb, var(--warm-a) 80%, transparent); }
 [data-look="studio"] .wu-row { background: var(--surface-2); border-color: var(--line); border-radius: 14px; }
