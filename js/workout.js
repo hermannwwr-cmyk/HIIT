@@ -169,13 +169,13 @@
     { move: 'jog', pace: 'quick', duration: 10 },
     { move: 'jog', pace: 'slow', duration: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
-    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 10 },
-    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 10 },
-    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 10 },
-    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 11 },
-    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 6.5, countdown: 3 },
-    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 11 },
-    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 6.5, countdown: 3 }
+    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 11 },
+    { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 11 },
+    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 11 },
+    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 12 },
+    { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 7.5, countdown: 3 },
+    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 12 },
+    { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 7.5, countdown: 3 }
   ];
   /** The moving part of a step (without its lead-in). */
   function warmupMoveDuration(st) { return st.duration || Math.round(st.counts * st.beats * st.beat * 1000) / 1000; }

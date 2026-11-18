@@ -1082,7 +1082,7 @@
   function warmFigOpts(seg, t) {
     var o = {};
     if (seg.counts) o.period = warmPeriod(seg);
-    if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + 1; }
+    if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + (seg.counts ? 2 : 1); }
     return o;
   }
   function warmPeriod(seg) { return seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat; }
@@ -1623,8 +1623,10 @@
   var CD_WORDS = ['One', 'Two', 'Three', 'Four', 'Five'];
   function warmLead(seg, t) {
     var cd = seg.countdown || 5;
+    // a counted move takes one more second: "…two, one, Begin!", and its count opens with "One" on the go
+    var slots = cd + (seg.counts ? 1 : 0);
     var leadEnd = seg.start + seg.lead, now = performance.now();
-    var cs = leadEnd - cd, hp = cs - VLEAD - GAP; // countdown start; hold point
+    var cs = leadEnd - slots, hp = cs - VLEAD - GAP; // countdown start; hold point
     var w = run.warm;
     if (!w || w.idx !== seg.index) w = run.warm = { idx: seg.index, counting: false, go: false, flashed: false, holdSince: 0, k: -1, vk: -1, said: false };
     if (w.go) return t;
@@ -1657,22 +1659,22 @@
       var vnat = vk === w.vk + 1 || (w.vk >= 0 && vk === w.vk + 2); // a late frame may skip one
       w.vk = vk;
       if (vk >= 0 && vnat && run.playing) {
-        // a counted move: "…three, two, Begin!" and its count opens on the go with "One"
-        if (vk < cd) A.say(seg.counts && vk === cd - 1 ? 'Begin!' : CD_WORDS[cd - 1 - vk]);
+        if (vk < cd) A.say(CD_WORDS[cd - 1 - vk]);
+        else if (vk < slots) A.say('Begin!'); // counted move: its own second before the count
         else { w.said = true; A.say(goWord(seg)); }
       }
     }
     if (t < cs) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     // the numbers: big, pulsing, one per second; 3-2-1 also pulse the screen edge
-    var k = Math.min(cd - 1, Math.floor(t - cs + 1e-6));
+    var k = Math.min(slots - 1, Math.floor(t - cs + 1e-6));
     if (k !== w.k) {
       var natural = k === w.k + 1 || (w.k >= 0 && k === w.k + 2);
       w.k = k;
       var n = cd - k;
       box.classList.add('runway');
-      leadText(String(n), 'Starts in');
+      leadText(n > 0 ? String(n) : 'GO', n > 0 ? 'Starts in' : '');
       box.classList.remove('pulse'); void box.offsetWidth; box.classList.add('pulse');
-      if (run.playing && natural) {
+      if (run.playing && natural && n > 0) {
         // the coach's numbers are the countdown; without a voice the ticks carry it (louder for 3, 2, 1)
         if (A.get('sfx') && !A.voiceWorks()) A.play(n > 3 ? 'tickSoft' : n === 1 ? 'tickLast' : 'tick');
         if (n <= 3) {
@@ -1682,8 +1684,8 @@
         } else bg.beatNow(0.3);
       }
     }
-    // BEGIN's wipe: after "One" has had its moment, and it opens as the count begins
-    if (!w.flashed && run.playing && t >= leadEnd - 0.35) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
+    // BEGIN's wipe: with the spoken "Begin!" (after "one" has had its moment); it opens as the count begins
+    if (!w.flashed && run.playing && t >= leadEnd - (slots - cd) - 0.35) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
     return t;
   }
   /** The count (or the jog timer) begins: an obvious signal you can hear and see. */

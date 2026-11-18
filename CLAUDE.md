@@ -30,7 +30,7 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - It holds the exercise catalogue and trainer text, `LEVELS`, `WARMUP_STEPS`, the random full-body pick, and `order()` (upper body → abs → legs).
 - `buildTimeline(ids, level, {warmup})` returns a flat list of segments, each with `start`, `end`, `duration` and `index`. Segment `type` is one of `warmup`, `prep`, `work`, `rest`, `jacks` or `setrest`.
 - Warm-up segments also carry `lead` (seconds of lead-in before the move) and `countdown` (5, or 3 for a leg switch).
-- `tests/workout.test.js` pins exact numbers: the lead values, `WARMUP_SECONDS` formatting to `'4:09'`, and session totals. So timing changes need test updates, plus the static fallback in `index.html` (`#wuTime`).
+- `tests/workout.test.js` pins exact numbers: the lead values, `WARMUP_SECONDS` formatting to `'4:16'`, and session totals. So timing changes need test updates, plus the static fallback in `index.html` (`#wuTime`).
 
 **`js/app.js` drives the clock in one loop.**
 - The clock is `run.base` plus the time since `run.anchor`, read through `elapsedNow()`.
