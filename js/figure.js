@@ -5,7 +5,6 @@
  *   window.HIITFigure = {
  *     EXERCISES: ['pushup','crunch','legraise','flutter','squat','lunge','twist','jacks','rest',
  *                 'shouldertap','jog-slow','jog-quick','pecstretch','hamstring-l','hamstring-r','calf-l','calf-r'],
- *     STYLES: ['studio'],
  *     MATERIALS: { dark: ['stone','titanium'], light: ['graphite'] },   // the first of each is the default
  *     create(canvas, opts) -> instance
  *   }
@@ -15,7 +14,7 @@
  *           fps: frame-rate cap (default 60, 'low' 30), maxDpr: resolution cap (default 2),
  *           clear: [dx, dy, r] ('low' only) a circle in from the bottom-right corner to keep the figure out of,
  *           fit: 'shared' (default: one body scale for every move) | 'fill' (each move fills the canvas) }
- *   instance.setExercise(id, {instant, time, period, ready}) / getTime() / setTime(t)
+ *   instance.setExercise(id, {instant, time, period, ready}) / getTime() / setTime(t, ease)
  *   instance.setColors(primary, secondary, instant)
  *   instance.setPlaying(bool) / setEnergy(x, instant) / pulse() / setSuspended(bool) / destroy()
  *   instance.setStyle(style, scheme[, material]) - switch scheme (and material) live; repaints once, now
@@ -848,7 +847,7 @@
     this.hasPose = false;
     this.fromEx = null; this.morphT = 1; this._xfN = 0; // dissolve: outgoing exercise, progress, number
     this.flash = 0; this.ring = -1;
-    this._setStyle(opts.style, opts.scheme);
+    this._setScheme(opts.scheme);
     this.W = 0; this.H = 0; this.dpr = 1;
     this.visible = true;
     this.dead = false;
@@ -1032,9 +1031,9 @@
   };
 
   FP._computePose = function () {
-    var ex = this.ex;
-    var p = ((this.time / ex.period) % 1 + 1) % 1;
-    var J = safePose(ex, p, this.time);
+    var ex = this.ex, g = this._glide, t = g ? this.time + g.off * glideLeft(g) : this.time; // (a re-timed clock: setTime)
+    var p = ((t / ex.period) % 1 + 1) % 1;
+    var J = safePose(ex, p, t);
     project(J, ex, this.view);
     var f = this._fit(ex), v = this.view, P = this.cur, m = this.meta;
     for (var i = 0; i < NJ; i++) {
@@ -1070,9 +1069,26 @@
     this._update(step);
     this._draw();
     this._still = settled;
-    var st = this._stats;
-    st.frames++; st.ms += now() - t0;
+    var st = this._stats, ms = now() - t0;
+    st.frames++; st.ms += ms;
+    this._watch(ms, step);
     return !settled || !this.ro;
+  };
+
+  // Slow-device guard. While a high-quality figure's frames average more than SLOW_MS over
+  // SLOW_S seconds of animation, the figures drop their costliest passes: first the
+  // silhouette rim, then (still slow) the occlusion shadows. One way, for all figures alike
+  // (a device is slow for all of them, and the swipe preview must keep matching the stage):
+  // nothing switches back on, so the look never flickers between the two.
+  // (Frames of a dissolve, which copy the canvas, and frozen dev figures don't count.)
+  var SLOW_MS = 8, SLOW_S = 2, slowLevel = 0, slowGuard = true;
+  FP._watch = function (ms, dt) {
+    if (this.low || this._frozen || this.morphT < 1 || slowLevel >= 2 || !slowGuard) return;
+    var w = this._pw || (this._pw = { n: 0, ms: 0, t: 0 });
+    w.n++; w.ms += ms; w.t += dt;
+    if (w.t < SLOW_S) return;
+    if (w.ms / w.n > SLOW_MS) slowLevel++;
+    w.n = 0; w.ms = 0; w.t = 0;
   };
 
   FP._update = function (dt) {
@@ -1085,6 +1101,8 @@
     this.flash *= Math.exp(-dt * 3.2);
     if (this.flash < 0.03) this.flash = 0;
     if (this.ring >= 0) { this.ring += dt / 0.8; if (this.ring > 1) this.ring = -1; }
+    var g = this._glide;
+    if (g && g.d > 0 && (g.t += dt) >= g.d) g.d = 0; // a re-timing glide (setTime) runs on real time
     if (this._frozen) { this._computePose(); return; }
     // the new move already plays while it dissolves in
     if (this.morphT < 1) this.morphT = Math.min(1, this.morphT + dt / MORPH_S);
@@ -1109,8 +1127,6 @@
   // cross-sections; the floor gets soft contact shadows scaled by each body part's true
   // height above it.
 
-  var STYLES = ['studio']; // the only look; setStyle() still takes it, for the scheme
-  function styleOf() { return 'studio'; }
   function schemeOf(s) { return s === 'light' ? 'light' : 'dark'; }
 
   // Lights in camera space (x right, y up, z toward the viewer): every exercise is lit
@@ -1458,7 +1474,7 @@
     if (xf && this._unseen) { this.morphT = 1; xf = false; }
     if (xf && (!this._xf || this._xf.n !== this._xfN)) xf = this._xfSnap();
     if (!xf && this._xf) { this._xf = null; drop(this, 'xbuf'); } // done: free the snapshot
-    this._noOcc = !this.low && Math.min(this.W, this.H) < OCC_MIN;
+    this._noOcc = !this.low && (Math.min(this.W, this.H) < OCC_MIN || slowLevel >= 2);
     this._drawStudio();
     if (xf) this._xfBlend();
     if (this.visible) this._unseen = false;
@@ -1521,7 +1537,7 @@
       if (!low) growDrawn(box, P, g, M.sc);
     }
     M.far = 0; M.dim = 1;
-    if (!low && Math.min(this.W, this.H) >= RIM_MIN) this._stRim(ctx, M, box);
+    if (!low && !slowLevel && Math.min(this.W, this.H) >= RIM_MIN) this._stRim(ctx, M, box);
     if (this.ring >= 0 && !low) this._stSweep(ctx, P, M);
     ctx.globalCompositeOperation = 'destination-over';
     this._stGround(ctx, P, M);
@@ -2372,18 +2388,31 @@
     this.ex = ex;
     this.paced = paced;
     this.time = t;
+    if (this._glide) this._glide.d = 0;
     this._still = false;
   };
   /**
    * Move the loop's clock to t seconds, at once (no dissolve): for keeping a figure on a
-   * count its own clock has drifted from (a stalled frame, a jump).
+   * count its own clock has drifted from (a stalled frame, a jump). With ease (seconds) the
+   * clock still moves at once, but the pose shown catches up instead of popping: it runs a
+   * little faster or slower, over at least `ease` and long enough that it never runs
+   * backwards (see _computePose).
    */
-  FP.setTime = function (t) {
+  FP.setTime = function (t, ease) {
     t = +t;
     if (this.dead || !isFinite(t) || t === this.time) return;
+    ease = num(ease, 0);
+    var g = this._glide || (this._glide = { off: 0, t: 0, d: 0 });
+    // how far the pose shown is from the new clock, as the nearest phase of the loop
+    var per = this.ex.period, sh = this.time + g.off * glideLeft(g), off = (sh - t) / per;
+    off = (off - Math.round(off)) * per;
+    g.d = 0;
+    if (ease > 0 && this.hasPose && this.morphT >= 1 && off) { g.off = off; g.t = 0; g.d = Math.max(ease, Math.abs(off) * 1.6); }
     this.time = t;
     this._still = false;
   };
+  // What is left (1 -> 0) of a glide's offset.
+  function glideLeft(g) { return g.d > 0 && g.t < g.d ? 1 - sine(g.t / g.d) : 0; }
   /** Seconds into the current exercise's loop (to hand over to another figure). */
   FP.getTime = function () { return this.time; };
   /** New accent colours; instant skips the cross-fade. */
@@ -2419,7 +2448,7 @@
   FP.setStyle = function (style, scheme, material) {
     if (this.dead) return;
     if (material !== undefined) this.material = typeof material === 'string' ? material : null;
-    this._setStyle(style, scheme === undefined ? this.scheme : scheme);
+    this._setScheme(scheme === undefined ? this.scheme : scheme);
     this._still = false; this._acc = 0;
     this._paint();
   };
@@ -2429,12 +2458,11 @@
    * the scheme's default is used. The choice survives setStyle().
    */
   FP.setMaterial = function (name) {
-    if (!this.dead) this.setStyle(this.style, this.scheme, typeof name === 'string' ? name : null);
+    if (!this.dead) this.setStyle('studio', this.scheme, typeof name === 'string' ? name : null);
   };
   /** Name of the material in use. */
   FP.getMaterial = function () { return this.mat.name; };
-  FP._setStyle = function (style, scheme) {
-    this.style = styleOf(style);
+  FP._setScheme = function (scheme) {
     this.scheme = schemeOf(scheme);
     this.mat = buildMat(materialFor(this.material, this.scheme), this.matOpts);
     this.ring = -1;
@@ -2459,6 +2487,7 @@
   FP._debugSetTime = function (t, freeze) {
     this.morphT = 1;
     this.time = t;
+    if (this._glide) this._glide.d = 0;
     this._computePose();
     this._frozen = freeze !== false;
     this._still = false;
@@ -2471,7 +2500,6 @@
 
   root.HIITFigure = {
     EXERCISES: EXERCISES.slice(),
-    STYLES: STYLES.slice(),
     // material presets by stage; the first of each list is the default
     MATERIALS: { dark: ['stone', 'titanium'], light: ['graphite'] },
     create: function (canvas, opts) { return new Figure(canvas, opts); },
@@ -2479,6 +2507,13 @@
       EX: EX, JN: JN, B: B,
       pose: function (id, p) { return safePose(getEx(id), p, p * getEx(id).period); },
       ikClamps: function () { var c = ikClamps; ikClamps = 0; return c; },
+      // slow-device level (0: all passes, 1: no rim, 2: no occlusion either): a number sets it,
+      // false also turns the guard off (steady captures on a busy machine)
+      slow: function (v) {
+        if (v === false) { slowGuard = false; v = 0; }
+        if (v != null) { slowLevel = v | 0; registry.forEach(function (f) { f._still = false; }); }
+        return slowLevel;
+      },
       instances: function () { return registry.slice(); }
     }
   };

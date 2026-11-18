@@ -75,3 +75,21 @@ test('a count-in breathes in its start pose, without IK clamping', () => {
   assert.equal(F._dev.ikClamps(), 0);
   f.destroy();
 });
+
+test('an eased setTime keeps the pose shown continuous and the clock exact', () => {
+  const F = load();
+  const f = F.create(fakeCanvas(), { exercise: 'squat' });
+  f.setExercise('squat', { instant: true, time: 1, period: 2 });
+  f._computePose();
+  const before = Array.from(f.cur);
+  f.setTime(1.1, 0.12);
+  assert.equal(f.getTime(), 1.1, 'the clock moves at once');
+  f._computePose();
+  before.forEach((v, i) => assert.ok(Math.abs(v - f.cur[i]) < 1e-3, 'no pop: the pose shown has not moved yet'));
+  f._update(0.3); // the catch-up is over
+  const shown = Array.from(f.cur);
+  f.setExercise('squat', { instant: true, time: 1.4, period: 2 });
+  f._computePose();
+  shown.forEach((v, i) => assert.ok(Math.abs(v - f.cur[i]) < 1e-3, 'then exactly on the new clock'));
+  f.destroy();
+});
