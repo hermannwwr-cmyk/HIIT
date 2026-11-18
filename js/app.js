@@ -1070,6 +1070,19 @@
     if (seg.move === 'hamstring' || seg.move === 'calf') return seg.move + '-' + (seg.side === 'right' ? 'r' : 'l');
     return seg.move;
   }
+  /**
+   * How the stage figure shows a warm-up step at clock time t. Counted moves loop on the
+   * count: one jumping jack per beat, a squat over two beats (down on 1, up on 2), a stretch
+   * per count of 4 (deepest on beat 2). Through the lead-in the move is demonstrated, then
+   * the figure waits in its start pose for the countdown (`ready`); startMove() starts the
+   * loop on BEGIN, so beat 1 is the first rep.
+   */
+  function warmFigOpts(seg, t) {
+    var o = {};
+    if (seg.counts) o.period = seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat;
+    if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + 1; }
+    return o;
+  }
   function warmName(seg) {
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
     return exName(seg.move) + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') : '');
@@ -1210,7 +1223,8 @@
 
     if (restMode) showUpNext(seg);
     else if (workFig) {
-      workFig.setExercise(seg.type === 'warmup' ? warmFigId(seg) : seg.exercise);
+      if (seg.type === 'warmup') workFig.setExercise(warmFigId(seg), warmFigOpts(seg, elapsedNow()));
+      else workFig.setExercise(seg.exercise);
       workFig.setColors(c[0], c[1]);
       workFig.setEnergy(ph.energy);
       if (!run.quiet) workFig.pulse();
@@ -1647,6 +1661,13 @@
     $('dLabel').textContent = seg.counts ? 'Count' : 'Time left';
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
+    if (workFig) {
+      // the go: the figure's loop starts now, phase-locked to the count. It was waiting in
+      // the start pose; jumped in mid-move, it cuts straight to the right point of the loop.
+      var fo = warmFigOpts(seg, elapsedNow());
+      fo.time = Math.max(0, fo.time); fo.ready = 0; fo.instant = !loud;
+      workFig.setExercise(warmFigId(seg), fo);
+    }
     if (!loud) return;
     // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
     if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
