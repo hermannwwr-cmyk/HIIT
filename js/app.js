@@ -183,7 +183,7 @@
   // ================================================================ SETUP
   var thumbs = {};
   var cards = {};
-  var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', energy: 0.7 });
+  var heroFig = makeFig($('heroFig'), { exercise: state.ids[0], primary: GROUP_COLORS.upper[0], secondary: GROUP_COLORS.upper[1], quality: 'high', fps: 30, energy: 0.7 });
   var hero = { hover: null, shown: null };
 
   var groupLists = {};
@@ -236,7 +236,9 @@
       grid.appendChild(li);
       cards[ex.id] = btn;
       var gc = GROUP_COLORS[ex.group];
-      thumbs[ex.id] = makeFig(btn.querySelector('canvas'), { exercise: ex.id, primary: gc[0], secondary: gc[1], quality: 'low', energy: 0.6 });
+      // the ⓘ button (.ex-info, 26-28 px, from 22 px inside the corner) sits on the thumbnail's
+      // bottom-right corner: keep the figure out from under it
+      thumbs[ex.id] = makeFig(btn.querySelector('canvas'), { exercise: ex.id, primary: gc[0], secondary: gc[1], quality: 'low', energy: 0.6, clear: [9, 9, 15] });
     });
   }
 
@@ -835,7 +837,7 @@
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
-    if (!nextFig) nextFig = makeFig($('nextFig'), { exercise: tl.exercises[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.45 });
+    if (!nextFig) nextFig = makeFig($('nextFig'), { exercise: tl.exercises[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', fps: 30, energy: 0.45 });
     run.mode = null;
     guardHistory();
     buildProgress(tl);
@@ -1782,9 +1784,11 @@
         // the figure exactly where and how big it will be
         peek.classList.add('is-fig');
         var fid = sg.type === 'warmup' ? warmFigId(sg) : sg.exercise;
-        if (!peekFig) peekFig = makeFig($('peekFig'), { exercise: fid, primary: dest.colors[0], secondary: dest.colors[1], quality: 'high', energy: 0.7 });
-        else peekFig.setExercise(fid);
-        peekFig.setColors(dest.colors[0], dest.colors[1]);
+        // (a preview at 30 fps; same quality and size as the stage figure, so the hand-over is seamless)
+        if (!peekFig) peekFig = makeFig($('peekFig'), { exercise: fid, primary: dest.colors[0], secondary: dest.colors[1], quality: 'high', fps: 30, energy: PHASE[sg.type].energy });
+        else peekFig.setExercise(fid, { instant: true });
+        peekFig.setColors(dest.colors[0], dest.colors[1], true);
+        peekFig.setEnergy(PHASE[sg.type].energy, true);
         peekFig.setPlaying(true);
       }
     }
@@ -1877,6 +1881,7 @@
           if (nowSeg && nowSeg.index === dest.seg.index) {
             workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, { instant: true, time: hand });
             workFig.setColors(dest.colors[0], dest.colors[1], true);
+            workFig.setEnergy(PHASE[dest.seg.type].energy, true);
           }
         }
         stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
@@ -2033,7 +2038,7 @@
       li.innerHTML = '<span>' + esc(ex.name) + '</span><b>' + H.formatTime(st.perEx[id] || 0) + '</b>';
       list.appendChild(li);
     });
-    if (!doneFig) doneFig = makeFig($('doneFig'), { exercise: 'jacks', primary: PHASE.done.colors[0], secondary: PHASE.done.colors[1], quality: 'high', energy: 1 });
+    if (!doneFig) doneFig = makeFig($('doneFig'), { exercise: 'jacks', primary: PHASE.done.colors[0], secondary: PHASE.done.colors[1], quality: 'high', fps: 30, energy: 1 });
     else { doneFig.setExercise('jacks'); doneFig.setPlaying(true); }
     doneFig.pulse();
     requestAnimationFrame(function () { focusOn($('doneFig')); });
