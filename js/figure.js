@@ -1376,8 +1376,8 @@
   // The torso is shaded as if it tilted toward or away from the viewer only this much: its
   // broad, flat front keeps facing the camera, so a torso leaning back or forward does not
   // turn into a dark vest next to the round limbs.
-  var ST_TILT = 0.45;
-  var ST_PELVIS = [0.082, 0.05, 0.05, 0.016]; // ellipsoid semi-axes: side, forward, up; lift of its centre
+  var ST_TILT = 0.55;
+  var ST_PELVIS = [0.082, 0.05, 0.044, 0.016]; // ellipsoid semi-axes: side, forward, up; lift of its centre
   // head: centre offset up / forward from the head joint, cranium semi-axes (up, forward,
   // side), jaw [forward, up offset from the cranium centre, semi-axes up, forward, side]
   var ST_HEAD = { up: 0.006, fwd: 0.014, skull: [0.069, 0.061, 0.053], jaw: [0.026, -0.04, 0.032, 0.034, 0.04] };
