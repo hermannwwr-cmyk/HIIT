@@ -1009,8 +1009,14 @@
   // at I = 0, rampAt[0], rampAt[1], 1. Optional extras (absent = off): spec2 (broad
   // sheen lobe), crisp (extra gradient stops that track the highlight so a tight one is
   // not lost between samples), env ([floor, softbox] reflection colours, envK = mix),
-  // rimPow (rim width, 8 = narrow), rim2 (untinted kicker on the key side), spotR (head
-  // highlight size), lowRim (rim strength in thumbnails).
+  // rimPow (width of the faint per-piece rim, 8 = narrow), rim2 (untinted kicker on the key
+  // side), spotR (head highlight size), lowRim (per-piece rim strength in thumbnails).
+  // Rim light: rimK is only a faint per-piece tint at every limb edge (it also shows where
+  // parts overlap, so it stays weak); the real rim is the silhouette pass (rimS = strength,
+  // rimD = width in body units, rimW = how far the phase colour is mixed toward white),
+  // which lights only the figure's outer edge.
+  // far / farK: the tone limbs on the far side recede toward (the stage's own), farDim: how
+  // much less light they get.
   var MATERIALS = {
     // dark stage: brushed mid-grey metal, crisp cool highlight, strong phase rim
     titanium: {
@@ -1018,24 +1024,25 @@
       body: [124, 131, 146], shade: [43, 47, 56], deepTo: [8, 9, 12], deepK: 0.55, lit: [211, 216, 226],
       spec: [242, 247, 255], specK: 1, shin: 48, crisp: true, spec2: [186, 196, 216], spec2K: 0.18, shin2: 6, spotR: 0.36,
       env: [[22, 25, 32], [224, 230, 242]], envK: 0.32, envSide: 0.75,
-      rimK: 1.1, rimW: 0.25, rimPow: 5, rim2: [196, 208, 230], rim2K: 0.18, rim2Pow: 7, lowRim: 0.7,
-      far: [6, 8, 12], farK: 0.3, ao: [4, 5, 8], aoK: 0.45,
-      shadow: [0, 0, 0], shadowK: 1.35, floor: [214, 224, 244], floorK: 0.03, pool: 0.085, sweep: 0.55
+      rimK: 0.25, rimW: 0.25, rimPow: 5, rimS: 0.9, rimD: 0.0065, rim2: [196, 208, 230], rim2K: 0.18, rim2Pow: 7, lowRim: 0.7,
+      far: [6, 8, 12], farK: 0.3, farDim: 0.12, ao: [4, 5, 8], aoK: 0.45,
+      shadow: [0, 0, 0], shadowK: 1.4, floor: [214, 224, 244], floorK: 0.03, pool: 0.1, sweep: 0.55
     },
     // dark (warm charcoal) stage: matte warm stone / clay
     stone: {
       stage: 'dark', rampAt: [0.34, 0.74], litTo: [244, 238, 228],
       body: [172, 164, 153], shade: [84, 77, 70], deepTo: [26, 19, 13], deepK: 0.6, lit: [232, 225, 214],
-      spec: [255, 246, 232], specK: 0.32, shin: 20, spec2: [250, 240, 226], spec2K: 0.14, shin2: 4, rimK: 0.9, rimW: 0.2, rimPow: 7,
-      far: [16, 14, 12], farK: 0.3, ao: [26, 18, 12], aoK: 0.45,
-      shadow: [8, 5, 2], shadowK: 1.25, floor: [255, 236, 212], floorK: 0.03, pool: 0.08, sweep: 0.45
+      spec: [255, 246, 232], specK: 0.32, shin: 20, spec2: [250, 240, 226], spec2K: 0.14, shin2: 4,
+      rimK: 0.2, rimW: 0.2, rimPow: 7, rimS: 0.8, rimD: 0.006,
+      far: [16, 14, 12], farK: 0.3, farDim: 0.12, ao: [26, 18, 12], aoK: 0.45,
+      shadow: [8, 5, 2], shadowK: 1.5, floor: [255, 236, 212], floorK: 0.03, pool: 0.12, sweep: 0.45
     },
     // light stage: satin graphite on warm paper
     graphite: {
-      stage: 'light', rampAt: [0.3, 0.62], litTo: [107, 114, 128],
-      body: [42, 45, 52], shade: [24, 26, 31], deepTo: [6, 7, 9], deepK: 0.5, lit: [107, 114, 128],
-      spec: [170, 176, 188], specK: 0.55, shin: 14, rimK: 0.72, rimW: 0.08,
-      far: [8, 9, 11], farK: 0.22, ao: [0, 0, 0], aoK: 0.5,
+      stage: 'light', rampAt: [0.3, 0.62], litTo: [130, 136, 148],
+      body: [58, 63, 73], shade: [32, 35, 41], deepTo: [6, 7, 9], deepK: 0.5, lit: [130, 136, 148],
+      spec: [182, 188, 200], specK: 0.55, shin: 14, rimK: 0.18, rimW: 0.35, rimS: 0.75, rimD: 0.0055,
+      far: [236, 234, 228], farK: 0.2, farDim: 0.02, ao: [0, 0, 0], aoK: 0.5,
       shadow: [44, 38, 30], shadowK: 0.62, floor: [0, 0, 0], floorK: 0.03, pool: 0, sweep: 0.4
     }
   };
@@ -1199,25 +1206,44 @@
     return g;
   }
 
-  // Studio body: radii in body units (start, end); per-group draw lists.
-  var ST_ARM = { up: [0.041, 0.0285], fore: [0.0285, 0.0205], hand: [0.0195, 0.016] };
-  var ST_LEG = { thigh: [0.056, 0.038], knee: 0.0375, calf: 0.0415, calfAt: 0.27, ankle: 0.0235 };
+  // Studio body: radii in body units. Limbs are built like an artist's mannequin: a piece
+  // ends in a ball joint shaded with that piece, and the next piece starts flat inside the
+  // ball, so no round end is drawn over the piece before it (only the thigh's rounded top,
+  // the hip, sits over the pelvis).
+  //   arm: deltoid ball (and how far below / inside the shoulder joint it sits), upper arm
+  //        (start, end), elbow ball, forearm (start, end), wrist ball, hand [wrist, palm
+  //        wide, palm thin (a flat mitten, as wide as it looks from its angle), fingertip],
+  //        palm station along the hand;
+  //   leg: thigh top (the hip; and how far inside the joint), thigh end, knee ball, shin
+  //        start, calf (at calfAt along the shin), ankle ball.
+  var ST_ARM = { delt: 0.042, deltDown: 0.026, deltIn: 0.004, up: [0.035, 0.0272], elbow: 0.029, fore: [0.0268, 0.0178],
+    wrist: 0.0178, hand: [0.0152, 0.0245, 0.0125, 0.0185], palmAt: 0.5 };
+  var ST_LEG = { hip: 0.063, hipIn: 0.008, thigh: 0.0375, knee: 0.039, shin: 0.0352, calf: 0.0385, calfAt: 0.28, ankle: 0.0228 };
+  var ST_NECK = [0.04, 0.036]; // base, top
+  var ST_PELVIS = [0.082, 0.05, 0.05, 0.016]; // ellipsoid semi-axes: side, forward, up; lift of its centre
+  // head: centre offset up / forward from the head joint, cranium semi-axes (up, forward,
+  // side), jaw [forward, up offset from the cranium centre, semi-axes up, forward, side]
+  var ST_HEAD = { up: 0.006, fwd: 0.014, skull: [0.069, 0.061, 0.053], jaw: [0.026, -0.04, 0.032, 0.034, 0.04] };
   var TORSO = [ // anchor (0 pelvis+u1*o | 1 chest+u2*o), o, half-width (R), half-depth (F), forward, hips->shoulders blend
     [0, 0.0, 0.092, 0.066, -0.008, 0],
     [0, 0.08, 0.074, 0.054, 0.004, 0.4],
     [1, 0.0, 0.093, 0.062, 0.012, 0.8],
     [1, 0.064, 0.106, 0.067, 0.016, 1],
-    [1, 0.124, 0.109, 0.056, 0.006, 1],
-    [1, 0.158, 0.05, 0.042, 0.0, 1]
+    [1, 0.14, 0.106, 0.056, 0.006, 1],
+    [1, 0.166, 0.058, 0.044, 0.0, 1]
   ];
   // Occlusion silhouettes (rough) per group, for the soft shadow a near part casts on what is behind it.
+  // (H: the head, a draw group of its own (see _stOrder) whose shadow goes with the torso's.)
   var ST_OCC = {
-    T: [[PELVIS, CHEST, 0.075, 0.08], [CHEST, NECK, 0.085, 0.06], [NECK, HEAD, 0.03, 0.062]],
-    AL: [[SHL, ELL, 0.041, 0.029], [ELL, WRL, 0.029, 0.021], [WRL, HAL, 0.02, 0.016]],
-    AR: [[SHR, ELR, 0.041, 0.029], [ELR, WRR, 0.029, 0.021], [WRR, HAR, 0.02, 0.016]],
-    LL: [[HIPL, KNL, 0.056, 0.038], [KNL, ANL, 0.041, 0.024], [ANL, TOL, 0.025, 0.014]],
-    LR: [[HIPR, KNR, 0.056, 0.038], [KNR, ANR, 0.041, 0.024], [ANR, TOR, 0.025, 0.014]]
+    T: [[PELVIS, CHEST, 0.075, 0.08], [CHEST, NECK, 0.085, 0.06]],
+    H: [[NECK, HEAD, 0.036, 0.066]],
+    AL: [[SHL, ELL, 0.04, 0.029], [ELL, WRL, 0.028, 0.019], [WRL, HAL, 0.02, 0.018]],
+    AR: [[SHR, ELR, 0.04, 0.029], [ELR, WRR, 0.028, 0.019], [WRR, HAR, 0.02, 0.018]],
+    LL: [[HIPL, KNL, 0.06, 0.039], [KNL, ANL, 0.039, 0.023], [ANL, TOL, 0.025, 0.014]],
+    LR: [[HIPR, KNR, 0.06, 0.039], [KNR, ANR, 0.039, 0.023], [ANR, TOR, 0.025, 0.014]]
   };
+  // Joints of each limb group, root to tip (for the head's depth sort and bounding boxes).
+  var ST_CHAIN = { AL: [SHL, ELL, WRL, HAL], AR: [SHR, ELR, WRR, HAR], LL: [HIPL, KNL, ANL, TOL], LR: [HIPR, KNR, ANR, TOR] };
   // Contact-shadow samples: [joint a, joint b, t, clearance radius]
   var ST_SHADOW = [[HEAD, HEAD, 0, 0.062], [PELVIS, PELVIS, 0, 0.07], [PELVIS, CHEST, 0.5, 0.066], [CHEST, CHEST, 0, 0.07],
     [CHEST, NECK, 0.6, 0.066], [NECK, HEAD, 0.4, 0.04]];
@@ -1258,7 +1284,9 @@
     var M = this._M || (this._M = {}), mat = this.mat;
     M.ramp = mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
     M.rimC = mix(this.c1, WHITE, mat.rimW);
-    M.rimK = mat.rimK * (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash) * (this.low ? (mat.lowRim || 0.45) : 1);
+    M.rimE = (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash); // energy + cue flare
+    M.acc1 = mix(this.c1, this.c2, 0.25); M.acc2 = mix(this.c2, this.c1, 0.2); // wristbands, soles
+    M.rimK = mat.rimK * M.rimE * (this.low ? (mat.lowRim || 0.45) : 1);
     M.rimPow = mat.rimPow || 8;
     M.spec2 = mat.spec2; M.spec2K = mat.spec2K || 0; M.shin2 = mat.shin2 || 1;
     M.rim2 = mat.rim2; M.rim2K = (mat.rim2K || 0) * (this.low ? 0.8 : 1); M.rim2Pow = mat.rim2Pow || 6;
@@ -1282,24 +1310,121 @@
     var P = this.cur, m = this.meta, low = this.low, mat = this.mat;
     var M = this._stState();
     var ex = (this.morphT < 0.5 && this.fromEx) ? this.fromEx : this.ex;
-    var order = orderOf(ex, ex === this.ex ? phaseOf(ex, this.time) : this.fromP);
+    var order = this._stOrder(orderOf(ex, ex === this.ex ? phaseOf(ex, this.time) : this.fromP), P, M);
+    var box = this._box || (this._box = [0, 0, 0, 0]); // screen box of what is drawn so far
+    box[0] = box[1] = 1e9; box[2] = box[3] = -1e9;
     for (var gi = 0; gi < order.length; gi++) {
-      var g = order[gi], far = g === 'T' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
-      if (!low && gi > 0) this._stOcclude(ctx, g, P, M);
+      var g = order[gi], far = g === 'T' || g === 'H' ? 0 : (g[1] === 'L' ? m.farL : m.farR);
+      // soft shadow of this part on what is behind it (the head's always goes with the
+      // torso's, so moving the head in the order never changes the shading)
+      if (!low && gi > 0 && g !== 'H') this._stOcclude(ctx, g, P, M, box);
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
-      M.far = far * mat.farK; M.dim = 1 - 0.12 * far;
+      M.far = far * mat.farK; M.dim = 1 - (mat.farDim === undefined ? 0.12 : mat.farDim) * far;
       if (g === 'T') this._stTorso(ctx, P, M);
+      else if (g === 'H') this._stHead(ctx, P, M);
       else if (g[0] === 'A') this._stArm(ctx, g[1], P, M);
       else this._stLeg(ctx, g[1], P, M);
+      if (!low) growBox(box, P, g, M.sc);
     }
     M.far = 0; M.dim = 1;
+    if (!low) this._stRim(ctx, M, box);
     if (this.ring >= 0 && !low) this._stSweep(ctx, P, M);
     ctx.globalCompositeOperation = 'destination-over';
     this._stGround(ctx, P, M);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
   };
+
+  // Draw order with the head as its own group 'H': straight after the torso, but after any
+  // later limb group that it overlaps on screen and that lies behind it there (in shoulder
+  // taps the far arm is drawn after the torso, yet the head is in front of it).
+  FP._stOrder = function (order, P, M) {
+    var out = this._ord || (this._ord = []), n = order.length, t = -1, pos, i, k;
+    for (i = 0; i < n; i++) if (order[i] === 'T') t = i;
+    pos = t;
+    var hx = P[HEAD * 3], hy = P[HEAD * 3 + 1], hz = P[HEAD * 3 + 2], sc = M.sc;
+    for (i = t + 1; i < n; i++) {
+      var C = ST_CHAIN[order[i]];
+      if (!C) continue;
+      // closest point of the limb's bones to the head centre on screen
+      var best = 1e9, bz = 0, reach = (0.085 + (order[i][0] === 'L' ? 0.065 : 0.045)) * sc;
+      for (k = 0; k < 3; k++) {
+        var a = C[k] * 3, b = C[k + 1] * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], dd = dx * dx + dy * dy;
+        var u = dd > 1e-9 ? clamp(((hx - P[a]) * dx + (hy - P[a + 1]) * dy) / dd, 0, 1) : 0;
+        var ex = P[a] + dx * u - hx, ey = P[a + 1] + dy * u - hy, d2 = ex * ex + ey * ey;
+        if (d2 < best) { best = d2; bz = lerp(P[a + 2], P[b + 2], u); }
+      }
+      if (best < reach * reach && bz < hz - 0.02) pos = i;
+    }
+    out.length = 0;
+    for (i = 0; i < n; i++) {
+      out.push(order[i]);
+      if (i === pos) out.push('H');
+    }
+    if (t < 0) out.push('H');
+    return out;
+  };
+
+  // Grow the screen box b [x0, y0, x1, y1] by draw group g.
+  function growBox(b, P, g, sc) {
+    var C = ST_CHAIN[g], i, j, r;
+    if (C) { r = 0.07 * sc; for (i = 0; i < 4; i++) { j = C[i] * 3; boxPt(b, P[j], P[j + 1], r); } return; }
+    if (g === 'H') { boxPt(b, P[HEAD * 3], P[HEAD * 3 + 1], 0.085 * sc); return; }
+    r = 0.13 * sc;
+    boxPt(b, P[PELVIS * 3], P[PELVIS * 3 + 1], r); boxPt(b, P[CHEST * 3], P[CHEST * 3 + 1], r); boxPt(b, P[NECK * 3], P[NECK * 3 + 1], r);
+  }
+  function boxPt(b, x, y, r) {
+    if (x - r < b[0]) b[0] = x - r; if (y - r < b[1]) b[1] = y - r;
+    if (x + r > b[2]) b[2] = x + r; if (y + r > b[3]) b[3] = y + r;
+  }
+
+  // Rim light on the silhouette only: the figure's coverage minus the same coverage moved
+  // toward the rim light leaves a thin band along the outer edges that face it (wide where
+  // an edge faces the light, vanishing where it turns away). It is built in a buffer at the
+  // backing store's resolution (1:1 copies, no resampling: cheap and crisp) and laid over
+  // the body with source-atop, so where parts overlap there is no edge and no coloured line.
+  FP._stRim = function (ctx, M, box) {
+    var mat = this.mat, a = clamp((mat.rimS || 0) * M.rimE, 0, 1);
+    if (a < 0.02 || !(box[2] > box[0])) return;
+    var rb = this._buf('rbuf');
+    if (!rb) return;
+    var dpr = this.dpr, cv = this.canvas, d = Math.max((mat.rimD || 0.006) * M.sc, 1.4) * dpr; // device px
+    var x0 = Math.max(0, Math.floor(box[0] * dpr)), y0 = Math.max(0, Math.floor(box[1] * dpr));
+    var x1 = Math.min(cv.width, Math.ceil(box[2] * dpr)), y1 = Math.min(cv.height, Math.ceil(box[3] * dpr));
+    var w = x1 - x0, h = y1 - y0;
+    if (w <= 0 || h <= 0) return;
+    var c = rb.c, x = rb.x;
+    if (c.width < w || c.height < h) { c.width = Math.max(c.width, w); c.height = Math.max(c.height, h); }
+    var rl = Math.sqrt(RIMX * RIMX + RIMY * RIMY), ux = Math.round(RIMX / rl * d), uy = Math.round(-RIMY / rl * d);
+    var hx = Math.round(RIMX / rl * d * 0.45), hy = Math.round(-RIMY / rl * d * 0.45);
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.globalCompositeOperation = 'copy';
+    x.globalAlpha = 1;
+    x.fillStyle = rgba(M.rimC);
+    x.fillRect(0, 0, w, h);
+    // full strength near the edge, half strength further in: a light that fades inward
+    x.globalCompositeOperation = 'destination-out';
+    blit(x, cv, x0 + ux, y0 + uy, w, h);
+    x.globalAlpha = 0.5;
+    blit(x, cv, x0 + hx, y0 + hy, w, h);
+    x.globalAlpha = 1;
+    x.globalCompositeOperation = 'source-over';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = a;
+    ctx.drawImage(c, 0, 0, w, h, x0, y0, w, h);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  };
+
+  // Copy the w x h region of canvas src at (sx, sy) to (0, 0) of context x, 1:1, clipped to
+  // src (a source rectangle outside the image is not drawn at all by some older engines).
+  function blit(x, src, sx, sy, w, h) {
+    var a = Math.max(0, sx), b = Math.max(0, sy), c = Math.min(src.width, sx + w), d = Math.min(src.height, sy + h);
+    if (c > a && d > b) x.drawImage(src, a, b, c - a, d - b, a - sx, b - sy, c - a, d - b);
+  }
 
   // depth-scaled radius (near parts slightly larger, as in the projection)
   function rz(M, P, i, r) { return r * M.rk * (1 + (P[i * 3 + 2] - M.zRef) / PERSP); }
@@ -1311,46 +1436,127 @@
     piece(ctx, ax, ay, ra, bx, by, rb, cap);
     ctx.fill();
   };
-  // segment between joints i -> j with radii (body units)
-  FP._stBone = function (ctx, M, P, i, j, r1, r2) {
-    this._stCap(ctx, M, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], rz(M, P, i, r1), P[j * 3], P[j * 3 + 1], P[j * 3 + 2], rz(M, P, j, r2), 3);
+  // Depth slope of bone i -> j: depth change per unit of screen length (camera units).
+  function slope(P, i, j, sc) {
+    var a = i * 3, b = j * 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], l = Math.sqrt(dx * dx + dy * dy) / sc;
+    return clamp((P[b + 2] - P[a + 2]) / Math.max(l, 1e-4), -4, 4);
+  }
+  // Two bones meeting at a joint are shaded as if their tilt toward the viewer were partly
+  // shared (JOINT_BLEND), so the light changes by a smaller step across a knee or elbow
+  // (a real limb's shading turns smoothly there).
+  var JOINT_BLEND = 0.35;
+
+  // A limb piece from (ax, ay) to joint j: path radii ri -> rj (flat ends), plus ball joints
+  // of radius bi at the start and bj at j (0 = none), filled once with one gradient (gi,
+  // gj = the radii the shading spans; sl = depth slope used for the shading), so the balls
+  // read as the piece's own rounded ends. Radii are in pixels (see rz).
+  FP._stPiece = function (ctx, M, P, ax, ay, j, ri, rj, bi, bj, gi, gj, sl) {
+    var b = j * 3, dx = P[b] - ax, dy = P[b + 1] - ay;
+    ctx.fillStyle = cylGrad(ctx, M, ax, ay, gi, P[b], P[b + 1], gj, dx, -dy, sl * Math.sqrt(dx * dx + dy * dy));
+    ctx.beginPath();
+    piece(ctx, ax, ay, ri, P[b], P[b + 1], rj, 0);
+    if (bi > 0) circle(ctx, ax, ay, bi);
+    if (bj > 0) circle(ctx, P[b], P[b + 1], bj);
+    ctx.fill();
   };
 
   FP._stArm = function (ctx, s, P, M) {
-    var sh = s === 'L' ? SHL : SHR, el = sh + 1, wr = sh + 2, ha = sh + 3;
-    this._stBone(ctx, M, P, sh, el, ST_ARM.up[0], ST_ARM.up[1]);
-    this._stBone(ctx, M, P, el, wr, ST_ARM.fore[0], ST_ARM.fore[1]);
-    this._stBone(ctx, M, P, wr, ha, ST_ARM.hand[0], ST_ARM.hand[1]);
-    if (M.low) return;
-    // accent wristband
-    var t0 = 0.74, t1 = 0.9, e = el * 3, w = wr * 3;
-    var x0 = lerp(P[e], P[w], t0), y0 = lerp(P[e + 1], P[w + 1], t0), z0 = lerp(P[e + 2], P[w + 2], t0);
-    var x1 = lerp(P[e], P[w], t1), y1 = lerp(P[e + 1], P[w + 1], t1), z1 = lerp(P[e + 2], P[w + 2], t1);
-    var r0 = rz(M, P, el, lerp(ST_ARM.fore[0], ST_ARM.fore[1], t0)) * 1.07, r1 = rz(M, P, wr, lerp(ST_ARM.fore[0], ST_ARM.fore[1], t1)) * 1.07;
-    this._stCap(ctx, M, x0, y0, z0, r0, x1, y1, z1, r1, 0, mix(this.c1, this.c2, 0.25));
+    var sh = s === 'L' ? SHL : SHR, el = sh + 1, wr = sh + 2, A = ST_ARM, sc = M.sc, k = JOINT_BLEND;
+    var s3 = sh * 3, o3 = (s === 'L' ? SHR : SHL) * 3, n3 = NECK * 3, c3 = CHEST * 3;
+    var su = slope(P, sh, el, sc), sf = slope(P, el, wr, sc);
+    // upper arm: deltoid ball, tapering arm, elbow ball. The ball sits below and a little
+    // inside the joint, so its top meets the trapezius instead of standing up like an
+    // epaulette; less so as the arm rises (cos of the arm to the spine, 1 = hanging).
+    var e3 = el * 3, sx = P[c3] - P[n3], sy = P[c3 + 1] - P[n3 + 1], sz = P[c3 + 2] - P[n3 + 2];
+    var hang = ((P[e3] - P[s3]) * sx + (P[e3 + 1] - P[s3 + 1]) * sy) / (sc * sc) + (P[e3 + 2] - P[s3 + 2]) * sz;
+    hang = clamp(0.5 + 0.5 * hang / (B.uarm * B.sp2), 0, 1);
+    var dk = A.deltDown * hang / B.sp2, ik = A.deltIn / (2 * B.shw);
+    var bx = P[s3] + (P[c3] - P[n3]) * dk + (P[o3] - P[s3]) * ik, by = P[s3 + 1] + (P[c3 + 1] - P[n3 + 1]) * dk + (P[o3 + 1] - P[s3 + 1]) * ik;
+    var rd = rz(M, P, sh, A.delt), re = rz(M, P, el, A.elbow);
+    this._stPiece(ctx, M, P, bx, by, el, rz(M, P, sh, A.up[0]), rz(M, P, el, A.up[1]), rd, re, rd, re, lerp(su, sf, k));
+    // forearm: starts flat inside the elbow ball, ends in the wrist ball
+    var f0 = rz(M, P, el, A.fore[0]), f1 = rz(M, P, wr, A.fore[1]), e = el * 3, w = wr * 3;
+    this._stPiece(ctx, M, P, P[e], P[e + 1], wr, f0, f1, 0, rz(M, P, wr, A.wrist), f0, f1, lerp(sf, su, k));
+    if (!M.low) { // accent wristband
+      var t0 = 0.74, t1 = 0.9;
+      var x0 = lerp(P[e], P[w], t0), y0 = lerp(P[e + 1], P[w + 1], t0), z0 = lerp(P[e + 2], P[w + 2], t0);
+      var x1 = lerp(P[e], P[w], t1), y1 = lerp(P[e + 1], P[w + 1], t1), z1 = lerp(P[e + 2], P[w + 2], t1);
+      this._stCap(ctx, M, x0, y0, z0, lerp(f0, f1, t0) * 1.08, x1, y1, z1, lerp(f0, f1, t1) * 1.08, 0, M.acc1);
+    }
+    this._stHand(ctx, s, P, M);
+  };
+
+  // Hand: a flat mitten (narrow wrist, wide palm, rounded fingertips). Its width on screen
+  // follows how the palm is turned: the palm faces away from the bend of the wrist (a
+  // planted hand faces the floor), or the body's side when the wrist is straight; the two
+  // estimates are blended by how much the wrist bends.
+  function palmHalf(A, hx, hy, hz, nx, ny, nz, px, py) {
+    var l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (l < 1e-6) return A[1];
+    nx /= l; ny /= l; nz /= l;
+    var wx = hy * nz - hz * ny, wy = hz * nx - hx * nz; // wide axis = hand x palm normal
+    return Math.sqrt(sq(A[1] * (wx * px + wy * py)) + sq(A[2] * (nx * px + ny * py)));
+  }
+  FP._stHand = function (ctx, s, P, M) {
+    var sh = s === 'L' ? SHL : SHR, el = sh + 1, wr = sh + 2, ha = sh + 3, A = ST_ARM.hand, sc = M.sc;
+    var e3 = el * 3, w3 = wr * 3, h3 = ha * 3, k;
+    var hx = (P[h3] - P[w3]) / sc, hy = -(P[h3 + 1] - P[w3 + 1]) / sc, hz = P[h3 + 2] - P[w3 + 2];
+    var hl = Math.sqrt(hx * hx + hy * hy + hz * hz) || 1;
+    hx /= hl; hy /= hl; hz /= hl;
+    var pl = Math.sqrt(hx * hx + hy * hy), px = pl > 1e-4 ? -hy / pl : 1, py = pl > 1e-4 ? hx / pl : 0; // screen normal of the axis
+    var half = A[1];
+    if (!M.low) {
+      var fx = (P[w3] - P[e3]) / sc, fy = -(P[w3 + 1] - P[e3 + 1]) / sc, fz = P[w3 + 2] - P[e3 + 2];
+      k = fx * hx + fy * hy + fz * hz; fx -= k * hx; fy -= k * hy; fz -= k * hz; // forearm off the hand axis
+      var r3 = SHR * 3, l3 = SHL * 3, rx = (P[r3] - P[l3]) / sc, ry = -(P[r3 + 1] - P[l3 + 1]) / sc, rzz = P[r3 + 2] - P[l3 + 2];
+      k = rx * hx + ry * hy + rzz * hz; rx -= k * hx; ry -= k * hy; rzz -= k * hz; // shoulder line off it
+      var w = clamp((Math.sqrt(fx * fx + fy * fy + fz * fz) / B.farm - 0.12) / 0.3, 0, 1);
+      half = lerp(palmHalf(A, hx, hy, hz, rx, ry, rzz, px, py), palmHalf(A, hx, hy, hz, fx, fy, fz, px, py), w);
+      half = lerp(half, A[1], 0.5); // seen edge-on a hand still shows its thumb: keep it legible
+    }
+    var zk = M.rk * (1 + (P[w3 + 2] - M.zRef) / PERSP);
+    var rw = A[0] * zk, rp = Math.max(half, A[0] * 1.05) * zk, rt = Math.min(rp, A[3] * zk);
+    var t = ST_ARM.palmAt, kx = lerp(P[w3], P[h3], t), ky = lerp(P[w3 + 1], P[h3 + 1], t);
+    ctx.fillStyle = cylGrad(ctx, M, P[w3], P[w3 + 1], rp, P[h3], P[h3 + 1], rp, hx, hy, hz);
+    ctx.beginPath();
+    piece(ctx, P[w3], P[w3 + 1], rw, kx, ky, rp, 0);
+    piece(ctx, kx, ky, rp, P[h3], P[h3 + 1], rt, 2);
+    ctx.fill();
   };
 
   FP._stLeg = function (ctx, s, P, M) {
-    var hip = s === 'L' ? HIPL : HIPR, kn = hip + 1, an = hip + 2, sc = M.sc;
-    this._stBone(ctx, M, P, hip, kn, ST_LEG.thigh[0], ST_LEG.thigh[1]);
-    // shin with a calf swell: two flat-joined pieces sharing the calf station
-    var k = kn * 3, a = an * 3, t = ST_LEG.calfAt;
-    var cx = lerp(P[k], P[a], t), cy = lerp(P[k + 1], P[a + 1], t);
-    var rk = rz(M, P, kn, ST_LEG.knee), rc = rz(M, P, kn, ST_LEG.calf), ra = rz(M, P, an, ST_LEG.ankle);
-    var dx = P[a] - P[k], dy = P[a + 1] - P[k + 1], dl = Math.sqrt(dx * dx + dy * dy) || 1, ov = 0.6 / dl;
+    var hip = s === 'L' ? HIPL : HIPR, kn = hip + 1, an = hip + 2, sc = M.sc, L = ST_LEG;
+    var st = slope(P, hip, kn, sc), ss = slope(P, kn, an, sc), sl;
+    // thigh: rounded top (the hip, centred a little inside the joint so the hips are not
+    // wider than the pelvis), tapering to the knee ball
+    var rh = rz(M, P, hip, L.hip), rk = rz(M, P, kn, L.knee), h = hip * 3, k = kn * 3, a = an * 3, p3 = PELVIS * 3;
+    var hin = L.hipIn / B.hipw;
+    var hx = P[h] + (P[p3] - P[h]) * hin, hy = P[h + 1] + (P[p3 + 1] - P[h + 1]) * hin;
+    var dx = P[k] - hx, dy = P[k + 1] - hy;
+    sl = lerp(st, ss, JOINT_BLEND);
+    ctx.fillStyle = cylGrad(ctx, M, hx, hy, rh, P[k], P[k + 1], rk, dx, -dy, sl * Math.sqrt(dx * dx + dy * dy));
+    ctx.beginPath();
+    piece(ctx, hx, hy, rh, P[k], P[k + 1], rz(M, P, kn, L.thigh), 1);
+    circle(ctx, P[k], P[k + 1], rk);
+    ctx.fill();
+    // shin: starts flat inside the knee ball, swells at the calf, ends in the ankle ball
+    var t = L.calfAt, cx = lerp(P[k], P[a], t), cy = lerp(P[k + 1], P[a + 1], t);
+    var r0 = rz(M, P, kn, L.shin), rc = rz(M, P, kn, L.calf), ra = rz(M, P, an, L.ankle);
+    dx = P[a] - P[k]; dy = P[a + 1] - P[k + 1];
+    var dl = Math.sqrt(dx * dx + dy * dy) || 1, ov = 0.6 / dl, vz = lerp(ss, st, JOINT_BLEND) * dl;
     if (dl > rc) {
-      var vx = dx / sc, vy = -dy / sc, vz = P[a + 2] - P[k + 2];
-      ctx.fillStyle = cylGrad(ctx, M, P[k], P[k + 1], rk, cx, cy, rc, vx, vy, vz);
-      ctx.beginPath(); piece(ctx, P[k], P[k + 1], rk, cx + dx * ov, cy + dy * ov, rc, 1); ctx.fill();
-      ctx.fillStyle = cylGrad(ctx, M, cx, cy, rc, P[a], P[a + 1], ra, vx, vy, vz);
+      ctx.fillStyle = cylGrad(ctx, M, P[k], P[k + 1], r0, cx, cy, rc, dx, -dy, vz);
+      ctx.beginPath(); piece(ctx, P[k], P[k + 1], r0, cx + dx * ov, cy + dy * ov, rc, 0); ctx.fill();
+      ctx.fillStyle = cylGrad(ctx, M, cx, cy, rc, P[a], P[a + 1], ra, dx, -dy, vz);
       ctx.beginPath(); piece(ctx, cx, cy, rc, P[a], P[a + 1], ra, 2); ctx.fill();
     } else {
-      this._stBone(ctx, M, P, kn, an, ST_LEG.calf, ST_LEG.ankle);
+      this._stPiece(ctx, M, P, P[k], P[k + 1], an, rc, ra, 0, ra, rc, ra, ss);
     }
     this._stFoot(ctx, s, P, M);
   };
 
-  // Sneaker-like foot: heel->toe capsule + instep, accent sole.
+  // Sneaker-like foot: heel->toe capsule + instep over an accent midsole (a slightly larger
+  // copy pushed toward the sole and drawn first, so only its edge shows).
   FP._stFoot = function (ctx, s, P, M) {
     var kn = s === 'L' ? KNL : KNR, an = kn + 1, to = kn + 2, sc = M.sc;
     var A = [P[an * 3] / sc, -P[an * 3 + 1] / sc, P[an * 3 + 2]];
@@ -1366,10 +1572,9 @@
     function cap(p, r, q, r2, acc) {
       self._stCap(ctx, M, p[0] * sc, -p[1] * sc, p[2], r * M.rk * z, q[0] * sc, -q[1] * sc, q[2], r2 * M.rk * z, 3, acc);
     }
+    if (!M.low) cap(addS(heel, fd, 0.006), 0.0255, addS(toe, fd, 0.006), 0.0155, M.acc2);
     cap(heel, 0.0225, toe, 0.0125);
     cap(ins0, 0.024, ins1, 0.0185);
-    if (M.low) return;
-    cap(addS(heel, fd, 0.0155), 0.0072, addS(toe, fd, 0.0062), 0.0062, mix(this.c2, this.c1, 0.2));
   };
 
   FP._stTorso = function (ctx, P, M) {
@@ -1401,10 +1606,11 @@
     }
     for (i = 0; i < n; i++) V.push(Lp[i]);
     for (i = n - 1; i >= 0; i--) V.push(Rp[i]);
-    // neck first (the torso's trapezius slope overlaps its base), then torso, then head
+    // neck first (the torso's trapezius slope overlaps its base); the head is drawn as
+    // its own group (_stOrder)
     var nb = addS(nek, u2, -0.03);
-    var nt = add(nek, mul(sub(hd, nek), 0.55));
-    this._stCap(ctx, M, nb[0] * sc, -nb[1] * sc, nb[2], rz(M, P, NECK, 0.033), nt[0] * sc, -nt[1] * sc, nt[2], rz(M, P, NECK, 0.029), 3);
+    var nt = add(nek, mul(sub(hd, nek), 0.6));
+    this._stCap(ctx, M, nb[0] * sc, -nb[1] * sc, nb[2], rz(M, P, NECK, ST_NECK[0]), nt[0] * sc, -nt[1] * sc, nt[2], rz(M, P, NECK, ST_NECK[1]), 3);
     function outline() {
       var N = V.length, q0 = V[N - 1], q1;
       ctx.moveTo((q0[0] + V[0][0]) / 2, (q0[1] + V[0][1]) / 2);
@@ -1417,8 +1623,8 @@
     // pelvis: an ellipsoid, so hips and seat are rounded from every camera angle; the
     // loft above it starts exactly at its widest section (station 0) and matches its shading
     var Fh = norm(cross(u1, Rh)), Rh2 = cross(Fh, u1), zk = 1 + (pel[2] - M.zRef) / PERSP;
-    var pc = addS(addS(pel, Fh, -0.008), u1, 0.01);
-    var pe = projEllipse([mul(Rh2, 0.09), mul(Fh, 0.062), mul(u1, 0.058)], sc * zk * (M.low ? 1.06 : 1));
+    var pc = addS(addS(pel, Fh, -0.004), u1, ST_PELVIS[3]);
+    var pe = projEllipse([mul(Rh2, ST_PELVIS[0]), mul(Fh, ST_PELVIS[1]), mul(u1, ST_PELVIS[2])], sc * zk * (M.low ? 1.06 : 1));
     var pw = Math.sqrt(sq(Lp[0][0] - Rp[0][0]) + sq(Lp[0][1] - Rp[0][1])) / 2;
     var ppx = pc[0] * sc, ppy = -pc[1] * sc, uu = sub(che, pel);
     var ux = uu[0] * sc, uy = -uu[1] * sc, ul = Math.sqrt(ux * ux + uy * uy) || 1;
@@ -1464,29 +1670,51 @@
         ctx.restore();
       }
     }
-    this._stHead(ctx, P, M);
   };
 
+  // Ellipse through 2D semi-axis vectors (x0, y0), (x1, y1), (x2, y2): o = [th, rx, ry].
+  function ell2(o, x0, y0, x1, y1, x2, y2) {
+    var sxx = x0 * x0 + x1 * x1 + x2 * x2, sxy = x0 * y0 + x1 * y1 + x2 * y2, syy = y0 * y0 + y1 * y1 + y2 * y2;
+    var mid = (sxx + syy) / 2, dd = Math.sqrt(Math.max(0, (sxx - syy) * (sxx - syy) / 4 + sxy * sxy));
+    o[0] = 0.5 * Math.atan2(2 * sxy, sxx - syy); o[1] = Math.sqrt(mid + dd); o[2] = Math.sqrt(Math.max(1e-9, mid - dd));
+    return o;
+  }
+
+  // Head: an ellipsoid cranium set a little forward of the neck, plus a small jaw below and
+  // in front of it so the facing reads in profile. Both are one outline, shaded as one
+  // sphere: diffuse along the light, darker toward the edge away from it, a soft highlight.
+  // (The rim light is the silhouette pass.)
   FP._stHead = function (ctx, P, M) {
-    var sc = M.sc, i;
+    var sc = M.sc, i, Q = ST_HEAD;
     function cam(j) { return [P[j * 3] / sc, -P[j * 3 + 1] / sc, P[j * 3 + 2]]; }
     var hd = cam(HEAD), nk = cam(NECK), fc = cam(FACE);
     var u3 = norm(sub(hd, nk)), F = sub(fc, hd);
     F = sub(F, mul(u3, dot(F, u3)));
     F = len(F) > 1e-4 ? norm(F) : norm(cross(u3, [0, 0, 1]));
     var R = cross(F, u3);
-    var c = addS(addS(hd, u3, 0.006), F, 0.004), z = 1 + (hd[2] - M.zRef) / PERSP;
-    var e = projEllipse([mul(u3, 0.069), mul(F, 0.061), mul(R, 0.053)], sc * z);
-    var x = c[0] * sc, y = -c[1] * sc, th = e.th, rx = e.rx, ry = e.ry;
-    // work in the ellipse's unit-circle frame; screen directions mapped into it
-    var ct = Math.cos(th), st = Math.sin(th);
+    var z = 1 + (hd[2] - M.zRef) / PERSP, k = sc * z, A = Q.skull, J = Q.jaw;
+    var e = projEllipse([mul(u3, A[0]), mul(F, A[1]), mul(R, A[2])], k);
+    var x = (hd[0] + (u3[0] * Q.up + F[0] * Q.fwd) * z) * sc, y = -(hd[1] + (u3[1] * Q.up + F[1] * Q.fwd) * z) * sc;
+    var th = e.th, rx = e.rx, ry = e.ry, ct = Math.cos(th), st = Math.sin(th);
+    // screen vector (dx, dy) in the cranium's unit-circle frame
+    function lx(dx, dy) { return (dx * ct + dy * st) / rx; }
+    function ly(dx, dy) { return (-dx * st + dy * ct) / ry; }
     function local(dx, dy) {
-      var lx = (dx * ct + dy * st) / rx, ly = (-dx * st + dy * ct) / ry, l = Math.sqrt(lx * lx + ly * ly) || 1;
-      return [lx / l, ly / l];
+      var a = lx(dx, dy), b = ly(dx, dy), l = Math.sqrt(a * a + b * b) || 1;
+      return [a / l, b / l];
     }
+    // jaw: centre offset and semi-axes on screen, then into the local frame
+    var ox = (F[0] * J[0] + u3[0] * J[1]) * k, oy = -(F[1] * J[0] + u3[1] * J[1]) * k;
+    var a0x = u3[0] * J[2] * k, a0y = -u3[1] * J[2] * k, a1x = F[0] * J[3] * k, a1y = -F[1] * J[3] * k, a2x = R[0] * J[4] * k, a2y = -R[1] * J[4] * k;
+    var je = ell2(this._je || (this._je = [0, 0, 0]), lx(a0x, a0y), ly(a0x, a0y), lx(a1x, a1y), ly(a1x, a1y), lx(a2x, a2y), ly(a2x, a2y));
+    var jx = lx(ox, oy), jy = ly(ox, oy);
     var L = local(KEY2[0], -KEY2[1]);
     ctx.save();
     ctx.translate(x, y); ctx.rotate(th); ctx.scale(rx, ry);
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.moveTo(jx + je[1] * Math.cos(je[0]), jy + je[1] * Math.sin(je[0]));
+    ctx.ellipse(jx, jy, je[1], je[2], je[0], 0, TAU);
     // 1. diffuse along the light axis (lit edge -> dark edge)
     var g = ctx.createLinearGradient(L[0], L[1], -L[0], -L[1]);
     var S = M.low ? [1, 0.2, -0.8] : [1, 0.75, 0.45, 0.15, -0.15, -0.45, -0.75, -1];
@@ -1497,7 +1725,7 @@
     }
     M.specK = sk; M.spec2K = s2k;
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+    ctx.fill();
     if (!M.low) {
       // 2. silhouette fall-off, strongest away from the light (sphere, not cylinder)
       var o = 0.28, ge = ctx.createRadialGradient(L[0] * o, L[1] * o, 0, L[0] * o, L[1] * o, 1 + o);
@@ -1505,24 +1733,14 @@
       ge.addColorStop(0, rgba(dk, 0)); ge.addColorStop(0.55, rgba(dk, 0)); ge.addColorStop(0.8, rgba(dk, 0.12));
       ge.addColorStop(1, rgba(dk, 0.42));
       ctx.fillStyle = ge;
-      ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      ctx.fill();
       // 3. specular spot
       var H = local(HALFV[0], -HALFV[1]), hl = Math.sqrt(HALFV[0] * HALFV[0] + HALFV[1] * HALFV[1]);
       var hx = H[0] * hl, hy = H[1] * hl, gs = ctx.createRadialGradient(hx, hy, 0, hx, hy, M.spotR);
       gs.addColorStop(0, rgba(M.spec, clamp(0.75 * sk, 0, 1))); gs.addColorStop(0.4, rgba(M.spec, clamp(0.25 * sk, 0, 1)));
       gs.addColorStop(1, rgba(M.spec, 0));
       ctx.fillStyle = gs;
-      ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
-      // 4. rim crescent on the far edge
-      if (M.rimK > 0.01) {
-        var Rd = local(RIMX, -RIMY), ro = 0.22;
-        var gr = ctx.createRadialGradient(-Rd[0] * ro, -Rd[1] * ro, 0, -Rd[0] * ro, -Rd[1] * ro, 1 + ro);
-        var cs = M.rimPow === 8 ? 0.84 : clamp(1 - 0.16 * Math.sqrt(8 / M.rimPow), 0.6, 0.9);
-        gr.addColorStop(0, rgba(M.rimC, 0)); gr.addColorStop(cs, rgba(M.rimC, 0));
-        gr.addColorStop(1, rgba(M.rimC, clamp(0.7 * M.rimK, 0, 1)));
-        ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
-      }
+      ctx.fill();
       if (M.rim2K > 0.01) { // kicker crescent on the key side
         var Kd = local(-RIMX, -RIMY), ko = 0.22;
         var gk = ctx.createRadialGradient(-Kd[0] * ko, -Kd[1] * ko, 0, -Kd[0] * ko, -Kd[1] * ko, 1 + ko);
@@ -1530,7 +1748,7 @@
         gk.addColorStop(0, rgba(M.rim2, 0)); gk.addColorStop(ks, rgba(M.rim2, 0));
         gk.addColorStop(1, rgba(M.rim2, clamp(0.6 * M.rim2K, 0, 1)));
         ctx.fillStyle = gk;
-        ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+        ctx.fill();
       }
     }
     ctx.restore();
@@ -1538,46 +1756,57 @@
 
   // Soft shadow a near part casts on what is already drawn behind it. The part's silhouette
   // is rasterised into a coarse buffer and composited upscaled (= blurred, no filter or
-  // shadowBlur needed) with source-atop, so only body pixels darken. Only its bounding
-  // box is touched.
-  FP._stOcclude = function (ctx, g, P, M) {
-    var L = ST_OCC[g], sc = M.sc, mat = this.mat, i;
+  // shadowBlur needed) with source-atop, so only body pixels darken. Only the overlap of
+  // its bounding box with the box of what is drawn so far (D) is touched. The torso's
+  // shadow includes the head's.
+  FP._stOcclude = function (ctx, g, P, M, D) {
+    var sc = M.sc, mat = this.mat, i, n, L;
     var ob = this._buf('obuf');
     if (!ob) return;
     var cell = clamp(0.016 * sc, 2, 9), b = ob.c, bc = ob.x;
     var bw = Math.ceil(this.W / cell) + 4, bh = Math.ceil(this.H / cell) + 4;
     if (b.width < bw || b.height < bh) { b.width = Math.max(b.width, bw); b.height = Math.max(b.height, bh); }
     var ox = -KEY2[0] * 0.012 * sc, oy = KEY2[1] * 0.012 * sc, grow = 0.006 * sc;
-    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (i = 0; i < L.length; i++) {
-      for (var e = 0; e < 2; e++) {
-        var j = L[i][e] * 3, r = L[i][2 + e] * sc * 1.1 + grow;
-        x0 = Math.min(x0, P[j] - r); x1 = Math.max(x1, P[j] + r); y0 = Math.min(y0, P[j + 1] - r); y1 = Math.max(y1, P[j + 1] + r);
+    var head = g === 'T', x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (n = 0; n < 2; n++) {
+      L = n ? (head ? ST_OCC.H : null) : ST_OCC[g];
+      for (i = 0; L && i < L.length; i++) {
+        for (var e = 0; e < 2; e++) {
+          var j = L[i][e] * 3, r = L[i][2 + e] * sc * 1.1 + grow;
+          x0 = Math.min(x0, P[j] - r); x1 = Math.max(x1, P[j] + r); y0 = Math.min(y0, P[j + 1] - r); y1 = Math.max(y1, P[j + 1] + r);
+        }
       }
     }
+    // the shadow lands offset by (ox, oy) and only darkens what is already drawn
+    var pad = 3 * cell;
+    x0 = Math.max(x0 - pad, D[0] - cell - ox); y0 = Math.max(y0 - pad, D[1] - cell - oy);
+    x1 = Math.min(x1 + pad, D[2] + cell - ox); y1 = Math.min(y1 + pad, D[3] + cell - oy);
     // buffer origin sits 2 cells left/up of the canvas so nothing is clipped at the edges
-    var pad = 3 * cell, o2 = 2 * cell;
-    var bx0 = Math.max(0, Math.floor((x0 - pad + o2) / cell)), by0 = Math.max(0, Math.floor((y0 - pad + o2) / cell));
-    var bx1 = Math.min(b.width, Math.ceil((x1 + pad + o2) / cell)), by1 = Math.min(b.height, Math.ceil((y1 + pad + o2) / cell));
+    var o2 = 2 * cell;
+    var bx0 = Math.max(0, Math.floor((x0 + o2) / cell)), by0 = Math.max(0, Math.floor((y0 + o2) / cell));
+    var bx1 = Math.min(b.width, Math.ceil((x1 + o2) / cell)), by1 = Math.min(b.height, Math.ceil((y1 + o2) / cell));
     if (bx1 <= bx0 || by1 <= by0) return;
     bc.setTransform(1, 0, 0, 1, 0, 0);
     bc.clearRect(0, 0, b.width, b.height);
     bc.setTransform(1 / cell, 0, 0, 1 / cell, 2, 2);
     bc.fillStyle = rgba(mat.ao);
     bc.beginPath();
-    for (i = 0; i < L.length; i++) {
-      var a = L[i][0] * 3, c = L[i][1] * 3;
-      capsule(bc, P[a], P[a + 1], rz(M, P, L[i][0], L[i][2]) + grow, P[c], P[c + 1], rz(M, P, L[i][1], L[i][3]) + grow);
+    for (n = 0; n < 2; n++) {
+      L = n ? (head ? ST_OCC.H : null) : ST_OCC[g];
+      for (i = 0; L && i < L.length; i++) {
+        var a = L[i][0] * 3, c = L[i][1] * 3;
+        capsule(bc, P[a], P[a + 1], rz(M, P, L[i][0], L[i][2]) + grow, P[c], P[c + 1], rz(M, P, L[i][1], L[i][3]) + grow);
+      }
     }
-    if (g === 'T') {
+    if (head) {
       capsule(bc, P[PELVIS * 3], P[PELVIS * 3 + 1], 0.085 * sc, P[NECK * 3], P[NECK * 3 + 1], 0.08 * sc);
-      circle(bc, P[HEAD * 3], P[HEAD * 3 + 1], 0.064 * sc);
+      circle(bc, P[HEAD * 3], P[HEAD * 3 + 1], 0.066 * sc);
     }
     bc.fill();
     ctx.globalCompositeOperation = 'source-atop';
     ctx.globalAlpha = mat.aoK;
     ctx.imageSmoothingEnabled = true;
-    try { ctx.imageSmoothingQuality = 'high'; } catch (err) { /* ignore */ }
+    try { ctx.imageSmoothingQuality = 'low'; } catch (err) { /* ignore */ }
     ctx.drawImage(b, bx0, by0, bx1 - bx0, by1 - by0, bx0 * cell - o2 + ox, by0 * cell - o2 + oy, (bx1 - bx0) * cell, (by1 - by0) * cell);
     ctx.globalAlpha = 1;
   };
