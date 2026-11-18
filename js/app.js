@@ -1657,7 +1657,8 @@
       var vnat = vk === w.vk + 1 || (w.vk >= 0 && vk === w.vk + 2); // a late frame may skip one
       w.vk = vk;
       if (vk >= 0 && vnat && run.playing) {
-        if (vk < cd) A.say(CD_WORDS[cd - 1 - vk]);
+        // a counted move: "…three, two, Begin!" and its count opens on the go with "One"
+        if (vk < cd) A.say(seg.counts && vk === cd - 1 ? 'Begin!' : CD_WORDS[cd - 1 - vk]);
         else { w.said = true; A.say(goWord(seg)); }
       }
     }
