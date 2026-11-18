@@ -64,8 +64,17 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - All instances share one `requestAnimationFrame` loop, which sleeps while no figure needs frames.
 - Warm-up moves stay on the count:
   - `app.js` `warmFigOpts()` passes `setExercise(id, {time, period, ready})`. That gives the move's tempo, plus a count-in that waits in a breathing ready pose until BEGIN.
-  - `update()` re-syncs through `setTime()` when the figure drifts more than 40 ms off the count.
+  - `update()` re-syncs through `setTime(t, ease)` when the figure drifts more than 40 ms off the count. Errors up to about 150 ms glide; bigger ones snap.
 - Exercise changes cross-dissolve over 0.25 s. The stage uses one body scale for every move; the setup hero and the How-to sheet use `fit: 'fill'`.
+- Figure ids differ from workout ids for sided and paced warm-up moves. `app.js` `figIdFor()` and `warmFigId()` map them, e.g. `jog` → `jog-slow`/`jog-quick`, `hamstring` → `hamstring-l`/`-r`.
+- `makeFig()` options:
+  - setup-card thumbnails use `quality: 'low'`, which means 30 fps and thicker limbs;
+  - `clear: [dx, dy, r]` keeps the thumbnail figure out from under the ⓘ badge for the whole cycle;
+  - other figures take `fps` (default 60) and `maxDpr` (default 2).
+- Draw order comes from each exercise's `order`. `_stOrder()` then depth-sorts the two arms, with hysteresis. Don't add phase-dependent order flips (`orderAt`); they made limbs pop in front of each other.
+- Renders are not fully deterministic across sizes or machines:
+  - The silhouette rim pass is skipped below 180 px, and the occlusion pass below 200 px.
+  - A one-way slow-device guard drops the rim, then the occlusion pass, once frames average more than 8 ms. For pixel comparisons on a busy machine, call `HIITFigure._dev.slow(false)` first.
 - Bench: `dev/figure-test.html?sheet=1&style=studio&scheme=light&material=graphite&ph=0,0.25,0.5,0.75` renders a contact sheet of every exercise. Use `&scheme=dark&material=stone&stage=charcoal` for dark.
 - `tests/figure.test.js` checks for duplicate top-level function names, finite poses, no IK clamping, seamless loops and the clock.
 

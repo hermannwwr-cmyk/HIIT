@@ -1517,17 +1517,28 @@
     var dots = $('beats').children;
     for (var i = 0; i < dots.length; i++) { dots[i].classList.toggle('on', i < beat); dots[i].classList.toggle('now', i === beat - 1); }
     var natural = prev != null && bi === prev + 1 && run.playing;
+    // the go: "Begin!" is beat 1, so the coach picks up the count on beat 2
+    if (prev == null && bi === 0 && run.playing && run.warm && run.warm.go) sayLater(countWord(seg, 1), Math.max(0, seg.beat * 1000 - 300));
     if (!natural) return;
+    // the coach counts every beat ("1 2 3 4, 2 2 3 4, …"); under a working voice the ticks
+    // step back so they never talk over it, and carry the rhythm when it can't play
+    var ticks = !A.voiceWorks();
     if (beat === seg.beats) {
-      A.play('beatAccent');
+      if (ticks) A.play('beatAccent');
       bg.beatNow(0.5); ring.beat = 1;
       pulseDigits('tick');
     } else {
-      A.play('beat');
+      if (ticks) A.play('beat');
       bg.beatNow(0.2);
     }
-    // phone speech starts 0.2–0.6 s late: ask for the count word just before its beat
-    if (beat === seg.beats - 1) sayLater(COUNT_WORDS[count - 1], Math.max(0, seg.beat * 1000 - 300));
+    // phone speech starts 0.2–0.6 s late: ask for the next beat's word just before it
+    var nb = bi + 1;
+    if (nb < seg.counts * seg.beats) sayLater(countWord(seg, nb), Math.max(0, seg.beat * 1000 - 300));
+  }
+  /** What the coach says on beat index bi: the count's number on its first beat, then 2, 3, 4. */
+  function countWord(seg, bi) {
+    var count = Math.floor(bi / seg.beats) + 1, beat = bi % seg.beats + 1;
+    return beat === 1 ? cap(COUNT_WORDS[count - 1]) : COUNT_WORDS[beat - 1];
   }
 
   function update() {
