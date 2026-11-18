@@ -1107,7 +1107,6 @@
   var WELCOME = 'Welcome to today\u2019s hit session!';
   // how the coach names a warm-up move, and one short form cue (kept brief: the countdown follows)
   var WARM_SAY = { jog: 'jogging on the spot', pecstretch: 'chest stretch' };
-  var WARM_CUE = { pecstretch: 'Hands behind, chest up.', squat: 'Chest up, sit back.', hamstring: 'Flat back.', calf: 'Back heel down.' };
   /** Was most of the warm-up actually done (not skipped)? */
   function warmedUp() {
     var segs = run.tl.segments, done = 0;
@@ -1124,8 +1123,9 @@
     }
     if (pv.move === seg.move && pv.side !== seg.side) return 'Switch to your ' + seg.side + ' leg.';
     if (pv.move === seg.move) return seg.pace === 'quick' ? 'Quick jog!' : 'Back to an easy jog.'; // pace change, no countdown
+    // "Next warm-up: jumping jacks. Five counts of four." (the form tip is on screen, in the Form card)
     return 'Next warm-up: ' + (WARM_SAY[seg.move] || spoken(seg.move)) + (seg.side ? ', ' + seg.side + ' leg.' : '.') +
-      (WARM_CUE[seg.move] ? ' ' + WARM_CUE[seg.move] : '');
+      (seg.counts ? ' ' + cap(COUNT_WORDS[seg.counts - 1]) + ' counts of ' + COUNT_WORDS[seg.beats - 1] + '.' : '');
   }
   var WARM_WORD = { jacks: 'JACKS', squat: 'SQUATS', pecstretch: 'STRETCH', hamstring: 'STRETCH', calf: 'STRETCH', jog: 'JOG' };
 
@@ -1535,6 +1535,8 @@
     var nb = bi + 1;
     if (nb < seg.counts * seg.beats) sayLater(countWord(seg, nb), Math.max(0, seg.beat * 1000 - 300));
   }
+  /** The word on the go: a counted move starts its count ("One"), a timed one hears "Begin!". */
+  function goWord(seg) { return seg.counts ? countWord(seg, 0) : 'Begin!'; }
   /** What the coach says on beat index bi: the count's number on its first beat, then 2, 3, 4. */
   function countWord(seg, bi) {
     var count = Math.floor(bi / seg.beats) + 1, beat = bi % seg.beats + 1;
@@ -1656,7 +1658,7 @@
       w.vk = vk;
       if (vk >= 0 && vnat && run.playing) {
         if (vk < cd) A.say(CD_WORDS[cd - 1 - vk]);
-        else { w.said = true; A.say('Begin!'); }
+        else { w.said = true; A.say(goWord(seg)); }
       }
     }
     if (t < cs) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
@@ -1699,7 +1701,7 @@
     if (!loud) return;
     // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
     if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
-    else if (!(run.warm && run.warm.said)) A.say('Begin!');
+    else if (!(run.warm && run.warm.said)) A.say(goWord(seg));
     buzz([90, 50, 180]);
     ring.shock(1); ring.hot = 1;
   }

@@ -169,12 +169,12 @@
     { move: 'jog', pace: 'quick', duration: 10 },
     { move: 'jog', pace: 'slow', duration: 10 },
     { move: 'jog', pace: 'quick', duration: 10 },
-    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 8.5 },
+    { move: 'jacks', counts: 5, beats: 4, beat: 0.6, lead: 10 },
     { move: 'pecstretch', counts: 5, beats: 4, beat: 1, lead: 10 },
-    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 9.5 },
-    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'squat', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'hamstring', side: 'left', counts: 5, beats: 4, beat: 1, lead: 11 },
     { move: 'hamstring', side: 'right', counts: 5, beats: 4, beat: 1, lead: 6.5, countdown: 3 },
-    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 10 },
+    { move: 'calf', side: 'left', counts: 5, beats: 4, beat: 1, lead: 11 },
     { move: 'calf', side: 'right', counts: 5, beats: 4, beat: 1, lead: 6.5, countdown: 3 }
   ];
   /** The moving part of a step (without its lead-in). */
