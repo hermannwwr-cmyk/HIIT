@@ -12,10 +12,11 @@
  *   opts: { exercise:'pushup', primary:'#ff2bd6', secondary:'#ffb000', quality:'high'|'low', energy:0..1,
  *           scheme:'dark'|'light', material: preset name, used while the scheme matches its stage,
  *           body, shade (material overrides: lit body colour, core-shadow colour),
- *           fps: frame-rate cap (default 60, 'low' 30), maxDpr: resolution cap (default 3, 'low' 2),
+ *           fps: frame-rate cap (default 60, 'low' 30), maxDpr: resolution cap (default 2),
  *           clear: [dx, dy, r] ('low' only) a circle in from the bottom-right corner to keep the figure out of,
  *           fit: 'shared' (default: one body scale for every move) | 'fill' (each move fills the canvas) }
- *   instance.setExercise(id, {instant, time}) / getTime() / setColors(primary, secondary, instant)
+ *   instance.setExercise(id, {instant, time, period, ready}) / getTime() / setTime(t)
+ *   instance.setColors(primary, secondary, instant)
  *   instance.setPlaying(bool) / setEnergy(x, instant) / pulse() / setSuspended(bool) / destroy()
  *   instance.setStyle(style, scheme[, material]) - switch scheme (and material) live; repaints once, now
  *   instance.setMaterial(name) / getMaterial() - material preset; repaints immediately
@@ -42,7 +43,6 @@
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function sine(t) { return 0.5 - 0.5 * Math.cos(Math.PI * t); }
-  function cubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
   function num(v, d) { v = +v; return isFinite(v) ? v : d; }
   var now = (root.performance && root.performance.now) ? function () { return root.performance.now(); } : function () { return Date.now(); };
 
@@ -350,7 +350,7 @@
   };
 
   EX.jacks = {
-    period: 0.8, cam: { yaw: 90, pitch: 4 }, far: { L: 0, R: 0 }, order: ['T', 'LL', 'LR', 'AL', 'AR'],
+    period: 0.8, cam: { yaw: 90, pitch: 4 }, far: { L: 0, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
     emit: [HAL, HAR, TOL, TOR],
     pose: function (p) {
       var J = {};
@@ -377,7 +377,7 @@
   };
 
   EX.rest = {
-    period: 4.0, cam: { yaw: 58, pitch: 5 }, far: { L: 0.3, R: 0 }, order: ['AL', 'T', 'LL', 'LR', 'AR'],
+    period: 4.0, cam: { yaw: 58, pitch: 5 }, far: { L: 0.3, R: 0 }, order: ['AL', 'LL', 'LR', 'T', 'AR'],
     emit: [HAL, HAR],
     pose: function (p) {
       var J = {};
@@ -636,16 +636,13 @@
   EX['calf-l'] = calfEx('L');
   EX['calf-r'] = calfEx('R');
 
-  // Draw order where it differs from the table's `order` (left over from the retired additive
-  // renderer, which drew limbs behind the torso); fold into `order` when the table is next edited.
-  EX.jacks.sorder = ['LL', 'LR', 'T', 'AL', 'AR'];
-  EX.rest.sorder = ['AL', 'LL', 'LR', 'T', 'AR'];
   for (var exk in EX) if (EX.hasOwnProperty(exk)) EX[exk].id = exk;
   function getEx(id) { return (typeof id === 'string' && EX.hasOwnProperty(id)) ? EX[id] : EX.rest; }
   function exId(ex) { return (ex && ex.id) || 'rest'; }
 
   // Draw order of an exercise's limb groups (some vary with the phase, e.g. a lifted knee
   // or a forward-swung arm passing in front of the torso).
+  // (sorder: pecstretch's draw order, until its table entry folds it into `order`)
   function orderOf(ex, p) {
     return ex.orderAt ? ex.orderAt(p) : (ex.sorder || ex.order);
   }
@@ -765,8 +762,28 @@
     return d.slice();
   }
   function mix(a, b, t) { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+  // mix() into o (which may be a or b): no new array, for the per-sample shading
+  function mixTo(o, a, b, t) {
+    o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t;
+    return o;
+  }
   var WHITE = [255, 255, 255];
+  // CSS colour of c (alpha a, default 1). Opaque colours come from a cache: a frame sets
+  // ~300 gradient stops, ~90% of them a colour seen lately, and building the string each
+  // time was most of the garbage a frame made.
+  var RGB_STR = {}, rgbN = 0;
   function rgba(c, a) {
+    if (a === undefined) {
+      var r = c[0] | 0, g = c[1] | 0, b = c[2] | 0;
+      if (r >= 0 && r < 256 && g >= 0 && g < 256 && b >= 0 && b < 256) {
+        var k = (r << 16) | (g << 8) | b, s = RGB_STR[k];
+        if (s === undefined) {
+          if (++rgbN > 4096) { RGB_STR = {}; rgbN = 1; }
+          s = RGB_STR[k] = 'rgba(' + r + ',' + g + ',' + b + ',1)';
+        }
+        return s;
+      }
+    }
     return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + (a === undefined ? 1 : +a.toFixed(3)) + ')';
   }
 
@@ -832,9 +849,11 @@
     this.ctx = null;
     try { this.ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null; } catch (e) { this.ctx = null; }
     this.low = opts.quality === 'low';
-    // Frame-rate cap (fps) and backing-store resolution cap (maxDpr). Thumbnails: 30 fps, 2x.
+    // Frame-rate cap (fps) and backing-store resolution cap (maxDpr). Thumbnails: 30 fps.
+    // 2x by default: a 3x phone pays ~2.25x the fill cost (+12 ms a frame on a slow one)
+    // for soft shading whose extra sharpness is hard to see.
     this.fps = clamp(num(opts.fps, this.low ? 30 : 60), 1, 240);
-    this.maxDpr = clamp(num(opts.maxDpr, this.low ? 2 : 3), 1, 4);
+    this.maxDpr = clamp(num(opts.maxDpr, 2), 1, 4);
     // thumbnails: a circle [dx, dy, r] (CSS px, centre in from the bottom-right corner) kept clear
     this.clear = opts.clear && opts.clear.length === 3 ? [num(opts.clear[0], 0), num(opts.clear[1], 0), num(opts.clear[2], 0)] : null;
     // framing (see _fit): 'shared' (one body scale for every move) or 'fill' (each move fills the canvas)
@@ -842,6 +861,7 @@
     this.ex = getEx(opts.exercise);
     // a thumbnail that is never played shows the move's key pose
     this.time = this.low ? keyTime(this.ex) : 0;
+    this.paced = false; // shown at an explicit tempo (see setExercise)
     this.playing = true;
     this.energy = this.energyT = clamp(num(opts.energy, 1), 0, 1);
     var c1 = parseColor(opts.primary, [255, 43, 214]), c2 = parseColor(opts.secondary, [255, 176, 0]);
@@ -853,7 +873,7 @@
     this.matOpts = { body: opts.body, shade: opts.shade };
     this.material = typeof opts.material === 'string' ? opts.material : null;
     this.hasPose = false;
-    this.from = null; this.fromMeta = null; this.morphT = 1;
+    this.fromEx = null; this.morphT = 1; this._xfN = 0; // dissolve: outgoing exercise, progress, number
     this.flash = 0; this.ring = -1;
     this._setStyle(opts.style, opts.scheme);
     this.W = 0; this.H = 0; this.dpr = 1;
@@ -934,7 +954,7 @@
     // stage): its snapshot keeps the fit it was taken with and is mapped to the new one.
     this.W = w; this.H = h; this.dpr = dpr;
     this._fitCache = null;
-    if (w < 4 || h < 4) this._xf = null;
+    if (w < 4 || h < 4) this._freeBufs(); // hidden (display: none): give the scratch canvases back
     this._still = false; // the next tick must repaint
     return true;
   };
@@ -1095,7 +1115,8 @@
     if (this._frozen) { this._computePose(); return; }
     // the new move already plays while it dissolves in
     if (this.morphT < 1) this.morphT = Math.min(1, this.morphT + dt / MORPH_S);
-    if (this.playing) this.time += dt * (reducedMotion() ? 0.5 : 1);
+    // reduced motion: half speed, except a move shown at an explicit tempo (it follows a count)
+    if (this.playing) this.time += dt * (reducedMotion() && !this.paced ? 0.5 : 1);
     this._computePose();
   };
 
@@ -1190,47 +1211,55 @@
     return m;
   }
 
-  // Surface colour for camera-space unit normal (nx, ny, nz). M = per-frame state.
+  // Surface colour for the camera-space unit normal in SN (x, y, z) at SN[3] = ed, how close
+  // the sample is to the silhouette (|u| across a limb, 0 = no rim). M = per-frame state.
   // acc: optional accent albedo (wristbands, soles) instead of the body ramp.
-  // ed: how close the sample is to the silhouette (|u| across a limb, 0 = no rim).
-  function stShade(M, nx, ny, nz, acc, ed) {
+  // It runs for every gradient stop of every frame, so it makes no garbage: the input comes
+  // in a typed array (doubles passed as arguments are boxed) and the result is a shared
+  // array, valid until the next call.
+  var SN = new Float64Array(4), SC = [0, 0, 0], ST = [0, 0, 0];
+  function stShade(M, acc) {
+    var nx = SN[0], ny = SN[1], nz = SN[2], ed = SN[3];
     var ndl = nx * KEY[0] + ny * KEY[1] + nz * KEY[2];
     var dif = clamp((ndl + 0.4) / 1.4, 0, 1);
     var I = clamp((0.07 + 0.15 * (0.5 + 0.5 * ny) + 0.8 * dif * (0.5 + 0.5 * dif)) * M.dim, 0, 1);
-    var c, R = M.ramp;
-    if (acc) c = I < 0.6 ? mix(mix(acc, BLACK, 0.6), acc, I / 0.6) : mix(acc, mix(acc, WHITE, 0.3), (I - 0.6) / 0.4);
-    else if (I <= R[1][0]) c = mix(R[0][1], R[1][1], I / R[1][0]);
-    else if (I <= R[2][0]) c = mix(R[1][1], R[2][1], (I - R[1][0]) / (R[2][0] - R[1][0]));
-    else c = mix(R[2][1], R[3][1], (I - R[2][0]) / (R[3][0] - R[2][0]));
+    var c = SC, R = M.ramp;
+    if (acc) {
+      if (I < 0.6) mixTo(c, mixTo(ST, acc, BLACK, 0.6), acc, I / 0.6);
+      else mixTo(c, acc, mixTo(ST, acc, WHITE, 0.3), (I - 0.6) / 0.4);
+    }
+    else if (I <= R[1][0]) mixTo(c, R[0][1], R[1][1], I / R[1][0]);
+    else if (I <= R[2][0]) mixTo(c, R[1][1], R[2][1], (I - R[1][0]) / (R[2][0] - R[1][0]));
+    else mixTo(c, R[2][1], R[3][1], (I - R[2][0]) / (R[3][0] - R[2][0]));
     if (M.envK > 0) { // reflected environment (view = +z): dark floor, softbox above, strip on the key side
       var ry = 2 * nz * ny, rx = 2 * nz * nx, et = clamp((ry + 0.15) / 0.7, 0, 1), es = clamp((-rx - 0.25) / 0.55, 0, 1);
       et = Math.max(et * et * (3 - 2 * et), M.envSide * es * es * (3 - 2 * es));
-      c = mix(c, mix(M.env[0], M.env[1], et), M.envK * M.dim);
+      mixTo(c, c, mixTo(ST, M.env[0], M.env[1], et), M.envK * M.dim);
     }
     var nh = nx * HALFV[0] + ny * HALFV[1] + nz * HALFV[2];
     if (M.spec2K > 0 && nh > 0) { // broad sheen (satin metal / softbox reflection)
       var s2 = Math.pow(nh, M.shin2) * M.spec2K * M.dim;
-      if (s2 > 0.003) c = mix(c, M.spec2, clamp(s2, 0, 1));
+      if (s2 > 0.003) mixTo(c, c, M.spec2, clamp(s2, 0, 1));
     }
     if (nh > 0.5) {
       var sp = Math.pow(nh, M.shin) * M.specK * M.dim;
-      if (sp > 0.003) c = mix(c, M.spec, clamp(sp, 0, 1));
+      if (sp > 0.003) mixTo(c, c, M.spec, clamp(sp, 0, 1));
     }
     if (ed > 0) {
       var pl = Math.sqrt(nx * nx + ny * ny), rr = pl > 1e-4 ? (nx * RIMX + ny * RIMY) / pl : 0;
       if (rr > 0) {
         var e2 = ed * ed, e4 = e2 * e2, rim = rr * (M.rimPow === 8 ? e4 * e4 : Math.pow(ed, M.rimPow)) * M.rimK;
-        if (rim > 0.003) c = mix(c, M.rimC, clamp(rim, 0, 1));
+        if (rim > 0.003) mixTo(c, c, M.rimC, clamp(rim, 0, 1));
       }
       if (M.rim2K > 0 && pl > 1e-4) { // kicker: untinted strip light on the opposite edge
         var r2 = (-nx * RIMX + ny * RIMY) / pl;
         if (r2 > 0) {
           var k2 = r2 * Math.pow(ed, M.rim2Pow) * M.rim2K;
-          if (k2 > 0.003) c = mix(c, M.rim2, clamp(k2, 0, 1));
+          if (k2 > 0.003) mixTo(c, c, M.rim2, clamp(k2, 0, 1));
         }
       }
     }
-    if (M.far > 0) c = mix(c, M.farC, M.far);
+    if (M.far > 0) mixTo(c, c, M.farC, M.far);
     return c;
   }
 
@@ -1248,13 +1277,14 @@
 
   // Sample positions across a cylinder: the standard set, plus (crisp materials) extra
   // samples around the specular peak u* so a tight highlight always shows.
-  var SUX = [];
+  var SUX = [], SXE = [0, 0, 0, 0, 0];
   function samples(M, e1x, e1y, e2x, e2y, e2z) {
     if (!M.crisp) return M.low ? SUL : SU;
     var he1 = HALFV[0] * e1x + HALFV[1] * e1y, he2 = HALFV[0] * e2x + HALFV[1] * e2y + HALFV[2] * e2z;
     if (he2 <= 0) return SU;
     var us = he1 / Math.sqrt(he1 * he1 + he2 * he2), w = Math.max(0.05, 0.6 / Math.sqrt(M.shin));
-    var X = SUX, n = 0, i, j = 0, extra = [us - 1.6 * w, us - 0.7 * w, us, us + 0.7 * w, us + 1.6 * w];
+    var X = SUX, n = 0, i, j = 0, extra = SXE;
+    extra[0] = us - 1.6 * w; extra[1] = us - 0.7 * w; extra[2] = us; extra[3] = us + 0.7 * w; extra[4] = us + 1.6 * w;
     for (i = 0; i < SU.length; i++) {
       while (j < extra.length && extra[j] < SU[i]) { if (extra[j] > -1 && Math.abs(extra[j] - SU[i]) > 0.02) X[n++] = extra[j]; j++; }
       X[n++] = SU[i];
@@ -1281,7 +1311,8 @@
       g = ctx.createConicGradient(th0, px, py);
       for (i = 0; i < n; i++) {
         u = U[i]; cu = Math.sqrt(Math.max(0, 1 - u * u));
-        c = stShade(M, u * e1x + cu * e2x, u * e1y + cu * e2y, cu * e2z, acc, Math.abs(u));
+        SN[0] = u * e1x + cu * e2x; SN[1] = u * e1y + cu * e2y; SN[2] = cu * e2z; SN[3] = Math.abs(u);
+        c = stShade(M, acc);
         var th = Math.atan2(my + sy * u * rm - py, mx + sx * u * rm - px) - th0;
         th = ((th % TAU) + TAU) % TAU;
         g.addColorStop(th / TAU, rgba(c));
@@ -1291,7 +1322,8 @@
     g = ctx.createLinearGradient(mx - sx * rm, my - sy * rm, mx + sx * rm, my + sy * rm);
     for (i = 0; i < n; i++) {
       u = U[i]; cu = Math.sqrt(Math.max(0, 1 - u * u));
-      c = stShade(M, u * e1x + cu * e2x, u * e1y + cu * e2y, cu * e2z, acc, Math.abs(u));
+      SN[0] = u * e1x + cu * e2x; SN[1] = u * e1y + cu * e2y; SN[2] = cu * e2z; SN[3] = Math.abs(u);
+      c = stShade(M, acc);
       g.addColorStop((u + 1) / 2, rgba(c));
     }
     return g;
@@ -1324,7 +1356,8 @@
     g = conic ? ctx.createConicGradient(th0, ax, ay) : ctx.createLinearGradient(2 * mx - px, 2 * my - py, px, py);
     for (i = 0; i < n; i++) {
       u = U[i]; cu = Math.sqrt(Math.max(0, 1 - u * u));
-      c = rgba(stShade(M, u * e1x + cu * e2x, u * e1y + cu * e2y, cu * e2z, null, Math.abs(u)));
+      SN[0] = u * e1x + cu * e2x; SN[1] = u * e1y + cu * e2y; SN[2] = cu * e2z; SN[3] = Math.abs(u);
+      c = rgba(stShade(M, null));
       if (conic) {
         var th = Math.atan2(my + (py - my) * u - ay, mx + (px - mx) * u - ax) - th0;
         g.addColorStop((((th % TAU) + TAU) % TAU) / TAU, c);
@@ -1415,9 +1448,9 @@
   FP._stState = function () {
     var M = this._M || (this._M = {}), mat = this.mat;
     M.ramp = mat.ramp; M.spec = mat.spec; M.specK = mat.specK; M.shin = mat.shin;
-    M.rimC = mix(this.c1, WHITE, mat.rimW);
+    M.rimC = mixTo(M.rimC || [0, 0, 0], this.c1, WHITE, mat.rimW);
     M.rimE = (0.5 + 0.5 * this.energy) * (1 + 1.4 * this.flash); // energy + cue flare
-    M.acc1 = mix(this.c1, this.c2, 0.25); M.acc2 = mix(this.c2, this.c1, 0.2); // wristbands, soles
+    M.acc1 = mixTo(M.acc1 || [0, 0, 0], this.c1, this.c2, 0.25); M.acc2 = mixTo(M.acc2 || [0, 0, 0], this.c2, this.c1, 0.2); // wristbands, soles
     M.rimK = mat.rimK * M.rimE * (this.low ? (mat.lowRim || 0.45) : 1);
     M.rimPow = mat.rimPow || 8;
     M.spec2 = mat.spec2; M.spec2K = mat.spec2K || 0; M.shin2 = mat.shin2 || 1;
@@ -1443,11 +1476,11 @@
   // two cameras does. On a resize the copy is mapped from the fit it was taken with to the
   // current one.
   FP._draw = function () {
-    var xf = this.morphT < 1 && !!this.from && !!this.fromEx && this.hasPose;
+    var xf = this.morphT < 1 && !!this.fromEx && this.hasPose;
     // shown again after being off screen: nothing visible to dissolve from
-    if (xf && this._unseen) { this.morphT = 1; this.from = null; xf = false; }
-    if (xf && (!this._xf || this._xf.from !== this.from)) xf = this._xfSnap();
-    if (!xf) this._xf = null;
+    if (xf && this._unseen) { this.morphT = 1; xf = false; }
+    if (xf && (!this._xf || this._xf.n !== this._xfN)) xf = this._xfSnap();
+    if (!xf && this._xf) { this._xf = null; drop(this, 'xbuf'); } // done: free the snapshot
     this._noOcc = !this.low && Math.min(this.W, this.H) < OCC_MIN;
     this._drawStudio();
     if (xf) this._xfBlend();
@@ -1463,7 +1496,7 @@
     s.x.drawImage(c, 0, 0);
     s.x.globalCompositeOperation = 'source-over';
     var f = this._fit(this.fromEx);
-    this._xf = { from: this.from, w: c.width, h: c.height, dpr: this.dpr, ox: f.ox, oy: f.oy, sc: f.sc };
+    this._xf = { n: this._xfN, w: c.width, h: c.height, dpr: this.dpr, ox: f.ox, oy: f.oy, sc: f.sc };
     return true;
   };
   FP._xfBlend = function () {
@@ -1511,7 +1544,7 @@
       if (!low) growDrawn(box, P, g, M.sc);
     }
     M.far = 0; M.dim = 1;
-    if (!low) this._stRim(ctx, M, box);
+    if (!low && Math.min(this.W, this.H) >= RIM_MIN) this._stRim(ctx, M, box);
     if (this.ring >= 0 && !low) this._stSweep(ctx, P, M);
     ctx.globalCompositeOperation = 'destination-over';
     this._stGround(ctx, P, M);
@@ -1562,6 +1595,10 @@
     if (x + r > b[2]) b[2] = x + r; if (y + r > b[3]) b[3] = y + r;
   }
 
+  // Below RIM_MIN CSS px (the Up-next card on a phone) there is no rim: its band is down to a
+  // pixel there, and reading the canvas back makes it raster mid-frame, which is most of a
+  // small figure's frame time (Up-next at 4x CPU throttle: 9.8 -> 3.8 ms without it).
+  var RIM_MIN = 180;
   // Rim light on the silhouette only: the figure's coverage minus the same coverage moved
   // toward the rim light leaves a thin band along the outer edges that face it (wide where
   // an edge faces the light, vanishing where it turns away). It is built in a buffer at the
@@ -1906,7 +1943,8 @@
     var sk = M.specK, s2k = M.spec2K; M.specK = 0; M.spec2K = 0;
     for (i = 0; i < S.length; i++) {
       var sv = S[i], cz = Math.sqrt(Math.max(0, 1 - sv * sv));
-      g.addColorStop((1 - sv) / 2, rgba(stShade(M, sv * KEY2[0], sv * KEY2[1], cz, null, 0)));
+      SN[0] = sv * KEY2[0]; SN[1] = sv * KEY2[1]; SN[2] = cz; SN[3] = 0;
+      g.addColorStop((1 - sv) / 2, rgba(stShade(M, null)));
     }
     M.specK = sk; M.spec2K = s2k;
     ctx.fillStyle = g;
@@ -2021,7 +2059,8 @@
     ctx.fillRect(x0, y0, w, h);
   };
 
-  // Floor: contact shadows (drawn with destination-over, i.e. beneath the body) + faint floor line.
+  // Scratch canvases (xbuf: dissolve snapshot, rbuf: rim, obuf: occlusion, gbuf: contact
+  // shadows), created on first use.
   FP._buf = function (key) {
     var b = this[key];
     if (!b) {
@@ -2031,6 +2070,16 @@
       b = this[key] = { c: c, x: x };
     }
     return b;
+  };
+  // Release scratch canvas `key` now (a zero-size backing store frees its memory at once,
+  // not when the element is collected); _buf() makes a new one when it is needed again.
+  function drop(o, key) {
+    var b = o[key];
+    if (b) { try { b.c.width = b.c.height = 0; } catch (e) { /* ignore */ } o[key] = null; }
+  }
+  FP._freeBufs = function () {
+    drop(this, 'xbuf'); drop(this, 'rbuf'); drop(this, 'obuf'); drop(this, 'gbuf');
+    this._xf = null; this._shT = null; this._shImg = null;
   };
 
   // Floor: soft contact shadows + (dark stage) a faint light pool, composited beneath the
@@ -2123,8 +2172,9 @@
   var TMPG = new Float32Array(NJ * 3);
   function shadowGrid(ex, f, W, H) {
     var sc = f.sc, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, N = 24;
+    var src = ex._base || ex; // a tempo / count-in variant: sample the move itself (a count-in tracks its wait)
     for (var n = 0; n < N; n++) {
-      groundProject(safePose(ex, n / N, n / N * ex.period), ex, f, TMPG);
+      groundProject(safePose(src, n / N, n / N * src.period), ex, f, TMPG);
       for (var i = 0; i < NJ; i++) {
         if (i === FACE) continue;
         var x = TMPG[i * 3], y = TMPG[i * 3 + 1];
@@ -2216,17 +2266,37 @@
   }
   // A count-in (fresh per call): while its clock is below `from` (a loop boundary just after
   // `ready` s before the go at time 0) it demonstrates the loop; from there on it waits in
-  // the start pose (ex.readyPose, else the loop's first frame) until the next setExercise().
+  // the start pose (ex.readyPose, else the loop's first frame), breathing, until the next
+  // setExercise().
   function countInOf(base, period, ready) {
     exBox(base); // the variant shares the base's framing caches
     var v = Object.create(base), w = v._wait = { from: Math.min(0, period * Math.ceil(-ready / period - 1e-9)), on: false, J: null };
     v._base = base; v.period = period;
     v.pose = function (p, t) {
       w.on = !(t < w.from);
-      return (w.J = w.on ? (base.readyPose ? base.readyPose() : base.pose(0, 0)) : base.pose(p, t));
+      return (w.J = w.on ? breathe(base.readyPose ? base.readyPose() : base.pose(0, 0), t - w.from) : base.pose(p, t));
     };
     if (base.orderAt) v.orderAt = function (p) { return base.orderAt(w.on ? 0 : p); };
     return v;
+  }
+  // Waiting: a slow breath (BREATH_S per cycle, from rest at s = 0) lifts the chest and the
+  // shoulders by up to BREATH_A (~7 mm). A bent arm keeps its hand where it is (resting on a
+  // thigh, say) and bends a little less; a (nearly) straight one rises whole. Which, depends
+  // on the pose held, not on the breath, so an arm never flips between the two.
+  var BREATH_S = 3.6, BREATH_A = 0.004;
+  function breathe(J, s) {
+    var a = BREATH_A * (0.5 - 0.5 * Math.cos(TAU * s / BREATH_S)), O = {}, i;
+    for (i = 0; i < NJ; i++) O[JN[i]] = J[JN[i]];
+    if (!(a > 1e-6)) return O;
+    var up = [0, a, 0];
+    O.chest = addS(J.chest, Y, 0.6 * a);
+    O.neck = add(J.neck, up); O.head = add(J.head, up); O.face = add(J.face, up);
+    for (i = 0; i < 2; i++) {
+      var s1 = SIDES[i][0], sh = J['sh' + s1], wr = J['wr' + s1], nsh = O['sh' + s1] = add(sh, up);
+      if (len(sub(wr, sh)) < (B.uarm + B.farm) * 0.94) O['el' + s1] = ik(nsh, wr, B.uarm, B.farm, sub(J['el' + s1], sh))[0];
+      else { O['el' + s1] = add(J['el' + s1], up); O['wr' + s1] = add(wr, up); O['ha' + s1] = add(J['ha' + s1], up); }
+    }
+    return O;
   }
   // The go after a count-in: the loop runs on its own clock from time t0 and eases out of the
   // last count-in pose J0 over its first 0.3 s (a blend of skeletons: the clock never stops).
@@ -2245,10 +2315,12 @@
     return v;
   }
   /**
-   * Show another exercise. opts.instant: no morph from the current pose;
-   * opts.time: start at that point of the loop (hand over from another figure); with a morph
-   *   the clock starts that much later, so the loop is on time once the morph lands;
-   * opts.period: loop length in seconds for this showing (tempo; default: the exercise's own);
+   * Show another exercise. opts.instant: no cross-dissolve from what is shown now;
+   * opts.time: start at that point of the loop (hand over from another figure; the clock
+   *   runs through the dissolve, so the loop is on time all along);
+   * opts.period: loop length in seconds for this showing (tempo; default: the exercise's own).
+   *   A showing at an explicit tempo follows a count, so it keeps real time even where
+   *   reduced motion slows the figures to half speed;
    * opts.ready: count-in, with a negative opts.time (seconds until the go): the move is
    *   demonstrated until about `ready` s before the go, then the figure waits in its start
    *   pose until setExercise(sameId, {time}) starts the loop on time, easing out of the wait.
@@ -2257,27 +2329,34 @@
     if (this.dead) return;
     opts = opts || {};
     var base = getEx(id), hasT = opts.time != null, t = num(opts.time, 0);
-    var per = num(opts.period, 0), ready = Math.max(0, num(opts.ready, 0));
-    per = per > 0 ? clamp(per, 0.2, 60) : base.period;
+    var per = num(opts.period, 0), paced = per > 0, ready = Math.max(0, num(opts.ready, 0));
+    per = paced ? clamp(per, 0.2, 60) : base.period;
     var cur = this.ex, J0 = hasT && !opts.instant && cur && cur._wait && cur._base === base ? cur._wait.J : null;
     var ex = J0 ? goOf(base, per, J0, t) : hasT && t < 0 && ready > 0 ? countInOf(base, per, ready) : tempoOf(base, per);
     if (ex === this.ex && !hasT) return;
     if (opts.instant) {
-      this.morphT = 1; this.from = null;
+      this.morphT = 1;
     } else if (J0) {
-      // the go after a count-in: the loop eases out of the waiting pose itself (a morph
+      // the go after a count-in: the loop eases out of the waiting pose itself (a dissolve
       // already in flight carries on)
     } else if (this.hasPose && this.W > 0) {
-      this.from = new Float32Array(this.cur);
-      this.fromMeta = { floorY: this.meta.floorY, sc: this.meta.sc, farL: this.meta.farL, farR: this.meta.farR, flat: this.meta.flat };
-      this.fromGnd = this.studio ? new Float32Array(this.gnd) : null;
-      this.fromOrder = this.ex.order; this.fromEx = this.ex; this.fromP = phaseOf(this.ex, this.time);
-      this.morphT = 0;
+      this.fromEx = this.ex; this._xfN++; this.morphT = 0; // the next frame snapshots what is shown
     } else {
       this.morphT = 1;
     }
     this.ex = ex;
-    this.time = t + (hasT && this.morphT < 1 && this.playing ? (1 - this.morphT) * MORPH_S * (reducedMotion() ? 0.5 : 1) : 0);
+    this.paced = paced;
+    this.time = t;
+    this._still = false;
+  };
+  /**
+   * Move the loop's clock to t seconds, at once (no dissolve): for keeping a figure on a
+   * count its own clock has drifted from (a stalled frame, a jump).
+   */
+  FP.setTime = function (t) {
+    t = +t;
+    if (this.dead || !isFinite(t) || t === this.time) return;
+    this.time = t;
     this._still = false;
   };
   /** Seconds into the current exercise's loop (to hand over to another figure). */
@@ -2332,7 +2411,6 @@
   FP._setStyle = function (style, scheme) {
     this.style = styleOf(style);
     this.scheme = schemeOf(scheme);
-    this.studio = this.style === 'studio';
     this.mat = buildMat(materialFor(this.material, this.scheme), this.matOpts);
     this.ring = -1;
   };
@@ -2345,7 +2423,7 @@
     if (this.io) { try { this.io.disconnect(); } catch (e) { /* ignore */ } }
     if (this._onResize && root.removeEventListener) root.removeEventListener('resize', this._onResize);
     if (this.ctx) { try { this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); } catch (e) { /* ignore */ } }
-    this.obuf = null; this.gbuf = null; this.xbuf = null; this._xf = null;
+    this._freeBufs();
     if (!registry.length && rafId) { caf(rafId); rafId = 0; lastT = 0; }
   };
   Object.defineProperty(FP, 'exercise', { get: function () { return exId(this.ex); } });
@@ -2354,7 +2432,7 @@
   // Jump the exercise clock to t seconds (morph completed) and freeze there (freeze=false
   // keeps it running).
   FP._debugSetTime = function (t, freeze) {
-    this.morphT = 1; this.from = null;
+    this.morphT = 1;
     this.time = t;
     this._computePose();
     this._frozen = freeze !== false;

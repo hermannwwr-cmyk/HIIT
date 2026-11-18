@@ -1081,9 +1081,22 @@
    */
   function warmFigOpts(seg, t) {
     var o = {};
-    if (seg.counts) o.period = seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat;
+    if (seg.counts) o.period = warmPeriod(seg);
     if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + 1; }
     return o;
+  }
+  function warmPeriod(seg) { return seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat; }
+  /**
+   * The stage figure on the count: its loop runs on its own clock from BEGIN, which a stalled
+   * frame (phone speech can block the page for 100–300 ms; a frame step is capped) or a jump
+   * within the step would leave off the beat for the rest of the count. Snap it back, without
+   * a dissolve, once it is more than 40 ms out of phase.
+   */
+  function lockFig(seg, t) {
+    if (!workFig || !workFig.setTime || !run.playing) return;
+    var want = t - seg.start - seg.lead, per = warmPeriod(seg);
+    var d = (workFig.getTime() - want) / per;
+    if (Math.abs(d - Math.round(d)) * per > 0.04) workFig.setTime(want);
   }
   function warmName(seg) {
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
@@ -1539,6 +1552,7 @@
     if (seg.type === 'warmup' && seg.counts && moving(seg)) {
       var bi = Math.max(0, Math.min(seg.counts * seg.beats - 1, Math.floor((t - seg.start - seg.lead) / seg.beat + 1e-6)));
       if (bi !== run.lastBeat) { var pb = run.lastBeat; run.lastBeat = bi; onBeat(seg, bi, pb); }
+      lockFig(seg, t);
     }
     updateCoach(seg, t);
 
@@ -1805,9 +1819,12 @@
         // the figure exactly where and how big it will be
         peek.classList.add('is-fig');
         var fid = sg.type === 'warmup' ? warmFigId(sg) : sg.exercise;
-        // (a preview at 30 fps; same quality and size as the stage figure, so the hand-over is seamless)
+        // (a preview at 30 fps; same quality and size as the stage figure, so the hand-over is
+        // seamless). A warm-up step shows its tempo and count-in as they will be on arrival.
+        var fo = sg.type === 'warmup' ? warmFigOpts(sg, sg.start) : {};
+        fo.instant = true;
         if (!peekFig) peekFig = makeFig($('peekFig'), { exercise: fid, primary: dest.colors[0], secondary: dest.colors[1], quality: 'high', fps: 30, energy: PHASE[sg.type].energy });
-        else peekFig.setExercise(fid, { instant: true });
+        peekFig.setExercise(fid, fo);
         peekFig.setColors(dest.colors[0], dest.colors[1], true);
         peekFig.setEnergy(PHASE[sg.type].energy, true);
         peekFig.setPlaying(true);
@@ -1900,7 +1917,12 @@
           // the real figure continues exactly where the preview was: same move, pose and colours
           var nowSeg = run.tl.segments[run.segIdx];
           if (nowSeg && nowSeg.index === dest.seg.index) {
-            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, { instant: true, time: hand });
+            // a warm-up step keeps its tempo and count-in; on the preview's clock, which runs at
+            // most the length of the swipe ahead (the count-in only waits longer, and BEGIN
+            // re-times the loop to the count)
+            var ho = dest.seg.type === 'warmup' ? warmFigOpts(dest.seg, elapsedNow()) : {};
+            ho.instant = true; ho.time = hand;
+            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, ho);
             workFig.setColors(dest.colors[0], dest.colors[1], true);
             workFig.setEnergy(PHASE[dest.seg.type].energy, true);
           }
