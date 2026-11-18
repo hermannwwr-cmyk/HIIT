@@ -405,7 +405,6 @@
   // shoulder; hips stay level and square (only a 1 cm weight shift onto the support hand).
   EX.shouldertap = {
     period: 2.4, cam: { yaw: 18, pitch: 20 }, far: { L: 0.45, R: 0 }, order: ['LL', 'LR', 'T', 'AL', 'AR'],
-    orderAt: function (p) { return p < 0.5 ? ['LL', 'LR', 'T', 'AL', 'AR'] : ['LL', 'LR', 'T', 'AR', 'AL']; },
     pose: function (p) {
       var J = {};
       var half = p < 0.5 ? 0 : 1, q = (p - half * 0.5) * 2;
@@ -451,25 +450,14 @@
   // the shoulders, contralateral: upper arm `arm` [forward, back] deg, elbow flexion `elbow`
   // [forward, back] (it closes as the arm comes forward); the forward hand drifts toward the
   // midline (`cross`). lean: trunk, rot: shoulder counter-rotation (deg).
+  // One draw order for the whole stride: the far limbs stay behind the torso and the near
+  // ones in front, as in every side view (switching mid-stride, where the parts overlap,
+  // made them jump; from this camera the far hand swings forward clear of the torso).
   function jogEx(period, o) {
     var d = o.duty, u1 = o.peel;
     var PK = [[0, 0], [u1, 0], [0.5, 1], [1 - u1, 0], [1, 0]];
     return {
-      period: period, cam: { yaw: 22, pitch: 6 }, far: { L: 0.45, R: 0 }, order: ['AL', 'T', 'LL', 'LR', 'AR'], center: true,
-      orderAt: function (p) {
-        // the lifted leg and a forward-swung far arm pass in front of the torso
-        var lifted = Math.sin(TAU * p) >= 0 ? 'LR' : 'LL', standing = lifted === 'LR' ? 'LL' : 'LR';
-        var up = Math.abs(Math.sin(TAU * p)) > 0.3, farFwd = Math.sin(TAU * p) > 0.2;
-        var L = [];
-        if (!farFwd) L.push('AL');
-        L.push(standing);
-        if (!up) L.push(lifted);
-        L.push('T');
-        if (up) L.push(lifted);
-        if (farFwd) L.push('AL');
-        L.push('AR');
-        return L;
-      },
+      period: period, cam: { yaw: 22, pitch: 6 }, far: { L: 0.45, R: 0 }, order: SIDE_ORDER, center: true,
       pose: function (p) { return jog(p, false); },
       // standing ready to go (count-in): both feet down, arms bent, nothing in the air
       readyPose: function () { return jog(0, true); }
@@ -1334,8 +1322,12 @@
     if (conic) {
       var t = ((Qa[0] - Pa[0]) * d2y - (Qa[1] - Pa[1]) * d2x) / den;
       ax = Pa[0] + d1x * t; ay = Pa[1] + d1y * t;
+      // conic whenever the edges meet clear of the slab: a strongly tapered slab drawn with
+      // a linear gradient would not match its neighbours' shading at the shared stations
+      // (a visible band across the torso)
       var dd = Math.sqrt(sq(ax - mx) + sq(ay - my));
-      conic = dd > 2.5 * hw && dd < 400 * hw;
+      var hl = Math.sqrt(sq((L1[0] + R1[0] - L0[0] - R0[0]) / 2) + sq((L1[1] + R1[1] - L0[1] - R0[1]) / 2)) / 2; // half length
+      conic = dd > Math.max(1.15 * hw, 1.3 * hl) && dd < 400 * hw;
       th0 = Math.atan2(my - ay, mx - ax) - Math.PI;
     }
     g = conic ? ctx.createConicGradient(th0, ax, ay) : ctx.createLinearGradient(2 * mx - px, 2 * my - py, px, py);
@@ -1374,7 +1366,7 @@
   // side), jaw [forward, up offset from the cranium centre, semi-axes up, forward, side]
   var ST_HEAD = { up: 0.006, fwd: 0.014, skull: [0.069, 0.061, 0.053], jaw: [0.026, -0.04, 0.032, 0.034, 0.04] };
   var TORSO = [ // anchor (0 pelvis+u1*o | 1 chest+u2*o), o, half-width (R), half-depth (F), forward, hips->shoulders blend
-    [0, 0.0, 0.092, 0.066, -0.008, 0],
+    [0, 0.0, 0.078, 0.047, -0.004, 0],
     [0, 0.08, 0.068, 0.054, 0.004, 0.4],
     [1, 0.0, 0.093, 0.062, 0.012, 0.8],
     [1, 0.09, 0.111, 0.067, 0.016, 1],
@@ -1543,6 +1535,19 @@
   FP._stOrder = function (order, P, M) {
     var out = this._ord || (this._ord = []), n = order.length, t = -1, pos, i, k;
     for (i = 0; i < n; i++) if (order[i] === 'T') t = i;
+    // the two arms, when the table draws them one straight after the other: whichever is
+    // nearer where they overlap on screen goes second (shoulder taps: the tapping arm
+    // crosses the other one), with some hysteresis so near-equal depths never flicker
+    var ia = -1, swap = false;
+    for (i = 0; i < n - 1; i++) if ((order[i] === 'AL' && order[i + 1] === 'AR') || (order[i] === 'AR' && order[i + 1] === 'AL')) ia = i;
+    if (ia >= 0) {
+      var dz = armsDepth(P, M.sc), lFront = this._armL; // dz: left arm's depth minus the right's
+      if (dz === null) lFront = null;
+      else if (dz > ARM_HYST) lFront = true;
+      else if (dz < -ARM_HYST) lFront = false;
+      this._armL = lFront;
+      if (lFront !== null && lFront !== undefined) swap = (order[ia] === 'AL') !== !lFront;
+    }
     pos = t;
     var hx = P[HEAD * 3], hy = P[HEAD * 3 + 1], hz = P[HEAD * 3 + 2], sc = M.sc;
     for (i = t + 1; i < n; i++) {
@@ -1560,12 +1565,39 @@
     }
     out.length = 0;
     for (i = 0; i < n; i++) {
-      out.push(order[i]);
+      out.push(swap && (i === ia || i === ia + 1) ? order[i === ia ? ia + 1 : ia] : order[i]);
       if (i === pos) out.push('H');
     }
     if (t < 0) out.push('H');
     return out;
   };
+
+  // Depth of the left arm minus the right arm's (camera units, + = left nearer), judged by
+  // their elbows and wrists (what crosses in front of the other arm), or null when the arms
+  // do not touch on screen (then the order does not show).
+  var ARM_HYST = 0.05;
+  var ARM_S = [SHL, ELL, WRL, HAL, SHR, ELR, WRR, HAR];
+  function armsDepth(P, sc) {
+    var best = 1e9, i, k, h;
+    for (h = 0; h < 2 && best > 0; h++) {
+      var A = h ? 4 : 0, Bc = h ? 0 : 4;
+      // points along one arm (joints and bone midpoints) against the other arm's bones
+      for (i = 0; i < 7; i++) {
+        var a0 = ARM_S[A + (i >> 1)] * 3, a1 = ARM_S[A + Math.min(3, (i + 1) >> 1)] * 3;
+        var x = (P[a0] + P[a1]) / 2, y = (P[a0 + 1] + P[a1 + 1]) / 2;
+        for (k = 0; k < 3; k++) {
+          var b0 = ARM_S[Bc + k] * 3, b1 = ARM_S[Bc + k + 1] * 3;
+          var dx = P[b1] - P[b0], dy = P[b1 + 1] - P[b0 + 1], dd = dx * dx + dy * dy;
+          var u = dd > 1e-9 ? clamp(((x - P[b0]) * dx + (y - P[b0 + 1]) * dy) / dd, 0, 1) : 0;
+          var ex = P[b0] + dx * u - x, ey = P[b0 + 1] + dy * u - y, d2 = ex * ex + ey * ey;
+          if (d2 < best) best = d2;
+        }
+      }
+    }
+    var reach = 0.085 * sc; // two arm radii (deltoid ball included) and a little more
+    if (best >= reach * reach) return null;
+    return (P[ELL * 3 + 2] + P[WRL * 3 + 2] - P[ELR * 3 + 2] - P[WRR * 3 + 2]) / 2;
+  }
 
   // Grow the screen box b [x0, y0, x1, y1] by draw group g.
   function growDrawn(b, P, g, sc) {
@@ -1802,10 +1834,13 @@
     }
     var V = [], tx, ty, tl;
     var Lp = [], Rp = [];
+    // every station's cross-section is measured along one direction (across the whole
+    // torso), so the stations are parallel: then each slab's conic shading maps the same
+    // fraction of the width to the same colour on both its stations, and neighbouring
+    // slabs agree exactly where they meet (no bands across the torso)
+    tx = cx[n - 1] - cx[0]; ty = cy[n - 1] - cy[0]; tl = Math.sqrt(tx * tx + ty * ty);
+    if (tl < 1e-6) { tx = 0; ty = -1; } else { tx /= tl; ty /= tl; }
     for (i = 0; i < n; i++) {
-      var ia = Math.max(0, i - 1), ib = Math.min(n - 1, i + 1);
-      tx = cx[ib] - cx[ia]; ty = cy[ib] - cy[ia]; tl = Math.sqrt(tx * tx + ty * ty);
-      if (tl < 1e-6) { tx = 0; ty = -1; } else { tx /= tl; ty /= tl; }
       var nx = -ty, ny = tx, p1 = AX[i] * nx + AY[i] * ny, p2 = BX[i] * nx + BY[i] * ny;
       var w = Math.sqrt(p1 * p1 + p2 * p2); // (the torso sits at the depth reference)
       if (i > 0 && i < n - 1) wmax = Math.max(wmax, w);
@@ -1818,13 +1853,18 @@
     var nb = addS(nek, u2, -0.03);
     var nt = add(nek, mul(sub(hd, nek), 0.6));
     this._stCap(ctx, M, nb[0] * sc, -nb[1] * sc, nb[2], rz(M, P, NECK, ST_NECK[0]), nt[0] * sc, -nt[1] * sc, nt[2], rz(M, P, NECK, ST_NECK[1]), 3);
+    // Smooth outline through the stations, except the bottom: a straight edge along station
+    // 0, which is the pelvis's own cross-section there and is shaded like it, so the loft
+    // runs into the pelvis with no hem.
     function outline() {
-      var N = V.length, q0 = V[N - 1], q1;
-      ctx.moveTo((q0[0] + V[0][0]) / 2, (q0[1] + V[0][1]) / 2);
-      for (var k = 0; k < N; k++) {
-        q0 = V[k]; q1 = V[(k + 1) % N];
+      var N = V.length, q0, q1;
+      ctx.moveTo(V[0][0], V[0][1]);
+      ctx.lineTo((V[0][0] + V[1][0]) / 2, (V[0][1] + V[1][1]) / 2);
+      for (var k = 1; k < N - 1; k++) {
+        q0 = V[k]; q1 = V[k + 1];
         ctx.quadraticCurveTo(q0[0], q0[1], (q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2);
       }
+      ctx.lineTo(V[N - 1][0], V[N - 1][1]);
       ctx.closePath();
     }
     // pelvis: an ellipsoid, so hips and seat are rounded from every camera angle; the
