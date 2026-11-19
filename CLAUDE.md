@@ -12,6 +12,7 @@ node --test --test-name-pattern "warm" tests/workout.test.js   # run matching te
 npm run build                              # dist/overdrive-hiit.html: one self-contained file
 node scripts/build.mjs out.html --fragment # same, without <html>/<head>/<body> (for hosts that add their own)
 npm run serve                              # python3 -m http.server 8080
+cd dev/swipe-tests && node matrix.js 390 844   # swipe touch harness (needs Playwright and the app served on :8731; see its README)
 ```
 
 There is no linter or formatter. Opening `index.html` directly (file://) must keep working.
