@@ -825,10 +825,12 @@
     return true;
   };
   /**
-   * Gauge geometry. The ring has an opening at the bottom; the transport pill
-   * (back, pause, skip) sits in it, centred on the ring's end caps, and scales
-   * with the ring. The figure (or the rest countdown) fills the space inside
-   * the ring above the pill. Everything is centred in the stage.
+   * Gauge geometry. The ring has an opening at the bottom, just wide enough for
+   * the pause button, which sits in it on the line of the ring's end caps (its
+   * base). Back and skip sit on that same line, out to the left and right of the
+   * ring, clear of its arc (--bx: their distance from the centre). Everything
+   * scales with the ring; the figure (or the rest countdown) fills the space
+   * inside the ring above the pause.
    */
   Ring.prototype.layout = function () {
     var w = this.w, h = this.h;
@@ -842,7 +844,7 @@
       var side = Math.max(44, Math.round(ph * 0.72));
       var main = Math.max(ph - 10, side + 8); // pause always clearly the biggest
       ph = Math.max(ph, main + 10);
-      return { ph: ph, main: main, side: side, pw: side * 2 + main + 12 * 2 + 5 * 2 + 2 }; // 12px between buttons
+      return { ph: ph, main: main, side: side, pw: main + 10 }; // the opening holds only the pause
     }
     function fit(S) {
       var r = radius(S), p = pill(S);
@@ -856,8 +858,8 @@
     var maxS = w / 0.9, S = Math.min(maxS, h * 1.6), f = fit(S);
     for (var k = 0; k < 12; k++) {
       var need = f.r.top + f.below;
-      if (need <= h + 0.5 && f.p.pw <= w) break;
-      S = Math.max(60, Math.min(S * Math.pow(h / need, 0.9), S * w / f.p.pw) * 0.998);
+      if (need <= h + 0.5) break;
+      S = Math.max(60, S * Math.pow(h / need, 0.9) * 0.998);
       f = fit(S);
     }
     var r = f.r, p = f.p;
@@ -875,6 +877,11 @@
     st.style.setProperty('--ph', px(p.ph));
     st.style.setProperty('--pmain', px(p.main));
     st.style.setProperty('--pside', px(p.side));
+    // back / skip: out at the sides on the base line, as far out as the stage allows (on a
+    // wide stage, under the ring's sides), and never touching the arc above them
+    var top = f.capY - p.side / 2, arcX = Math.sqrt(Math.max(0, r.R * r.R - top * top)) + r.th / 2;
+    var bx = Math.min(w / 2 - 6 - p.side / 2, Math.max(arcX + 10 + p.side / 2, r.R * 0.92));
+    st.style.setProperty('--bx', px(bx));
     st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
     st.style.setProperty('--fh', px(regionH));
     st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));

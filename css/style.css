@@ -1237,15 +1237,12 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .digits .d.of { width: auto; font-size: .42em; align-self: flex-end; margin-bottom: .14em; opacity: .55; letter-spacing: 0; }
 .digits .d.of:first-of-type, .digits .d.of + .d.of { margin-left: 0; }
 
-/* transport: one fixed pill (back · pause · skip), scaled with the ring */
+/* transport: pause in the ring's opening, back / skip out at the sides, all on the ring's base line */
 .transport {
   position: absolute; left: 50%; top: var(--ty, calc(100% - 40px)); z-index: 2;
+  width: calc(2 * var(--bx, 140px) + var(--pside, 48px));
   transform: translate(-50%, -50%);
-  display: flex; align-items: center; gap: 12px;
-  padding: 5px; border-radius: 999px;
-  background: rgba(8, 3, 20, .86);
-  border: 1px solid var(--line-hi);
-  box-shadow: 0 12px 32px -12px rgba(0,0,0,.8);
+  display: flex; align-items: center; justify-content: space-between;
 }
 .ctl {
   display: inline-grid; place-items: center; flex: none;

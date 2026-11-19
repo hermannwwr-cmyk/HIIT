@@ -840,20 +840,18 @@
 [data-look="studio"] .upnext.q3 .un-pre { color: color-mix(in srgb, var(--c1) 75%, var(--text)); font-weight: 600; }
 
 
-[data-look="studio"] .transport {
-  padding: 5px; gap: 12px;
-  background: var(--surface); border: 1px solid var(--line);
-  box-shadow: var(--shadow-1);
+/* each control is its own disc now: back / skip quiet surfaces, pause solid */
+[data-look="studio"] .ctl {
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); box-shadow: var(--shadow-1);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-[data-look="studio"] .ctl { border: 0; background: transparent; color: var(--text); box-shadow: none; }
-[data-look="studio"] .ctl:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
-[data-look="studio"] .ctl-main { background: var(--text); color: var(--ink); box-shadow: none; }
+[data-look="studio"] .ctl:hover { background: var(--surface-2); }
+[data-look="studio"] .ctl-main { border: 0; background: var(--text); color: var(--ink); box-shadow: 0 16px 34px -16px rgba(0,0,0,.6); }
+[data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: 0 16px 34px -16px rgba(17,20,28,.45); }
 [data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: 0 0 0 4px color-mix(in srgb, var(--text) 12%, transparent); }
-[data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: none; }
 @media (hover: none) {
-  [data-look="studio"] .ctl:hover { background: transparent; }
-  [data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: none; }
+  [data-look="studio"] .ctl:hover { background: var(--surface); }
+  [data-look="studio"] .ctl-main:hover { background: var(--text); }
 }
 
 [data-look="studio"] .dial-k { font: 700 clamp(13px, calc(var(--fh, 200px) * .085), 20px)/1.15 var(--ui); letter-spacing: .02em; text-transform: none; color: color-mix(in srgb, var(--c1) 75%, var(--text)); }
