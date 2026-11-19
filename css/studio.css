@@ -357,6 +357,8 @@
 [data-look="studio"] .brief.talking .b-eq i:nth-child(3) { animation-delay: -.6s; }
 @keyframes bEq { 0%, 100% { height: 5px; } 50% { height: 16px; } }
 [data-look="studio"] .b-go { background: rgba(0,0,0,.16); border-radius: 50%; }
+/* setup's Start matches the brief's: label, then the session's length, quieter; the play circle at the end */
+[data-look="studio"] .start-dur { margin-left: 10px; font-weight: 500; opacity: .78; font-variant-numeric: tabular-nums; }
 [data-look="studio"] .b-go svg { fill: currentColor; stroke-width: 1.5; }
 
 /* the part the coach is talking about: everything else steps back; the part itself lifts */
@@ -391,6 +393,8 @@
 [data-look="studio"] .brief .b-round-main.on .b-beats { filter: none; }
 /* "tap Start": the button calls for attention */
 [data-look="studio"] .b-start.on { animation: bReady 1.6s cubic-bezier(.2,.8,.3,1) 2; }
+/* setup: Start workout glows the same way, continuously */
+[data-look="studio"] #start:not(:disabled) { animation: bReady 1.6s cubic-bezier(.2,.8,.3,1) infinite; }
 @keyframes bReady {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btn-bg) 55%, transparent), 0 14px 30px -14px color-mix(in srgb, var(--btn-bg) 80%, transparent); }
   100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--btn-bg) 0%, transparent), 0 14px 30px -14px color-mix(in srgb, var(--btn-bg) 80%, transparent); }
@@ -426,7 +430,7 @@
   [data-look="studio"] .b-fact b { font-size: 19px; }
   [data-look="studio"] .b-coach-v, [data-look="studio"] .b-coach-v.long { font-size: 17px; }
   [data-look="studio"] .b-kicker { font-size: 13px; }
-  [data-look="studio"] .b-start { min-height: 68px; font-size: 19px; }
+  [data-look="studio"] .b-start, [data-look="studio"] #start { min-height: 68px; font-size: 19px; }
 }
 /* phones on their side: one-line title, everything a notch smaller */
 @media (max-height: 500px) and (min-aspect-ratio: 5/4) {
@@ -436,7 +440,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   [data-look="studio"] .brief.talking .b-eq i { animation: none; height: 10px; }
-  [data-look="studio"] .b-start.on { animation: none; box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--btn-bg); }
+  [data-look="studio"] .b-start.on, [data-look="studio"] #start:not(:disabled) { animation: none; box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--btn-bg); }
   [data-look="studio"] .b-coach-v.swap { animation: none; }
 }
 
@@ -501,22 +505,8 @@
 [data-look="studio"] .link-btn svg { color: var(--mute); }
 [data-look="studio"] .link-btn:hover { background: var(--surface-2); }
 
-[data-look="studio"] .ctl {
-  border: 1px solid var(--line-hi); background: var(--surface); color: var(--text);
-  box-shadow: var(--shadow-1);
-}
-[data-look="studio"] .ctl:hover { background: var(--surface-2); }
-[data-look="studio"] .ctl-main {
-  border: 0; background: var(--text); color: var(--ink);
-  box-shadow: 0 16px 34px -16px rgba(0,0,0,.6);
-}
-[data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: 0 16px 34px -16px rgba(17,20,28,.45); }
-[data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: 0 0 0 6px color-mix(in srgb, var(--text) 12%, transparent); }
+/* the workout controls' discs: see "each control is its own disc" below */
 [data-look="studio"] .ctl-main svg { stroke-width: 2.6; }
-[data-look="studio"] .ctl-skip.has-text {
-  border-color: var(--line-hi); background: var(--surface); box-shadow: var(--shadow-1); color: var(--text);
-}
-[data-look="studio"] .ctl-skip.has-text .ctl-text { font: 600 14px/1 var(--ui); letter-spacing: 0; text-transform: none; }
 
 /* phase change: a colour disc grows out of the ring, the word rises, then an iris opens */
 @property --hole { syntax: '<length>'; inherits: false; initial-value: 0px; }
@@ -836,25 +826,27 @@
 [data-look="studio"] .upnext.q3 .un-pre { color: color-mix(in srgb, var(--c1) 75%, var(--text)); font-weight: 600; }
 
 
-[data-look="studio"] .transport {
-  padding: 5px; gap: 12px;
-  background: var(--surface); border: 1px solid var(--line);
-  box-shadow: var(--shadow-1);
+/* each control is its own disc now: back / skip quiet surfaces, pause solid */
+[data-look="studio"] .ctl {
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); box-shadow: var(--shadow-1);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-[data-look="studio"] .ctl { border: 0; background: transparent; color: var(--text); box-shadow: none; }
-[data-look="studio"] .ctl:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
-[data-look="studio"] .ctl-main { background: var(--text); color: var(--ink); box-shadow: none; }
+[data-look="studio"] .ctl:hover { background: var(--surface-2); }
+[data-look="studio"] .ctl-main { border: 0; background: var(--text); color: var(--ink); box-shadow: 0 16px 34px -16px rgba(0,0,0,.6); }
+[data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: 0 16px 34px -16px rgba(17,20,28,.45); }
 [data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: 0 0 0 4px color-mix(in srgb, var(--text) 12%, transparent); }
-[data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: none; }
 @media (hover: none) {
-  [data-look="studio"] .ctl:hover { background: transparent; }
-  [data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: none; }
+  [data-look="studio"] .ctl:hover { background: var(--surface); }
+  [data-look="studio"] .ctl-main:hover { background: var(--text); }
 }
 
 [data-look="studio"] .dial-k { font: 700 clamp(13px, calc(var(--fh, 200px) * .085), 20px)/1.15 var(--ui); letter-spacing: .02em; text-transform: none; color: color-mix(in srgb, var(--c1) 75%, var(--text)); }
 [data-look="studio"] .dial .digits { --dg: min(calc(var(--fh, 200px) * .56), calc(var(--rr, 120px) * 1.1)); }
 [data-look="studio"] .dial .digits.long { font-size: min(calc(var(--dg) * .76), calc(var(--rr, 120px) * .74)); }
+/* short landscape: the dial sits high in a small ring, where the ring is narrower: one step smaller */
+@media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  [data-look="studio"] .dial .digits.long { font-size: min(calc(var(--dg) * .7), calc(var(--rr, 120px) * .64)); }
+}
 [data-look="studio"] .dial-sub { font: 500 15px/1.2 var(--ui); letter-spacing: 0; color: var(--mute); }
 [data-look="studio"] .digits .d.of { width: auto; font-size: .4em; font-weight: 400; color: var(--mute); opacity: 1; }
 
@@ -894,7 +886,7 @@
 }
 @media (max-height: 700px) and (max-aspect-ratio: 5/4) {
   [data-look="studio"] .coach { margin-top: 0; padding: 6px 6px 6px 14px; }
-  [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 0; }
+  [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 2.6em; } /* two lines, long tip or short: the ring never moves */
 }
 
 /* swipe carousel + first-run tip (Studio) */

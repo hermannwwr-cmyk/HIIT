@@ -11,6 +11,9 @@
   var $ = function (id) { return document.getElementById(id); };
   var TAU = Math.PI * 2;
   var reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // At the top level (not embedded in another page's frame), the workout screen turns off
+  // pull-to-refresh; in a frame, vertical drags must still scroll the page around it.
+  try { if (window.top === window.self) document.documentElement.classList.add('top-level'); } catch (e) { /* cross-origin: framed */ }
 
   var PHASE = {
     setup: { colors: ['#9b5cff', '#22e5ff'], energy: 0.22, chip: '', flash: '' },
@@ -102,7 +105,7 @@
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
         level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
-        swipeTip: state.swipeTip, dragTip: state.dragTip,
+        swipeTip: state.swipeTip,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -117,7 +120,6 @@
     ids: H.randomPick(H.DEFAULT_COUNT),
     warmup: prefs.warmup !== false,
     swipeTip: !!prefs.swipeTip, // the "swipe to skip" tip has been shown once
-    dragTip: !!prefs.dragTip,   // "during exercise, drag from the controls" has been shown once
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -787,6 +789,24 @@
     var n = parseInt(hex.slice(1), 16);
     return [n >> 16 & 255, n >> 8 & 255, n & 255];
   }
+  /** Relative luminance (WCAG) of a hex colour. */
+  function lumOf(hex) {
+    var c = hexRgb(hex).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  /** The icon colour on a solid hex fill: white while it keeps 3:1 (WCAG, graphics), else near-black. */
+  function inkOn(hex) { return 1.05 / (lumOf(hex) + 0.05) >= 3 ? '#fff' : '#111318'; }
+  /** A phase colour as a solid control on the light page: darkened a step at a time until it
+   *  stands out from the page by 3.3:1 (#0a84ff, for one, is only 3.0:1). Dark pages: as is. */
+  function solidOnPage(hex) {
+    if (LOOKS[look].scheme !== 'light') return hex;
+    var c = hexRgb(hex);
+    for (var i = 0; i < 8 && 0.89 / (lumOf(hex) + 0.05) < 3.3; i++) {
+      c = c.map(function (v) { return Math.round(v * 0.9); });
+      hex = '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1);
+    }
+    return hex;
+  }
   function rgba(c, a) { return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')'; }
 
   function Ring(canvas) {
@@ -810,6 +830,10 @@
     return this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
   };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
+  /** Switch colours at once (no blend through the middle). */
+  Ring.prototype.snapColors = function (a, b) {
+    this.setColors(a, b); this.a = this.ta.slice(); this.b = this.tb.slice(); this.needs = 2;
+  };
   Ring.prototype.shock = function (strength) { this.shocks.push({ t: 0, s: strength || 1 }); this.needs = 2; };
   Ring.prototype.resize = function () {
     if (!this.sizeDirty && this.w) return true;
@@ -825,10 +849,12 @@
     return true;
   };
   /**
-   * Gauge geometry. The ring has an opening at the bottom; the transport pill
-   * (back, pause, skip) sits in it, centred on the ring's end caps, and scales
-   * with the ring. The figure (or the rest countdown) fills the space inside
-   * the ring above the pill. Everything is centred in the stage.
+   * Gauge geometry. The ring has an opening at the bottom, just wide enough for
+   * the pause button, which sits in it on the line of the ring's end caps (its
+   * base). Back and skip sit on that same line, out to the left and right of the
+   * ring, clear of its arc (--bx: their distance from the centre). Everything
+   * scales with the ring; the figure (or the rest countdown) fills the space
+   * inside the ring above the pause.
    */
   Ring.prototype.layout = function () {
     var w = this.w, h = this.h;
@@ -837,27 +863,44 @@
       var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5, top: S * 0.44 + 2 };
     }
     function pill(S) {
-      // three fixed slots, so the opening never changes shape between phases
-      var ph = Math.round(Math.max(56, Math.min(84, S * 0.19)));
-      var side = Math.max(44, Math.round(ph * 0.72));
-      var main = Math.max(ph - 10, side + 8); // pause always clearly the biggest
-      ph = Math.max(ph, main + 10);
-      return { ph: ph, main: main, side: side, pw: side * 2 + main + 12 * 2 + 5 * 2 + 2 }; // 12px between buttons
+      // fixed sizes per ring, so nothing changes shape between phases; they grow with the
+      // ring (a big dial gets a big pause). Back / skip are clearly secondary (0.8 of the
+      // pause) but never under a 44 px target
+      var main = Math.round(Math.max(52, Math.min(92, S * 0.135 + 10)));
+      var side = Math.max(44, Math.round(main * 0.8));
+      return { ph: main + 10, main: main, side: side };
     }
     function fit(S) {
       var r = radius(S), p = pill(S);
-      var half = p.pw / 2 + 12 + r.ext; // opening half-chord: pill + breathing room + cap
+      // every control keeps the same clearance from the ring: the pause from the caps,
+      // back / skip from the arc above them (17 px, a little more on a big ring)
+      var gap = Math.max(17, Math.round(S * 0.028));
+      var half = p.main / 2 + gap + r.ext; // opening half-chord: pause + clearance + cap
       var ga = Math.asin(Math.min(0.92, half / r.R));
       var capY = r.R * Math.cos(ga);
-      return { S: S, r: r, p: p, ga: ga, capY: capY, below: Math.max(capY + p.ph / 2, capY + r.ext) + 2 };
+      // back / skip sit just clear of the arc, so the row stays part of the dial (beside
+      // the ring's base the nearest point of the band is straight towards the centre).
+      // A hand holding the phone needs room beside them (16 px inside the stage): on a
+      // narrow stage their clearance gives way first (down to 12 px), then the ring shrinks.
+      var outR = r.R + r.th / 2 + p.side / 2;
+      function clearX(g) { return Math.sqrt(Math.max(0, Math.pow(outR + g, 2) - capY * capY)); }
+      var room = w / 2 - 16 - p.side / 2, sg = gap;
+      if (clearX(sg) > room) sg = Math.max(12, Math.min(sg, Math.sqrt(room * room + capY * capY) - outR));
+      // …and at least as far out as the ring is wide (a disc's outer edge flush with the ring's),
+      // so on a big ring they still sit at the far left and right, not tucked in under it
+      var bx = Math.max(clearX(sg), Math.min(r.R + r.th / 2 - p.side / 2, room));
+      var air = Math.round(Math.max(8, Math.min(16, S * 0.035))); // between the row and what's below
+      return { S: S, r: r, p: p, ga: ga, capY: capY, bx: bx,
+        below: Math.max(capY + p.ph / 2, capY + r.ext) + air, wide: 2 * (bx + p.side / 2 + 16) };
     }
     // The bottom of the ring is an opening, so the ring may be taller than the
-    // stage: size it by what is actually drawn (top of the ring down to the pill).
+    // stage: size it by what is actually drawn (top of the ring down to the controls),
+    // and narrow enough that back and skip fit beside its base.
     var maxS = w / 0.9, S = Math.min(maxS, h * 1.6), f = fit(S);
-    for (var k = 0; k < 12; k++) {
+    for (var k = 0; k < 16; k++) {
       var need = f.r.top + f.below;
-      if (need <= h + 0.5 && f.p.pw <= w) break;
-      S = Math.max(60, Math.min(S * Math.pow(h / need, 0.9), S * w / f.p.pw) * 0.998);
+      if (need <= h + 0.5 && f.wide <= w + 0.5) break;
+      S = Math.max(60, Math.min(S * Math.pow(h / need, 0.9), S * Math.pow(w / f.wide, 0.9)) * 0.998);
       f = fit(S);
     }
     var r = f.r, p = f.p;
@@ -875,12 +918,28 @@
     st.style.setProperty('--ph', px(p.ph));
     st.style.setProperty('--pmain', px(p.main));
     st.style.setProperty('--pside', px(p.side));
+    // back / skip on the base line (see fit); never past the stage's edge
+    var bx = Math.min(f.bx, w / 2 - 6 - p.side / 2);
+    st.style.setProperty('--bx', px(bx));
+    // The room round back / skip for their swipe tab ("Next ›", "‹ Restart"): toward the pause
+    // only while it stays 8 px clear of the ring's band (its nearest point is straight toward the
+    // centre), and out toward the screen's edge (into the page margin, 10 px short of the edge)
+    var capY = r.R * Math.cos(f.ga), hs = p.side / 2;
+    var nearX = Math.sqrt(Math.max(0, Math.pow(r.R + r.th / 2 + 8 + hs, 2) - capY * capY));
+    var sr = st.getBoundingClientRect(), vw = window.innerWidth || w;
+    var outL = Math.min(sr.left + w / 2 - bx - hs - 10, w / 2 - bx - hs + 16);
+    var outR = Math.min(vw - (sr.left + w / 2 + bx + hs) - 10, w / 2 - bx - hs + 16);
+    this.tabRoom = { tin: Math.max(0, bx - nearX), outL: Math.max(0, outL), outR: Math.max(0, outR), side: p.side };
+    st.style.setProperty('--tin', px(this.tabRoom.tin));
     st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
     st.style.setProperty('--fh', px(regionH));
     st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));
     // on the stage, so the swipe preview's figure gets exactly the same size and place
     st.style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
     sizeUpNext();
+    // (the tabs' room changed: refit their names)
+    var sg = typeof run !== 'undefined' && run && !run.finished && run.tl.segments[run.segIdx];
+    if (sg && tabKey) { tabKey.skip = tabKey.prev = ''; syncSkipLabel(sg); syncPrevLabel(); }
   };
   /** The up-next card overlays the readout's space; its demo tile fills that height. */
   /**
@@ -1112,10 +1171,13 @@
   var run = null;
   var wakeLock = null;
 
-  var lockPending = false;
+  var lockPending = false, wakeDenied = false; // (denied: this frame may not keep the screen on)
   function lockScreen() {
-    if (wakeLock || lockPending || document.hidden) return;
+    if (wakeLock || lockPending || wakeDenied || document.hidden) return;
     try {
+      // (in an embedding frame without the permission, don't ask at all: it only logs errors)
+      var pol = document.permissionsPolicy || document.featurePolicy;
+      if (pol && pol.allowsFeature && !pol.allowsFeature('screen-wake-lock')) { wakeDenied = true; return; }
       if (navigator.wakeLock && navigator.wakeLock.request) {
         lockPending = true;
         navigator.wakeLock.request('screen').then(function (l) {
@@ -1123,7 +1185,7 @@
           if (!run || run.finished) { l.release().catch(noop); return; }
           wakeLock = l;
           l.addEventListener('release', function () { if (wakeLock === l) wakeLock = null; });
-        }).catch(function () { lockPending = false; });
+        }).catch(function (err) { lockPending = false; if (err && err.name === 'NotAllowedError' && !document.hidden) wakeDenied = true; });
       }
     } catch (e) { lockPending = false; }
   }
@@ -1195,6 +1257,7 @@
   }
 
   function setPlaying(on) {
+    if (!on && carousel) carousel.clearKeys(); // pausing stops queued arrow presses too
     if (!run || run.finished || on === run.playing) return;
     run.base = elapsedNow();
     run.anchor = performance.now();
@@ -1211,6 +1274,7 @@
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
+    if (carousel) carousel.clearKeys();
     if (!run || !run.playing) return;
     run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
     A.stopVoice();
@@ -1244,6 +1308,7 @@
       veilGuard = setTimeout(function () { veil.classList.remove('guard'); }, 500);
     }
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
+    $('transport').classList.toggle('held', !!paused); // ⏮ / ⏭ keep their tabs and hints tucked away
     setInert(!$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden);
     ring.needs = 2;
     if (paused && run) {
@@ -1360,7 +1425,8 @@
     var pre = seg.type === 'prep' ? 'First' : seg.type === 'setrest' ? 'Set ' + (seg.set + 1) : 'Next';
     $('unName').innerHTML = '<span class="un-pre">' + esc(pre) + ' · </span>' + esc(ex.name);
     $('unMeta').innerHTML = '<b>' + esc(H.GROUPS[ex.group].label) + '</b><span class="un-mus"> · ' + esc(ex.muscles) + '</span>';
-    $('unStartText').textContent = seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now';
+    // a narrow card shows just "Start" (the card already names the set); the button's aria-label has it all
+    $('unStartText').innerHTML = '<span class="un-long">' + (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + '</span><span class="un-short">Start</span>';
     // a 30 s rest is part of the workout: starting early is possible, not encouraged
     $('unStart').classList.toggle('quiet', seg.type === 'rest');
     $('unStart').setAttribute('aria-label', (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + ex.name);
@@ -1514,6 +1580,101 @@
   /** No label inside small rings (or short landscape ones): the countdown gets the room. */
   function dialBare() { return !!(ring.geo && (ring.geo.S < 300 || (window.innerWidth > window.innerHeight && ring.geo.fh < 200))); }
 
+  /** An interval's name for a button label: "rest", "Push Ups", "calf stretch, right side". */
+  function labelName(sg) {
+    return sg.type === 'warmup' && sg.side ? exName(sg.move).toLowerCase() + ', ' + sg.side + ' side' : segName(sg);
+  }
+  /** ⏭ says what it will do: "Skip to rest", "Start now: Push Ups", "Finish workout"... */
+  function syncSkipLabel(seg) {
+    var nx = run.tl.segments[seg.index + 1], label;
+    if (!nx) label = 'Finish workout';
+    else if (seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest') label = (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise);
+    else if (seg.type === 'warmup') label = nx.type === 'warmup' ? 'Next warm-up move: ' + labelName(nx) : 'Finish warm-up';
+    else label = 'Skip to ' + labelName(nx);
+    $('skip').setAttribute('aria-label', label);
+    setTab('skip', nx, nx ? 'Next' : 'Finish');
+  }
+  /** Contrast ratio (WCAG) of two hex colours. */
+  function contrastOf(a, b) { var x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  /** a mixed toward b by w (0..1), as hex. */
+  function mixHex(a, b, w) {
+    var p = hexRgb(a), q = hexRgb(b);
+    return '#' + ((1 << 24) | p.map(function (v, i) { return Math.round(v + (q[i] - v) * w); }).reduce(function (n, v) { return (n << 8) | v; }, 0)).toString(16).slice(-6);
+  }
+  /** Step a toward b until it keeps 4.6:1 against bg (WCAG AA for text, with a margin). */
+  function aaOn(a, b, bg) {
+    for (var i = 0; i < 24 && contrastOf(a, bg) < 4.6; i++) a = mixHex(a, b, 0.12);
+    return a;
+  }
+  /**
+   * ⏭ / ⏮'s tab: a fixed word for what it does ("Next", "Finish", "Restart", "Redo", "Back"),
+   * in the colour of where it lands; the ring's preview names the place. Its colours keep
+   * AA contrast both as a tint (swiping) and solid (letting go will do it), and its size and
+   * place fit the room round the button (see Ring.layout). Only touched when something changes.
+   */
+  var tabKey = { skip: '', prev: '' };
+  function setTab(id, sg, word) {
+    var col = solidOnPage((sg ? PHASE[sg.type] : PHASE.done).colors[0]), light = LOOKS[look].scheme === 'light';
+    var room = ring && ring.tabRoom, key = word + '|' + col + '|' + look + '|' + (room ? room.tin + ',' + room.outL + ',' + room.outR : '');
+    if (tabKey[id] === key) return;
+    tabKey[id] = key;
+    var btn = $(id), d = $(id + 'Dest');
+    // colours: the tint is the phase colour washed into the button's surface; its ink and the
+    // solid fill are pushed darker (light page) or lighter (dark page) until they read at AA
+    var surf = (getComputedStyle(document.documentElement).getPropertyValue('--surface-solid') || '').trim();
+    if (!/^#[0-9a-f]{6}$/i.test(surf)) surf = light ? '#ffffff' : '#2e2e31';
+    var tint = mixHex(surf, col, light ? 0.14 : 0.2);
+    var ink = aaOn(col, light ? '#000000' : '#ffffff', tint);
+    var on = light ? '#ffffff' : '#111318', solid = aaOn(col, light ? '#000000' : '#ffffff', on);
+    btn.style.setProperty('--t-tint', tint);
+    btn.style.setProperty('--t-ink', ink);
+    btn.style.setProperty('--t-solid', solid);
+    btn.style.setProperty('--t-on', on);
+    if (d.textContent !== word) d.textContent = word;
+    // size: the word, its chevron and padding; place: toward the pause as far as the ring allows,
+    // the rest out toward the edge
+    if (!room) return;
+    var tab = d.parentNode, cs = getComputedStyle(tab);
+    var need = Math.ceil(tab.scrollWidth ? d.offsetWidth + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.columnGap || cs.gap || 0) + tab.querySelector('.ctl-chev').getBoundingClientRect().width : 0);
+    var W = Math.max(room.side, need), extra = W - room.side, out = id === 'skip' ? room.outR : room.outL;
+    var tin = Math.min(room.tin, extra / 2);
+    if (extra - tin > out) tin = Math.min(room.tin, extra - out);
+    var shift = (extra - tin) / 2 - tin / 2; // + outward
+    btn.style.setProperty('--tw', Math.round(W) + 'px');
+    btn.style.setProperty('--tx', Math.round(id === 'skip' ? shift : -shift) + 'px');
+  }
+  /** ⏮ says what it will do: "Restart Push Ups", "Back to rest", "Redo Push Ups". */
+  function syncPrevLabel() {
+    if (!run || run.finished) return;
+    var b = backTarget(), name = b.seg ? labelName(b.seg) : '';
+    var label = b.kind === 'restart' ? 'Restart ' + name : b.kind === 'redo' ? 'Redo ' + name : 'Back to ' + name;
+    var btn = $('prev');
+    if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
+    setTab('prev', b.seg, b.kind === 'restart' ? 'Restart' : b.kind === 'redo' ? 'Redo' : 'Back');
+  }
+  // the buttons' own icons in a tip (not emoji), with words for screen readers
+  var ICON_NEXT = '<svg aria-hidden="true"><use href="#i-next"/></svg><span class="sr-only">the skip button</span>';
+  var ICON_PREV = '<svg aria-hidden="true"><use href="#i-prev"/></svg><span class="sr-only">the back button</span>';
+  /** A short line in the progress row (where "N sets left" sits) for a few seconds. */
+  var tipT = 0;
+  function showTip(html, ms) {
+    var tip = $('wpTip');
+    tip.innerHTML = html;
+    tip.hidden = false; $('wProg').classList.add('tipping');
+    clearTimeout(tipT);
+    tipT = setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, ms);
+  }
+  /** ⏭ / ⏮ glow once: "this is where that lives". With reduced motion: a still halo for a moment. */
+  function pulseCtl(btn) {
+    if (reduced) {
+      btn.classList.add('halo');
+      clearTimeout(btn._haloT);
+      btn._haloT = setTimeout(function () { btn.classList.remove('halo'); }, 1500);
+      return;
+    }
+    btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
+  }
+
   function enterSegment(idx) {
     var tl = run.tl, seg = tl.segments[idx], ph = PHASE[seg.type];
     run.segIdx = idx;
@@ -1596,16 +1757,17 @@
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
-    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Next warm-up move'
-      : restMode ? (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise)
-      : 'Next interval');
+    syncSkipLabel(seg);
+    syncPrevLabel();
 
     updateProgress(seg);
+    if (carousel) carousel.sliver(true); // resting: the next page's edge peeks in at the rim
     if (restMode && seg.type !== 'setrest' && !state.swipeTip) {
       state.swipeTip = true; savePrefs();
-      $('wpTip').hidden = false; $('wProg').classList.add('tipping');
-      setTimeout(function () { $('wpTip').hidden = true; $('wProg').classList.remove('tipping'); }, 7000);
+      showTip('Swipe ← or tap ' + ICON_NEXT + ' for next', 7000);
+      // the slide shows the swipe; then ⏭ glows once, so "tap ⏭" points at something
       setTimeout(function () { if (carousel) carousel.nudge(); }, 1300);
+      setTimeout(function () { if (run && run.mode === 'rest') pulseCtl($('skip')); }, reduced ? 600 : 2300); // (no slide with reduced motion)
     }
 
     // phase wipe, sound, voice
@@ -1712,6 +1874,7 @@
 
   /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
+    syncPrevLabel(); // ⏮ goes back in the first 3 s, restarts after
     if (seg.type === 'warmup') {
       if (!seg.counts && moving(seg)) setDigits(String(whole), whole + ' seconds left');
       return;
@@ -1851,6 +2014,35 @@
     return beat === 1 ? cap(COUNT_WORDS[count - 1]) : COUNT_WORDS[beat - 1];
   }
 
+  /**
+   * Set an element's markup, changing only the text when the tags stay the same. Text that
+   * ticks every second must not replace its elements: a finger that touched one would lose
+   * its touchmove / touchend (they go to the element it began on), and so would the swipe.
+   */
+  function setRich(el, html) {
+    if (el._html === html) return;
+    el._html = html;
+    var tpl = document.createElement('div');
+    tpl.innerHTML = html;
+    if (sameShape(el, tpl)) copyText(el, tpl); else el.innerHTML = html;
+  }
+  function sameShape(a, b) {
+    var x = a.childNodes, y = b.childNodes;
+    if (x.length !== y.length) return false;
+    for (var i = 0; i < x.length; i++) {
+      if (x[i].nodeType !== y[i].nodeType || x[i].nodeName !== y[i].nodeName) return false;
+      if (x[i].nodeType === 1 && (x[i].className !== y[i].className || !sameShape(x[i], y[i]))) return false;
+    }
+    return true;
+  }
+  function copyText(a, b) {
+    for (var i = 0; i < a.childNodes.length; i++) {
+      var x = a.childNodes[i], y = b.childNodes[i];
+      if (x.nodeType === 3) { if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue; }
+      else if (x.nodeType === 1) copyText(x, y);
+    }
+  }
+
   function update() {
     if (!run || run.finished) return;
     var tl = run.tl;
@@ -1868,7 +2060,7 @@
       onSecond(seg, whole, prev);
       var nl = nextLine(idx, t);
       var wn = $('wNext');
-      wn.innerHTML = nl;
+      setRich(wn, nl);
       wn.hidden = !nl;
     }
     if (seg.type === 'warmup' && seg.counts && moving(seg)) {
@@ -2085,44 +2277,96 @@
 
   // ---------------------------------------------------------------- swipe carousel: left = next, right = back
   /**
-   * The ring's inside is a carousel. Dragging slides what's on now out with the
-   * finger and slides a preview of the destination in from the other side,
-   * clipped to the ring: the next exercise's live demo, "Rest 0:30", "Restart
-   * Push Ups"... The ring blends toward the destination's colour, and ⏭ / ⏮
-   * charges with an arc that fills; when it's full (with a haptic tick) the
-   * button turns solid and letting go does it. Pause never moves.
-   *   - Rest, get ready, set break: swipe anywhere (you're at the phone).
-   *   - Exercise, jacks, warm-up: only a drag that starts on the controls, and
-   *     only a full charge; wipes, palms and picking the phone up do nothing.
-   * Tapping ⏭ / ⏮ plays the same slide. Edges (system back), palms, dialogs and
-   * the paused screen are ignored; double taps can't skip twice.
+   * The workout screen is a pager. Swiping anywhere on it (not the top bar or the
+   * progress strip) slides what's on now out of the ring with the finger, 1:1, and
+   * slides the destination in from the other side, clipped to the ring: the next
+   * exercise's live demo, "Rest 0:30", "Restart Push Ups"... Letting go commits
+   * when the swipe was a flick (fast enough) or went far enough; otherwise it
+   * springs back. Either way the content settles at the finger's speed.
+   * Past the ends of the plan (next on the last interval) it only gives a little,
+   * with resistance. Undo (8 s) is the safety net, not friction: the same
+   * gesture works in exercise, rest, get ready and the set break.
+   *
+   * Recognition: a touch is ours once it has moved 10 px mostly sideways; a
+   * mostly vertical one is left to the browser. Touch uses TouchEvents (the
+   * sideways moves are preventDefault-ed, so no browser, webview or embedding
+   * page can turn them into a pan and cancel us); mouse and pen use pointer
+   * events. A second finger cancels; the outer 16 px (system back gesture) are
+   * left alone. A tap on a button stays a tap; a swipe that starts on one swipes.
+   *
+   * Hooks for the controls (on #transport): --ck (0..1 toward a commit by
+   * distance), --dc / --dfg (the destination's colour and the ink on it),
+   * charge-next / charge-prev (dragging that way) and armed (letting go now
+   * would commit: far enough, or moving fast enough).
    */
   var carousel = null;
   function initSwipe() {
     var area = $('workout'), tp = $('transport'), stage = $('stage');
     var peek = $('riPeek'), pkDial = $('pkDial'), pkK = $('pkK'), pkDigits = $('pkDigits'), pkSub = $('pkSub');
     var chip = $('phaseChip'), wName = $('wName'), wEx = $('wEx'), head = document.querySelector('.w-head');
+    var edge = $('riEdge'), edgeN = $('riEdgeN');
     var peekFig = null, saved = null, dest = null;
-    var g = null, eatClick = false, lockUntil = 0, settleT = 0, nudgeT = 0;
+    var g = null, eatClick = false, eatT = 0, lockUntil = 0, settleT = 0, nudgeT = 0, pending = null, multi = false;
+    var TOUCH = 'ontouchstart' in window;
+    var SLOP = 10, EDGE = 16, FLICK_V = 0.25, FLICK_MIN = 24; // px, px, px/ms, px
     function locked() { return performance.now() < lockUntil; }
-    function blocked(e) {
-      return !run || run.finished || currentScreen !== 'workout' || locked() ||
+    function blocked(target) {
+      return !run || run.finished || currentScreen !== 'workout' ||
         !$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden ||
-        (e.target.closest && e.target.closest('.w-top, .w-prog, .veil'));
+        !!(target && target.closest && target.closest('.w-top, .w-prog, .veil'));
     }
-    function threshold() { return Math.min(110, Math.max(64, window.innerWidth * 0.2)); }
-    function travel() { return 2 * (parseFloat(getComputedStyle(stage).getPropertyValue('--ri')) || 140) + 24; }
-    function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
+    /** How far a slow drag must go to commit: about 28% of a phone's width (at most 110 px),
+     *  or 60% of a page on a big ring (a tablet's); never more than 30% of the screen or 75% of
+     *  a page (a small ring's page is short). */
+    function commitDist() {
+      var W = window.innerWidth, D = travel();
+      return Math.max(56, Math.min(W * 0.3, D * 0.75, Math.max(Math.min(110, W * 0.28), D * 0.6)));
+    }
+    /** The ring's inner radius: the pages are clipped to this circle. */
+    var riCache = 0; // (read once per gesture: a style read on every move is costly on a slow phone)
+    function ri() { return riCache || (riCache = parseFloat(getComputedStyle(stage).getPropertyValue('--ri')) || 140); }
+    /** The pager's page width: the pages sit edge to edge at 1.3 radii apart (about the width of
+     *  their content), so the incoming one shows as soon as the outgoing one moves. */
+    function travel() { return 1.3 * ri(); }
+    var SLIVER = 14; // px of the next page's edge showing inside the ring while resting
+    /**
+     * The incoming page's edge: a curtain in the destination's colour that leads it in, with
+     * the destination's name on it, kept inside the ring's visible chord.
+     */
+    function edgeLook(dir, sg, prefix) {
+      edge.classList.toggle('to-next', dir > 0); edge.classList.toggle('to-prev', dir < 0);
+      edgeN.classList.toggle('to-next', dir > 0); edgeN.classList.toggle('to-prev', dir < 0);
+      var col = (sg ? PHASE[sg.type] : PHASE.done).colors[0], light = LOOKS[look].scheme === 'light';
+      var surf = (getComputedStyle(document.documentElement).getPropertyValue('--surface-solid') || '').trim();
+      if (!/^#[0-9a-f]{6}$/i.test(surf)) surf = light ? '#ffffff' : '#2e2e31';
+      var pill = mixHex(surf, solidOnPage(col), light ? 0.16 : 0.24);
+      stage.style.setProperty('--ec', solidOnPage(col));
+      stage.style.setProperty('--eb', pill);
+      stage.style.setProperty('--en', aaOn(solidOnPage(col), light ? '#000000' : '#ffffff', pill));
+      var name = sg ? headFor(sg).name : ''; // (the tab says Restart / Redo: the name alone here)
+      if (edgeN.textContent !== name) edgeN.textContent = name;
+      return name;
+    }
+    /** Rubber band: the further you pull, the less it gives (never more than c). */
+    function rubber(x, c) { return c * (1 - 1 / (x * 0.55 / c + 1)); }
 
     /** Where a move in direction dir (+1 next, -1 back) lands, and the preview of it. */
     function prepare(dir) {
-      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, prefix = '';
-      if (dir > 0) sg = tl.segments[idx + 1];
-      else { var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : ''; }
-      dest = { dir: dir, seg: sg, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
-      tp.style.setProperty('--dc', dest.colors[0]);
+      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, prefix = '', edge = false;
+      if (dir > 0) { sg = tl.segments[idx + 1]; edge = !sg; } // past the last interval: nothing to swipe to
+      else {
+        var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : '';
+        edge = bt.kind === 'restart' && sg.index === 0 && t - sg.start < 1; // the very start of the plan
+      }
+      dest = { dir: dir, seg: edge ? null : sg, edge: edge, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
+      edgeLook(dir, dest.seg, prefix);
+      dest.tw = dest.seg ? edgeN.offsetWidth : 0; // (shown: prepare() runs once the carousel is open)
+      var dc = solidOnPage(dest.colors[0]);
+      tp.style.setProperty('--dc', dc);
+      tp.style.setProperty('--dfg', inkOn(dc)); // the armed button's icon
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
-      if (!sg) { peek.classList.add('is-end'); return; }
+      peek.classList.toggle('to-next', dir > 0); peek.classList.toggle('to-prev', dir < 0);
+      if (!dest.seg) { peek.classList.add('is-end'); return; }
       var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
       if (restLike) {
         // the dial exactly as it will look: same label, digits and breathing line
@@ -2150,26 +2394,28 @@
         peekFig.setPlaying(true);
       }
     }
-    /** Armed: the title and the ring switch to the destination, so letting go changes nothing more. */
+    /** Armed: letting go now would go there (⏭ / ⏮'s tab turns solid, with a tick). */
     function arm(on) {
       if (on === tp.classList.contains('armed')) return;
       tp.classList.toggle('armed', on);
-      if (on) {
-        buzz(12);
-        if (dest && dest.seg) {
-          saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
-          var h = headFor(dest.seg);
-          chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
-          wEx.innerHTML = h.ex;
-          // the head wears the destination's colours too
-          var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
-          head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
-          head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
-          head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
-          ring.fastUntil = performance.now() + 300;
-          ring.setColors(dest.colors[0], dest.colors[1]);
-        }
-      } else restoreHead();
+      if (on) { if (!g || !g.buzzed) { if (g) g.buzzed = true; buzz(12); } }
+    }
+    /** Committed: the title and the ring switch to the destination as it slides in, so landing
+     *  changes nothing more. (Not while dragging: until you let go, the head and the timer both
+     *  stay on what's on now, and the preview in the ring is the only thing that names where to.) */
+    function showDest() {
+      if (!dest || !dest.seg) return;
+      saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
+      var h = headFor(dest.seg);
+      chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
+      wEx.innerHTML = h.ex;
+      // the head wears the destination's colours too
+      var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
+      head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
+      head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
+      head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
+      // the ring switches outright, under the slide (a blend of, say, blue and coral is mud)
+      ring.snapColors(dest.colors[0], dest.colors[1]);
     }
     function clearHeadColours() {
       head.style.removeProperty('--c1'); head.style.removeProperty('--c2');
@@ -2184,21 +2430,82 @@
       }
       if (run) { var cur = run.tl.segments[run.segIdx]; if (cur) { var c = PHASE[cur.type].colors; ring.setColors(c[0], c[1]); } }
     }
-    /** Progress k (0..1+) of a move in direction dir: what's on now leaves with the finger, the destination eases in. */
-    function set(k, dir, over) {
-      var th = threshold(), D = travel(), kk = Math.min(1, k), e = easeOut(kk), extra = (over || 0) * 0.06;
-      stage.style.setProperty('--sx', (-dir * (kk * th + extra)).toFixed(1) + 'px');
-      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.35).toFixed(3));
-      stage.style.setProperty('--ss', (1 - 0.06 * kk).toFixed(4));
-      stage.style.setProperty('--px', (dir * 0.35 * D * (1 - e) - dir * extra).toFixed(1) + 'px');
-      stage.style.setProperty('--po', easeOut(Math.max(0, (kk - 0.25) / 0.75)).toFixed(3));
-      tp.style.setProperty('--ck', kk.toFixed(3));
-      tp.classList.toggle('charge-next', dir > 0 && kk > 0);
-      tp.classList.toggle('charge-prev', dir < 0 && kk > 0);
-      arm(kk >= 1);
+    /**
+     * Place the pages: what's on now sits off px toward -dir (it follows the finger), the
+     * destination comes in from the dir side and meets it. ck: 0..1 toward a commit.
+     */
+    function place(off, dir, ck) {
+      var D = travel(), r = ri(), p = Math.max(0, Math.min(1, off / D)), real = dest && dest.seg;
+      stage.style.setProperty('--sx', (-dir * off).toFixed(1) + 'px');
+      stage.style.setProperty('--so', Math.max(0, 1 - p).toFixed(3));
+      stage.style.setProperty('--sk', (1 - 0.06 * p).toFixed(4));
+      stage.style.setProperty('--px', (dir * Math.max(0, D - off)).toFixed(1) + 'px');
+      stage.style.setProperty('--po', Math.min(1, 0.3 + p * 1.6).toFixed(3));
+      // the curtain's edge moves with the finger from the ring's rim; the name rides on it,
+      // but never further out than the visible chord (it can be read from the first 20 px)
+      // (the name tag sits high in the ring, 0.74 r above the centre, where the chord reaches
+      // 0.67 r each way (on a small ring, at its top edge, clear of the big digits), just ahead
+      // of the curtain's edge: over the leaving page, clear of the incoming figure's head and
+      // of the leaving one's, which has moved off with the finger. The tag is the one name, at
+      // full strength, for as long as the finger is down; the incoming page's own label (a
+      // dial's "Push Ups in") waits. Letting go hands over: the title takes the name at once
+      // (showDest), the tag fades in the first half of the landing and the label fades in in
+      // the second (see commit() and the CSS), so the two never show together. The leaving
+      // page's label steps aside as soon as the drag starts)
+      var ex = r - SLIVER - off;
+      stage.style.setProperty('--ex', ex.toFixed(1) + 'px');
+      stage.style.setProperty('--co', real ? (1 - p * p).toFixed(3) : '0');
+      // (inside the visible chord if it fits there, else centred: it may cross the ring's band)
+      var ch = r * 0.67 - 8, tw = dest && dest.tw || 0;
+      stage.style.setProperty('--nx', (tw <= 2 * ch ? Math.max(tw - ch, Math.min(ch, ex - 8)) : tw / 2).toFixed(1) + 'px');
+      stage.style.setProperty('--cl', (1 - Math.min(1, off / 16)).toFixed(3));
+      stage.style.setProperty('--ny', (r < 100 ? r - 4 : r * 0.74).toFixed(1) + 'px');
+      stage.style.setProperty('--pn', real ? Math.min(1, off / 20).toFixed(3) : '0');
+      stage.style.setProperty('--pl', 0);
+      // the incoming page is clipped at its edge (its figure never spills over what's leaving)
+      // while the finger is down; the clip opens as it lands (see commit())
+      stage.style.setProperty('--pcl', (0.3 * r + SLIVER).toFixed(1) + 'px');
+      tp.style.setProperty('--ck', ck.toFixed(3));
+      tp.classList.toggle('charge-next', dir > 0 && ck > 0);
+      tp.classList.toggle('charge-prev', dir < 0 && ck > 0);
     }
-    function open() { clearTimeout(settleT); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); }
-    function close(after) {
+    /**
+     * Time the settle: dist px to go, starting at the finger's speed v (px/ms). Returns ms.
+     * The curve is a cubic that leaves at speed m0·dist/T and comes to rest at the end, as
+     * cubic-bezier(1/3, m0/3, 2/3, 1) (x = t exactly, so the y control points are the
+     * Hermite tangents). m0 = 2 (T = 2·dist/v) leaves at exactly the finger's speed and only
+     * slows down; m0 is held to 1.5..3 (still only slowing), and T to 140..360 ms, so a very
+     * slow release still lands promptly and a very fast one doesn't snap.
+     */
+    function settleWith(dist, v) {
+      var sp = Math.abs(v || 0);
+      if (reduced) { stage.style.setProperty('--st', '0ms'); return 0; }
+      var T = sp > 0.02 ? 2 * dist / sp : 260;
+      T = Math.round(Math.max(140, Math.min(360, T)));
+      var m0 = dist > 1 ? Math.max(1.5, Math.min(3, sp * T / dist)) : 2;
+      stage.style.setProperty('--st', T + 'ms');
+      stage.style.setProperty('--se', 'cubic-bezier(.3333,' + (m0 / 3).toFixed(4) + ',.6667,1)');
+      return T;
+    }
+    function open() { riCache = 0; clearTimeout(settleT); sliverHide(); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); }
+    /**
+     * Resting (rest, get ready, the set break): the next page's edge shows as a sliver of its
+     * colour at the ring's rim, sliding in once as the phase begins (still, with reduced motion).
+     */
+    function sliverShow(anim) {
+      riCache = 0;
+      if (!run || run.finished || run.mode !== 'rest' || g || pending || stage.classList.contains('carousel')) { sliverHide(); return; }
+      var tl = run.tl, sg = tl.segments[H.segmentAt(tl, elapsedNow()) + 1];
+      if (!sg) { sliverHide(); return; }
+      edgeLook(1, sg, '');
+      stage.style.setProperty('--ex', (ri() - SLIVER) + 'px');
+      stage.style.setProperty('--co', 1); stage.style.setProperty('--pn', 0);
+      var was = stage.classList.contains('peeking');
+      stage.classList.add('peeking');
+      if (anim && !was && !reduced) { edge.classList.remove('peek-in'); void edge.offsetWidth; edge.classList.add('peek-in'); }
+    }
+    function sliverHide() { stage.classList.remove('peeking'); edge.classList.remove('peek-in'); }
+    function close(ms) {
       stage.classList.remove('swiping');
       clearTimeout(settleT);
       settleT = setTimeout(function () {
@@ -2206,132 +2513,305 @@
         stage.classList.remove('settle', 'carousel');
         tp.classList.remove('charge-next', 'charge-prev');
         if (peekFig) peekFig.setPlaying(false);
-        if (after) after();
-      }, reduced ? 0 : 260);
+        sliverShow(false);
+      }, (ms || 0) + 40);
     }
-    function springBack(dir) {
+    function springBack(dir, off, v) {
+      arm(false);
+      restoreHead();
+      var ms = settleWith(off || travel() * 0.3, v);
       stage.classList.add('settle');
-      set(0, dir);
-      close();
+      place(0, dir, 0);
+      close(ms);
     }
     /** Finish the move from wherever it is (swipes, ⏭ / ⏮ taps and arrow keys). */
-    function commit(dir, act) {
-      if (!run || locked()) return;
-      lockUntil = performance.now() + (reduced ? 300 : 600); // no double skips
+    var keyQueue = []; // arrow presses waiting for the slide before them (at most 4)
+    function commit(dir, act, key, swipe) {
+      if (!run) return;
+      if (locked() && !swipe) {
+        // no double skips from a double tap; but quick arrow presses are meant: each one
+        // slides on in turn once the current slide is done (held keys don't repeat: see the keydown)
+        if (key && keyQueue.length < 4) keyQueue.push({ dir: dir, act: act });
+        return;
+      }
+      if (pending) land(true); // (a swipe during the slide before: that one lands first)
+      lockUntil = performance.now() + (key ? (reduced ? 120 : 260) : reduced ? 300 : 600);
       if (!dest || dest.dir !== dir || !stage.classList.contains('carousel')) { open(); prepare(dir); }
+      var D = travel(), off = swipe ? swipe.off : 0;
+      var ms = settleWith(Math.max(1, D - off), swipe ? swipe.v : 0);
       stage.classList.remove('swiping');
       stage.classList.add('settle');
-      set(1, dir);
-      setTimeout(function () {
-        // swap in the real interval: it looks exactly like the preview, so snap without animating
-        saved = null;
-        clearHeadColours();
-        stage.classList.remove('settle');
-        stage.classList.add('snap');
-        document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
-        var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
-        run.quiet = true;
-        act();
-        run.quiet = false;
-        if (hand != null && workFig && dest.seg) {
-          // the real figure continues exactly where the preview was: same move, pose and colours
-          var nowSeg = run.tl.segments[run.segIdx];
-          if (nowSeg && nowSeg.index === dest.seg.index) {
-            // a warm-up step keeps its tempo and count-in; on the preview's clock, which runs at
-            // most the length of the swipe ahead (the count-in only waits longer, and BEGIN
-            // re-times the loop to the count)
-            var ho = dest.seg.type === 'warmup' ? warmFigOpts(dest.seg, elapsedNow()) : {};
-            ho.instant = true; ho.time = hand;
-            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, ho);
-            workFig.setColors(dest.colors[0], dest.colors[1], true);
-            workFig.setEnergy(PHASE[dest.seg.type].energy, true);
-          }
+      place(D, dir, 1);
+      stage.style.setProperty('--pcl', (3 * ri()) + 'px'); // landing: the whole page shows
+      stage.style.setProperty('--pn', 0); // the title has its name now (showDest); the tag
+      stage.style.setProperty('--pl', 1); // hands over to the page's own label as it lands
+      arm(true);
+      showDest();
+      pending = { t: setTimeout(land, ms), act: act };
+    }
+    /** Swap in the real interval: it looks exactly like the preview, so snap without animating. */
+    function land(early) {
+      var p = pending; pending = null;
+      if (!p) return;
+      clearTimeout(p.t);
+      saved = null;
+      clearHeadColours();
+      stage.classList.remove('settle');
+      stage.classList.add('snap');
+      document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
+      var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
+      run.quiet = true;
+      p.act();
+      run.quiet = false;
+      if (hand != null && workFig && dest.seg) {
+        // the real figure continues exactly where the preview was: same move, pose and colours
+        var nowSeg = run.tl.segments[run.segIdx];
+        if (nowSeg && nowSeg.index === dest.seg.index) {
+          // a warm-up step keeps its tempo and count-in; on the preview's clock, which runs at
+          // most the length of the swipe ahead (the count-in only waits longer, and BEGIN
+          // re-times the loop to the count)
+          var ho = dest.seg.type === 'warmup' ? warmFigOpts(dest.seg, elapsedNow()) : {};
+          ho.instant = true; ho.time = hand;
+          workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, ho);
+          workFig.setColors(dest.colors[0], dest.colors[1], true);
+          workFig.setEnergy(PHASE[dest.seg.type].energy, true);
         }
-        stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
-        stage.style.setProperty('--po', 0);
-        tp.classList.remove('armed');
-        stage.classList.remove('carousel', 'swiping');
-        tp.classList.remove('charge-next', 'charge-prev');
-        if (peekFig) peekFig.setPlaying(false);
-        dest = null;
-        requestAnimationFrame(function () { requestAnimationFrame(function () { stage.classList.remove('snap'); document.body.classList.remove('instant-phase'); }); });
-      }, reduced ? 0 : 220);
+      }
+      stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--sk', 1);
+      stage.style.setProperty('--po', 0);
+      tp.classList.remove('armed');
+      tp.style.setProperty('--ck', 0);
+      stage.classList.remove('carousel', 'swiping');
+      tp.classList.remove('charge-next', 'charge-prev');
+      if (peekFig) peekFig.setPlaying(false);
+      dest = null;
+      if (early === true) {
+        // landed early for the next swipe: settle the snap now, so that one animates
+        void stage.offsetWidth;
+        stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+        return;
+      }
+      requestAnimationFrame(function () { requestAnimationFrame(function () {
+        if (pending) return; // the next slide has begun (and landed this one)
+        stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+        sliverShow(true);
+        var q = keyQueue.shift();
+        if (q) {
+          lockUntil = 0;
+          // (pausing, the quit dialog, Undo or a swipe clear the queue; this is a backstop)
+          if (run && !run.finished && $('pausedVeil').hidden && $('quitDialog').hidden && $('coachSheet').hidden) commit(q.dir, q.act, true);
+          else keyQueue.length = 0;
+        }
+      }); });
     }
     /** One-time nudge that shows the next interval is just a swipe away. */
     function nudge() {
-      if (!run || g || locked() || reduced) return;
+      if (!run || g || pending || reduced) return;
       open(); prepare(1);
+      if (dest.edge) { dest = null; close(0); return; }
       stage.classList.remove('swiping'); stage.classList.add('settle');
-      set(0.35, 1);
+      var D = travel();
+      settleWith(D * 0.3, 0);
+      place(D * 0.3, 1, 0.3);
       nudgeT = setTimeout(function () { nudgeT = 0; springBack(1); }, 700);
     }
-    /** A sideways swipe during exercise that we ignored: show where skipping lives instead. */
-    var hinted = false;
-    function hintControls(dir) {
-      if (hinted) return;
-      hinted = true;
-      var btn = dir > 0 ? $('skip') : $('prev');
-      btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
-      if (!state.dragTip) {
-        state.dragTip = true; savePrefs();
-        var tip = $('wpTip'); tip.textContent = 'During exercise, drag from the controls to skip';
-        tip.hidden = false; $('wProg').classList.add('tipping');
-        setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, 5000);
-      }
-    }
-    carousel = { commit: commit, nudge: nudge };
+    carousel = { commit: commit, nudge: nudge, clearKeys: function () { keyQueue.length = 0; }, sliver: sliverShow };
 
-    area.addEventListener('pointerdown', function (e) {
-      if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
-      if (e.pointerType === 'touch') {
-        if (e.width > 40 || e.height > 40) return; // a palm or a wipe, not a fingertip
-        if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
-      }
-      var restMode = run.mode === 'rest', ignored = false;
-      if (!restMode) {
-        // during exercise only a drag that starts on the controls counts
-        var r = tp.getBoundingClientRect(), m = 16;
-        ignored = e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
-      }
-      hinted = false;
+    // ---- the gesture: one recogniser, fed by touch events, or pointer events for mouse and pen
+    /** When the input happened (the event's own time: on a busy frame, events arrive late and
+     *  bunched up, and the speed must come from when the finger was there, not when we heard). */
+    function stamp(e) { var t = e.timeStamp, n = performance.now(); return t > 0 && Math.abs(t - n) < 5000 ? t : n; }
+    function down(id, kind, x, y, target, t) {
+      eatClick = false; // (the click of the last swipe, if any, has been and gone)
+      if (g && g.kind === 'pointer' && performance.now() - g.real > 8000) abort(); // a mouse whose release never came
+      if (g || multi || blocked(target)) return;
+      if (kind === 'touch' && (x < EDGE || x > window.innerWidth - EDGE)) return; // the system back gesture
+      if (pending) land(true); // a new swipe during the last one's slide: that one lands now
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
-      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored };
-    });
-    area.addEventListener('pointermove', function (e) {
-      if (!g || e.pointerId !== g.id) return;
-      var dx = e.clientX - g.x, dy = e.clientY - g.y;
-      if (g.ignored) {
-        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) { hintControls(dx < 0 ? 1 : -1); g = null; }
-        else if (Math.abs(dy) > 48) g = null;
-        return;
+      keyQueue.length = 0; // and any arrow presses still waiting
+      g = { id: id, kind: kind, x: x, y: y, t: t, on: false, dead: false, dx: 0, dir: 0, s: [[t, x]], buzzed: false, real: performance.now() };
+    }
+    /** The finger's speed along x (px/ms) over its last ~100 ms; 0 if it has come to rest. */
+    /** How long without a move means the finger has stopped: three of its usual gaps between
+     *  moves on the events' own clock (sparse on a slow phone), at least 90 ms. */
+    function restGap(s) { return Math.max(90, 3 * (s.egap || 0)); }
+    function velocity(s, now) {
+      var last = s.s[s.s.length - 1], i = s.s.length - 1;
+      if (now - last[0] > restGap(s)) return 0;
+      while (i > 0 && last[0] - s.s[i - 1][0] <= 100) i--;
+      var dt = last[0] - s.s[i][0];
+      return dt >= 8 ? (last[1] - s.s[i][1]) / dt : 0;
+    }
+    /**
+     * Would letting go at time now (the events' own clock) go there? A flick (moving on at
+     * 0.25 px/ms or more, and once flicking, until below 0.18: no flicker near the line), a
+     * short fast swipe, or a drag past commitDist() that isn't flicking back. `armed` shows
+     * this, and the release decides by it (keep: the flick state carries on, as at a release).
+     */
+    function wouldCommit(s, now, keep) {
+      if (!s.on || !dest || dest.edge) return false;
+      var adx = Math.abs(s.dx), v = velocity(s, now) * -(s.dir || 1), dt = Math.max(1, now - s.t);
+      var flick = adx >= FLICK_MIN && v >= (s.fl ? 0.18 : FLICK_V);
+      if (keep) s.fl = flick;
+      var moving = now - s.s[s.s.length - 1][0] <= restGap(s);
+      var quick = moving && dt < 260 && adx >= 36 && adx / dt > 0.2 && v > -0.1; // short and fast, all of it, not stopped
+      var far = adx >= commitDist() && v > -FLICK_V;
+      return flick || quick || far;
+    }
+    /** While a swipe is held, re-check `armed` every frame: a finger that stops is no longer a
+     *  flick, though no event says so. The events' clock is taken to have run on since the last
+     *  move at the pace it kept against ours during the swipe (on a struggling phone, moves are
+     *  handled late and bunched, and wall time overstates how long the finger has rested), so
+     *  `armed` shows what a release now would do. (A mouse whose release never arrived is let
+     *  go after 8 s; a touch is reset by the next touchstart.) */
+    var watchRaf = 0;
+    function watch() {
+      watchRaf = 0;
+      if (!g || !g.on) return;
+      var idle = performance.now() - g.real;
+      if (idle > 8000 && g.kind === 'pointer') { abort(); return; }
+      // (only once moves have been missing for three of their usual gaps as we receive them: no
+      // flicker between moves that simply arrive slowly)
+      if (idle > 3 * (g.rgap || 16)) {
+        var span = g.real - g.r0, rate = span > 30 ? Math.max(0.6, Math.min(1, (g.s[g.s.length - 1][0] - g.t0) / span)) : 1;
+        arm(wouldCommit(g, g.s[g.s.length - 1][0] + idle * rate, false));
       }
+      watchRaf = requestAnimationFrame(watch);
+    }
+    /** A move of the gesture; true when it's ours (the caller then keeps the browser out of it). */
+    function move(x, y, now, scrolling) {
+      if (!g || g.dead) return false;
+      var dx = x - g.x, dy = y - g.y, adx = Math.abs(dx), ady = Math.abs(dy);
+      var lastT = g.s[g.s.length - 1][0];
+      g.s.push([now, x]); if (g.s.length > 12) g.s.shift();
+      // how often moves come, on the events' clock (see restGap())
+      var eg = Math.min(60, Math.max(0, now - lastT));
+      if (g.s.length > 2) g.egap = g.egap ? g.egap * 0.7 + eg * 0.3 : eg;
+      var rn = performance.now();
+      if (g.on) g.rgap = Math.min(200, g.rgap ? g.rgap * 0.7 + (rn - g.real) * 0.3 : rn - g.real);
+      g.real = rn;
       if (!g.on) {
-        if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } // vertical: not ours
-        if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        // Flatter than ~51° once 10 px out: ours. Steeper than ~56° for 24 px, or still undecided
+        // at 40: vertical, the browser's (an embedding page may scroll). A thumb's sweep often
+        // starts upward, so give it those first 24 px to turn sideways (the browser is held off
+        // meanwhile); but if it has already begun scrolling (its moves can't be cancelled), it
+        // keeps the gesture.
+        if (scrolling || (ady >= 24 && ady > adx * 1.5) || (adx + ady > 40 && adx < ady * 0.8)) { g.dead = true; return false; }
+        if (adx < SLOP || adx < ady * 0.8) return true; // still deciding: hold the browser off until we know
         g.on = true;
-        try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        g.t0 = now; g.r0 = g.real; // (the two clocks, from here: see watch())
+        eatClick = true; clearTimeout(eatT); // a swipe that started on a button must not also press it
         open();
+        if (!watchRaf) watchRaf = requestAnimationFrame(watch);
       }
       var dir = dx < 0 ? 1 : -1;
       if (dir !== g.dir) { if (g.dir) arm(false); g.dir = dir; prepare(dir); }
       g.dx = dx;
-      var th = threshold(), adx = Math.abs(dx);
-      set(adx / th, dir, Math.max(0, adx - th));
-    });
-    function end(e, cancelled) {
-      if (!g || e.pointerId !== g.id) return;
-      var s = g; g = null;
-      if (!s.on) return;
-      var dt = Math.max(1, performance.now() - s.t), adx = Math.abs(s.dx);
-      var full = adx >= threshold();
-      var flick = s.rest && adx > 56 && adx / dt > 0.45; // flicks only while resting
-      if (cancelled || !(full || flick)) { arm(false); springBack(s.dir || 1); return; }
-      eatClick = true; // a swipe that started on a button must not also press it
-      setTimeout(function () { eatClick = false; }, 350);
-      commit(s.dx < 0 ? 1 : -1, s.dx < 0 ? skip : prev);
+      var D = travel();
+      if (dest.edge) { place(rubber(adx, D * 0.25), dir, 0); arm(false); return true; } // nothing there: resistance
+      var off = adx <= D ? adx : D + rubber(adx - D, D * 0.15);
+      place(off, dir, Math.min(1, adx / commitDist()));
+      arm(wouldCommit(g, now, true));
+      return true;
     }
-    area.addEventListener('pointerup', function (e) { end(e, false); });
-    area.addEventListener('pointercancel', function (e) { end(e, true); });
+    /** The gesture ends; true when it was a swipe. */
+    function up(cancelled, now) {
+      var s = g; g = null;
+      if (watchRaf) { cancelAnimationFrame(watchRaf); watchRaf = 0; }
+      if (!s || !s.on) return false;
+      clearTimeout(eatT); eatT = setTimeout(function () { eatClick = false; }, 400);
+      var adx = Math.abs(s.dx), dir = s.dir || 1, D = travel();
+      var v = velocity(s, now) * -dir, off = adx <= D ? adx : D;
+      if (!dest || dest.edge) { springBack(dir, rubber(adx, D * 0.25), 0); return true; }
+      // the same rule as `armed` (wouldCommit(), with its flick state), at the release's own time:
+      // a flick, a short fast swipe, or a drag far enough; flicking back cancels. (On a busy
+      // page a late-handled release still counts as the flick it was; `armed` follows.)
+      var go = !cancelled && (tp.classList.contains('armed') || wouldCommit(s, now, true)); // (what it showed always holds)
+      arm(go);
+      if (cancelled || !go) { springBack(dir, off, Math.max(0, -v)); return true; }
+      commit(dir, dir > 0 ? skip : prev, false, { off: off, v: Math.max(v, 0) });
+      return true;
+    }
+    function abort() {
+      var s = g; g = null;
+      if (watchRaf) { cancelAnimationFrame(watchRaf); watchRaf = 0; }
+      if (s && s.on) springBack(s.dir || 1, Math.abs(s.dx), 0);
+    }
+
+    // touch: TouchEvents, so the sideways moves can be kept from the browser outright.
+    // The moves and the end are delivered to the element the touch began on, and they only
+    // bubble up to the screen while it is still in the page; the clock text, the digits and the
+    // title are rewritten as the workout runs, so listen on that element too (once per event).
+    function findTouch(list, id) { for (var i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i]; return null; }
+    function seen(e) { if (e.__hiitSwipe) return true; e.__hiitSwipe = true; return false; }
+    function touchMove(e) {
+      if (seen(e) || !g || g.kind !== 'touch') return;
+      var t = findTouch(e.changedTouches, g.id);
+      if (t && move(t.clientX, t.clientY, stamp(e), !e.cancelable) && e.cancelable) e.preventDefault();
+    }
+    function touchEnd(e) {
+      if (seen(e)) return;
+      if (e.touches.length === 0) { multi = false; unbindAll(); }
+      if (!g || g.kind !== 'touch' || !findTouch(e.changedTouches, g.id)) return;
+      // (and a swipe never becomes a click on the button it started on)
+      if (up(e.type === 'touchcancel', stamp(e)) && e.cancelable && e.type === 'touchend') e.preventDefault();
+    }
+    function bind(el) {
+      el.addEventListener('touchmove', touchMove, { passive: false });
+      el.addEventListener('touchend', touchEnd, { passive: false });
+      el.addEventListener('touchcancel', touchEnd, { passive: true });
+    }
+    function unbind(el) {
+      el.removeEventListener('touchmove', touchMove, { passive: false });
+      el.removeEventListener('touchend', touchEnd, { passive: false });
+      el.removeEventListener('touchcancel', touchEnd, { passive: true });
+    }
+    var bound = [];
+    function unbindAll() { while (bound.length) unbind(bound.pop()); }
+    area.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 1) {
+        // the only finger down: whatever came before has ended, even if we never heard it
+        multi = false;
+        if (g && g.kind === 'touch') abort();
+        unbindAll();
+      }
+      if (e.target !== area && e.target.addEventListener && bound.indexOf(e.target) < 0) { bind(e.target); bound.push(e.target); }
+      if (e.touches.length > 1) { multi = true; if (g && g.kind === 'touch') abort(); return; } // a second finger: not a swipe
+      var t = e.changedTouches[0];
+      down(t.identifier, 'touch', t.clientX, t.clientY, e.target, stamp(e));
+    }, { passive: true });
+    bind(area);
+
+    // mouse and pen (and touch in a browser without TouchEvents)
+    area.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'touch' && TOUCH) return; // the touch events have it
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (g && g.kind === 'pointer') {
+        if (e.pointerId === g.id) abort(); // the same mouse pressed again: its last release never came
+        else { multi = true; abort(); return; } // a second contact
+      }
+      if (e.isPrimary !== false && !g) multi = false;
+      down(e.pointerId, e.pointerType === 'touch' ? 'touch' : 'pointer', e.clientX, e.clientY, e.target, stamp(e));
+      if (g) g.kind = 'pointer';
+    });
+    area.addEventListener('pointermove', function (e) {
+      if (!g || g.kind !== 'pointer' || e.pointerId !== g.id) return;
+      var was = g.on;
+      move(e.clientX, e.clientY, stamp(e));
+      if (g && !was && g.on) {
+        try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        try { var sel = window.getSelection(); if (sel) sel.removeAllRanges(); } catch (err) { /* ignore */ }
+      }
+    });
+    function pointerEnd(e) {
+      if (e.pointerType === 'touch' && TOUCH) return;
+      if (!g || g.kind !== 'pointer' || e.pointerId !== g.id) { if (!g) multi = false; return; }
+      up(e.type === 'pointercancel', stamp(e));
+    }
+    area.addEventListener('pointerup', pointerEnd);
+    area.addEventListener('pointercancel', pointerEnd);
+    // (a mouse let go outside the window, before the drag was ours: no pointerup will come)
+    window.addEventListener('blur', function () { if (g && g.kind === 'pointer') abort(); });
     area.addEventListener('click', function (e) { if (eatClick) { e.preventDefault(); e.stopPropagation(); eatClick = false; } }, true);
   }
 
@@ -2459,6 +2939,7 @@
   var resumeAfterDialog = false;
   function openQuit() {
     if (!run) return;
+    if (carousel) carousel.clearKeys();
     resumeAfterDialog = run.playing;
     pauseQuietly();
     $('pausedVeil').hidden = true;
@@ -2577,6 +3058,7 @@
     $('unStart').addEventListener('click', skip);
     $('wpSkip').addEventListener('click', skipWarmup);
     $('toastUndo').addEventListener('click', function () {
+      if (carousel) carousel.clearKeys();
       if (run && undo.at != null) { A.play('click'); seek(undo.at); }
       hideUndo();
     });
@@ -2645,8 +3127,12 @@
         var ae = document.activeElement;
         if (ae && ae.tagName === 'BUTTON' && ae !== $('pause') && focusByKeyboard) return;
         e.preventDefault(); setPlaying(!run.playing);
-      } else if (e.key === 'ArrowRight') { e.preventDefault(); if (carousel) carousel.commit(1, skip); else skip(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); if (carousel) carousel.commit(-1, prev); else prev(); }
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (e.repeat) return; // a held key is one press, not a run through the workout
+        var fwd = e.key === 'ArrowRight';
+        if (carousel) carousel.commit(fwd ? 1 : -1, fwd ? skip : prev, true); else if (fwd) skip(); else prev();
+      }
     });
 
     var scrollRaf = 0;
@@ -2706,6 +3192,7 @@
         if (workFig) workFig.setColors(c[0], c[1]);
         if (run.mode === 'rest') showUpNext(seg);
         updateProgress(seg);
+        syncSkipLabel(seg); syncPrevLabel(); // the tabs' colours
       }
     }
     ring.sizeDirty = true;

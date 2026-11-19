@@ -32,6 +32,19 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - Warm-up segments also carry `lead` (seconds of lead-in before the move) and `countdown` (5, or 3 for a leg switch).
 - `tests/workout.test.js` pins exact numbers: the lead values, `WARMUP_SECONDS` formatting to `'4:14'`, and session totals. So timing changes need test updates, plus the static fallback in `index.html` (`#wuTime`).
 
+**Start flow and the coach's brief.**
+- Screens: setup → brief (`#brief`) → workout (`#workout`) → done (`#done`).
+- On the setup screen, `#start` calls `openBrief()`. The coach reads the plan aloud, and `#bStart` ("Start warm-up", or "Start workout" with the warm-up off) calls `startWorkout()`. `#briefBack`, Esc and browser Back return to setup.
+- `HIIT.brief(tl)` in `workout.js` is a pure function. From the timeline it returns the plan (exercises, groups, level, set break, warm-up, total) and the spoken `lines: [{say, show}]`.
+- `show` names the part of the screen to light while that line is spoken: `intro`, `warmup`, `exercises`, `ex:<id>`, `intervals`, `sets`, `setbreak`, `total` or `ready`. It matches elements with `data-part="…"`; `briefShow()` toggles `.on`.
+- `tests/workout.test.js` pins the brief's wording rules:
+  - every line ends in `.`, `!` or `?`, never a comma (each line is its own speech utterance);
+  - no digits;
+  - "HIIT" is written as "hit" so text-to-speech says the word;
+  - a 25–41 s length.
+- The welcome lives in the brief, so the warm-up opens with "Let's warm up…".
+- Playwright scripts must click `#start` and then `#bStart` to reach the workout.
+
 **`js/app.js` drives the clock in one loop.**
 - The clock is `run.base` plus the time since `run.anchor`, read through `elapsedNow()`.
 - `update()` runs every animation frame:
@@ -41,14 +54,21 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   4. calls `onBeat()` for counted warm-up moves.
 - `warmLead()` runs a warm-up step's lead-in: "Get ready", a spoken 5-4-3-2-1, then "Begin!". It can hold the clock by rewriting `run.base` while the coach is still speaking.
 - Jumps go through `seek(t)`. Cues only fire on "natural" progress (see the `natural` and `prev` checks), so seeking never replays a whole round of sounds.
-- The timer ring is the `Ring` canvas class. `Ring.layout()` writes the stage geometry as CSS custom properties (`--cy`, `--rr`, `--ph`, …) that the CSS uses to place the dial, the swipe carousel and the transport pill inside the ring's opening.
+- The timer ring is the `Ring` canvas class. `Ring.layout()` writes the stage geometry as CSS custom properties (`--cy`, `--rr`, `--ph`, …) that the CSS uses to place the dial and the swipe carousel inside the ring. The opening at the bottom holds only the pause button; The controls grow with the ring (pause `S*0.135+10`, 52–92 px; back and skip 0.8 of it, never under 44 px). Back and skip sit out at the sides on the same base line, `--bx` from the centre, keeping the pause's clearance (17 px, more on big rings) from the arc, with 16 px to the stage edge for a gripping hand (the clearance gives way to 12 px first, then the ring shrinks). The beat-dot row stays reserved through the whole workout, so the ring keeps one size from the warm-up to the end.
+- ⏮ / ⏭ are plain discs when idle (the resting sliver is the swipe hint) and hold a `.ctl-tab`: a fixed word for the action ("Next" / "Finish", "Restart" / "Redo" / "Back") plus a chevron; the ring's preview is the one place that names the destination. `setTab()` (from `syncSkipLabel()` / `syncPrevLabel()`) sets its AA colours (`--t-tint`/`--t-ink`, `--t-solid`/`--t-on`) and its size and offset (`--tw`, `--tx`) inside the room `Ring.layout()` measures (`tabRoom`: toward the pause only while clear of the ring's band). The tab morphs in over the first ~20% of `--ck` (`--k`, a registered `@property`), tinted, and goes solid when `#transport` is `armed`; hover, focus and the `pulse` / `halo` hints show it, and `#transport.held` (paused) tucks everything away. The title switches to the destination only on commit (`showDest()`), not while dragging.
 - `ring.progress` is set in `update()`. Warm-up steps get two sweeps: one for the lead-in, one for the move.
 - Rest, prep and the set break switch the screen to `#workout[data-mode="rest"]`: a dial inside the ring plus an "Up next" card.
+- Swipe (`initSwipe()`) is a pager, the same in every phase: content follows the finger 1:1; release commits on a flick (≥ 0.25 px/ms, from the events' own `timeStamp`s, so a busy main thread doesn't turn flicks into slow drags) or past `commitDist()` (28% of a phone's width up to 110 px, or 60% of a page on a tablet's big ring; at most 30% of the width and 75% of a page), else springs back. `armed` shows `wouldCommit()` (flick hysteresis 0.25 on / 0.18 off; re-checked every frame, so it drops once the finger rests) and the release applies the same rule at the touchend's own `timeStamp` (on a throttled phone, events are handled late). Pages sit 1.3 ring radii apart (`travel()`); the incoming one is led by `.ri-edge` (a curtain in its colour; the incoming page is clipped at its edge), which also shows as a soft resting sliver during rest/prep/set break (`sliverShow()`). Its name tag `#riEdgeN` sits high in the ring, ahead of the curtain, outside the ring's clip (on small rings it may cross the band); it stays at full strength while the finger is down (the incoming dial's own label waits), and on release hands over: the title takes the name at once, the tag fades in the first half of the landing and the page's label in the second (`--pn`, `--pl`). The leaving page's label steps aside as the drag starts (`--cl`). The incoming page stays clipped at the curtain until release (`--pcl`), and the ring's colours switch outright at commit (`Ring.snapColors`), never through a muddy blend. `overscroll-behavior: none` applies only with `html.top-level` (not framed): in the Claude app's preview iframe, vertical drags must scroll the host page. The settle leaves at the finger's speed and only slows (`settleWith()`). Touch goes through TouchEvents (sideways `touchmove`s are `preventDefault`-ed, so an embedding iframe or webview can't steal the pan); pointer events serve mouse and pen. Touch moves and ends go to the element the touch began on and stop bubbling if it leaves the DOM, so the listeners are also bound to that element: still, don't replace elements on the workout screen every tick (`setRich()` updates `#wNext`'s text in place). No palm/contact-size filter. The controls read the hooks on `#transport` (`--ck`, `--dc`, `--dfg`, `charge-next`/`charge-prev`, `armed`). Test with CDP `Input.dispatchTouchEvent` and pass `timestamp`s; headless delivery is far slower than real time.
 
 **Looks.**
 - Only the "Studio" look exists. An inline script in `<head>` sets `html[data-look="studio"]` and `data-scheme="light|dark"` before first paint, following the system setting unless the user overrides it.
 - `css/style.css` holds the base layout. `css/studio.css` holds everything scoped to `[data-look="studio"]`, including the compact media queries (the countdown digits size via `--dg`).
 - Preferences and stats live in localStorage under `overdrive-hiit:v1`.
+- Phase colours live in two places that must agree:
+  - `app.js`: `PHASE`, `LOOKS[…].phase` and `.group` for light and dark, and `DARK_VARIANTS.charcoal` (the default dark scheme);
+  - the CSS custom properties, e.g. `--warm-a`/`--warm-b` in `style.css` and `studio.css`.
+- Current phase colours: warm-up leaf green, work coral, rest blue, jacks amber, set break mint-teal. The WARM UP and BEGIN wipes use their own deep green, passed through the `flash()` kind argument, so white text stays readable.
+- The only font is Geist, loaded from Google Fonts in `index.html`.
 
 **Audio and voice (`js/audio.js`).**
 - All sounds are synthesised with Web Audio; there are no audio files.
