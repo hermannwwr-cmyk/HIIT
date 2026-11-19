@@ -2404,16 +2404,12 @@
         if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
       }
       var restMode = run.mode === 'rest';
-      // during exercise a drag counts when it starts on one of the three buttons (with a little
-      // slack round each; from ⏮ it can only go back, from ⏭ only on, from pause either way) or
-      // anywhere on the ring itself (either way, and it must be dragged until ⏭ / ⏮ fills: no
-      // flicks). The lower half (timer, coach card) stays still for a sweaty wipe.
+      // a drag anywhere on the workout screen goes back or on. During an exercise one that starts
+      // on a button may be a quick flick (from ⏮ it can only go back, from ⏭ only on); anywhere
+      // else it must be dragged until ⏭ / ⏮ fills, so a sweaty wipe never skips (and Undo follows).
       var on = restMode ? 0 : onControl(e.clientX, e.clientY), fromCtl = !restMode && on !== null;
-      if (!restMode && on === null) {
-        var sr = stage.getBoundingClientRect();
-        if (e.clientX >= sr.left && e.clientX <= sr.right && e.clientY >= sr.top && e.clientY <= sr.bottom) on = 0;
-      }
-      var ignored = on === null;
+      if (on === null) on = 0;
+      var ignored = false;
       hinted = false;
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
       keyQueue.length = 0; // and any arrow presses still waiting
