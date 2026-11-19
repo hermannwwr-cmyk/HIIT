@@ -304,9 +304,10 @@
         </div>
       </div>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">
-        <button id="prev" class="ctl" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
+        <!-- ⏮ / ⏭ each hold a tab (where you'd land: its name, in its colour) that slides out toward the pause as you swipe -->
+        <button id="prev" class="ctl ctl-side" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"><span class="ctl-tab" aria-hidden="true"><span class="ctl-dest" id="prevDest"></span></span><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
         <button id="pause" class="ctl ctl-main" type="button" aria-label="Pause" aria-keyshortcuts="Space"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
-        <button id="skip" class="ctl ctl-skip" type="button" aria-label="Next interval" aria-keyshortcuts="ArrowRight"><svg aria-hidden="true"><use href="#i-next"/></svg></button>
+        <button id="skip" class="ctl ctl-side ctl-skip" type="button" aria-label="Next interval" aria-keyshortcuts="ArrowRight"><span class="ctl-tab" aria-hidden="true"><span class="ctl-dest" id="skipDest"></span></span><svg aria-hidden="true"><use href="#i-next"/></svg></button>
       </div>
     </div>
     <div class="w-lower">
