@@ -84,7 +84,7 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   - `setTab()` (from `syncSkipLabel()` / `syncPrevLabel()`) sets its AA colours (`--t-tint`/`--t-ink`, `--t-solid`/`--t-on`) and its size and offset (`--tw`, `--tx`) within `ring.tabRoom`. The tab grows toward the pause only while it stays clear of the ring's band.
   - It morphs in over the first ~20% of `--ck` (`--k`, a registered `@property`), tinted, and goes solid on `armed`. Hover, focus and the `pulse` / `halo` hints show it; `#transport.held` (paused) tucks everything away.
   - The hooks the gesture sets on `#transport` are `--ck` (0..1), `--dc`, `--dfg`, `charge-next` / `charge-prev` and `armed`. Taps and keys go through the same commit path.
-- Testing: use CDP `Input.dispatchTouchEvent` with a realistic `radiusX/Y` (about 22) and explicit `timestamp`s. Headless delivery is far slower than real time, so judge timing by event timestamps.
+- Testing: use CDP `Input.dispatchTouchEvent` with a realistic `radiusX/Y` (about 22) and explicit `timestamp`s. Headless delivery is far slower than real time, so judge timing by event timestamps. The harness, the history (root causes, rejected designs) and the open nice-to-haves are in `dev/swipe-tests/README.md`.
 
 **Looks.**
 - Only the "Studio" look exists. An inline script in `<head>` sets `html[data-look="studio"]` and `data-scheme="light|dark"` before first paint, following the system setting unless the user overrides it.

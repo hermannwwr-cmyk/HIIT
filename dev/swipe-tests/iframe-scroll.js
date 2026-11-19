@@ -1,0 +1,21 @@
+const { open } = require('./lib');
+(async () => {
+  const h = await open({ url: '', frame: 'http://localhost:8732/outer.html' });
+  await h.toWorkout(); await h.remap();
+  const { f, page, touch, stroke, st, go, box } = h;
+  const [cx, cy] = await box('#stage');
+  const outer = () => page.evaluate(() => document.querySelector('.wrap').scrollTop);
+  await go('work', 6);
+  await touch(stroke(cx, cy + 100, 3, -200, 300, 18, 'inout'), { after: 600 });
+  console.log('vertical drag in iframe -> outer scrollTop', await outer());
+  await page.evaluate(() => document.querySelector('.wrap').scrollTop = 0);
+  let a = await go('work', 6);
+  await touch([[cx + 60, cy, 0], [cx + 58, cy - 4, 16], [cx + 55, cy - 7, 16], [cx + 45, cy - 10, 16], [cx + 25, cy - 12, 16], [cx - 5, cy - 13, 16], [cx - 40, cy - 14, 16]], { after: 600 });
+  console.log('swipe with small vertical start -> moved', (await st()).i - a.i, 'outer scrollTop', await outer());
+  await page.evaluate(() => document.querySelector('.wrap').scrollTop = 0);
+  a = await go('work', 6);
+  await touch(stroke(cx + 60, cy, -80, 30, 140, 9, 'in'), { after: 600 });
+  console.log('flick 80 left with 30 down -> moved', (await st()).i - a.i, 'outer scrollTop', await outer());
+  console.log('errors', h.errs.filter(e => !/wake-lock/.test(e)));
+  await h.browser.close();
+})();
