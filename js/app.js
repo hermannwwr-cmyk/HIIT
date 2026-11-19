@@ -11,6 +11,9 @@
   var $ = function (id) { return document.getElementById(id); };
   var TAU = Math.PI * 2;
   var reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // At the top level (not embedded in another page's frame), the workout screen turns off
+  // pull-to-refresh; in a frame, vertical drags must still scroll the page around it.
+  try { if (window.top === window.self) document.documentElement.classList.add('top-level'); } catch (e) { /* cross-origin: framed */ }
 
   var PHASE = {
     setup: { colors: ['#9b5cff', '#22e5ff'], energy: 0.22, chip: '', flash: '' },
@@ -2308,30 +2311,35 @@
         !$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden ||
         !!(target && target.closest && target.closest('.w-top, .w-prog, .veil'));
     }
-    /** How far a slow drag must go to commit: about 28% of a phone's width, at most 110 px
-     *  (on a tablet a thumb's comfortable sweep is no longer than on a phone). */
-    function commitDist() { return Math.max(56, Math.min(110, window.innerWidth * 0.28)); }
+    /** How far a slow drag must go to commit: about 28% of a phone's width (at most 110 px),
+     *  or 60% of a page on a big ring (a tablet's); never more than 30% of the screen or 75% of
+     *  a page (a small ring's page is short). */
+    function commitDist() {
+      var W = window.innerWidth, D = travel();
+      return Math.max(56, Math.min(W * 0.3, D * 0.75, Math.max(Math.min(110, W * 0.28), D * 0.6)));
+    }
     /** The ring's inner radius: the pages are clipped to this circle. */
-    function ri() { return parseFloat(getComputedStyle(stage).getPropertyValue('--ri')) || 140; }
+    var riCache = 0; // (read once per gesture: a style read on every move is costly on a slow phone)
+    function ri() { return riCache || (riCache = parseFloat(getComputedStyle(stage).getPropertyValue('--ri')) || 140); }
     /** The pager's page width: the pages sit edge to edge at 1.3 radii apart (about the width of
      *  their content), so the incoming one shows as soon as the outgoing one moves. */
     function travel() { return 1.3 * ri(); }
-    var SLIVER = 10; // px of the next page's edge showing inside the ring while resting
+    var SLIVER = 14; // px of the next page's edge showing inside the ring while resting
     /**
      * The incoming page's edge: a curtain in the destination's colour that leads it in, with
      * the destination's name on it, kept inside the ring's visible chord.
      */
     function edgeLook(dir, sg, prefix) {
       edge.classList.toggle('to-next', dir > 0); edge.classList.toggle('to-prev', dir < 0);
+      edgeN.classList.toggle('to-next', dir > 0); edgeN.classList.toggle('to-prev', dir < 0);
       var col = (sg ? PHASE[sg.type] : PHASE.done).colors[0], light = LOOKS[look].scheme === 'light';
       var surf = (getComputedStyle(document.documentElement).getPropertyValue('--surface-solid') || '').trim();
       if (!/^#[0-9a-f]{6}$/i.test(surf)) surf = light ? '#ffffff' : '#2e2e31';
       var pill = mixHex(surf, solidOnPage(col), light ? 0.16 : 0.24);
-      edge.style.setProperty('--ec', solidOnPage(col));
-      edge.style.setProperty('--eb', pill);
-      edge.style.setProperty('--en', aaOn(solidOnPage(col), light ? '#000000' : '#ffffff', pill));
-      var name = sg ? headFor(sg).name : '';
-      if (sg && prefix) name = prefix.replace(/^\S+\s/, '') + ' ' + name; // "Restart Push Ups", "Redo Squats"
+      stage.style.setProperty('--ec', solidOnPage(col));
+      stage.style.setProperty('--eb', pill);
+      stage.style.setProperty('--en', aaOn(solidOnPage(col), light ? '#000000' : '#ffffff', pill));
+      var name = sg ? headFor(sg).name : ''; // (the tab says Restart / Redo: the name alone here)
       if (edgeN.textContent !== name) edgeN.textContent = name;
       return name;
     }
@@ -2346,12 +2354,14 @@
         var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : '';
         edge = bt.kind === 'restart' && sg.index === 0 && t - sg.start < 1; // the very start of the plan
       }
-      dest = { dir: dir, seg: edge ? null : sg, edge: edge, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors, tw: null };
+      dest = { dir: dir, seg: edge ? null : sg, edge: edge, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
       edgeLook(dir, dest.seg, prefix);
+      dest.tw = dest.seg ? edgeN.offsetWidth : 0; // (shown: prepare() runs once the carousel is open)
       var dc = solidOnPage(dest.colors[0]);
       tp.style.setProperty('--dc', dc);
       tp.style.setProperty('--dfg', inkOn(dc)); // the armed button's icon
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
+      peek.classList.toggle('to-next', dir > 0); peek.classList.toggle('to-prev', dir < 0);
       if (!dest.seg) { peek.classList.add('is-end'); return; }
       var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
       if (restLike) {
@@ -2429,12 +2439,23 @@
       stage.style.setProperty('--po', Math.min(1, 0.3 + p * 1.6).toFixed(3));
       // the curtain's edge moves with the finger from the ring's rim; the name rides on it,
       // but never further out than the visible chord (it can be read from the first 20 px)
-      if (real && dest.tw == null) dest.tw = edgeN.offsetWidth;
-      var ex = r - SLIVER - off, tw = real ? dest.tw : 0;
+      // (the name tag sits high in the ring, 0.74 r above the centre, where the chord reaches
+      // 0.67 r each way, just ahead of the curtain's edge: over the leaving page, clear of the
+      // incoming figure's head and of the leaving one's, which has moved off with the finger.
+      // It is gone before the incoming page's own label fades in, from p = .7; the leaving
+      // page's label steps aside as soon as the drag starts: one name at a time)
+      var ex = r - SLIVER - off, clamp01 = function (q) { return Math.max(0, Math.min(1, q)); };
       stage.style.setProperty('--ex', ex.toFixed(1) + 'px');
       stage.style.setProperty('--co', real ? (1 - p * p).toFixed(3) : '0');
-      stage.style.setProperty('--nx', Math.min(r * 0.84 - 6 - tw, ex + 12).toFixed(1) + 'px');
-      stage.style.setProperty('--pn', real ? (Math.min(1, off / 20) * (1 - Math.max(0, Math.min(1, (p - 0.62) / 0.3)))).toFixed(3) : '0');
+      // (inside the visible chord if it fits there, else centred: it may cross the ring's band)
+      var ch = r * 0.67 - 8, tw = dest && dest.tw || 0;
+      stage.style.setProperty('--nx', (tw <= 2 * ch ? Math.max(tw - ch, Math.min(ch, ex - 8)) : tw / 2).toFixed(1) + 'px');
+      stage.style.setProperty('--cl', (1 - Math.min(1, off / 16)).toFixed(3));
+      stage.style.setProperty('--pn', real ? (Math.min(1, off / 20) * (1 - clamp01((p - 0.42) / 0.2))).toFixed(3) : '0');
+      stage.style.setProperty('--pl', clamp01((p - 0.7) / 0.22).toFixed(3));
+      // the incoming page is clipped at its edge (its figure never spills over what's leaving),
+      // opening up as it lands
+      stage.style.setProperty('--pcl', (0.3 * r + SLIVER + r * clamp01((p - 0.6) / 0.35)).toFixed(1) + 'px');
       tp.style.setProperty('--ck', ck.toFixed(3));
       tp.classList.toggle('charge-next', dir > 0 && ck > 0);
       tp.classList.toggle('charge-prev', dir < 0 && ck > 0);
@@ -2457,12 +2478,13 @@
       stage.style.setProperty('--se', 'cubic-bezier(.3333,' + (m0 / 3).toFixed(4) + ',.6667,1)');
       return T;
     }
-    function open() { clearTimeout(settleT); sliverHide(); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); }
+    function open() { riCache = 0; clearTimeout(settleT); sliverHide(); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); }
     /**
      * Resting (rest, get ready, the set break): the next page's edge shows as a sliver of its
      * colour at the ring's rim, sliding in once as the phase begins (still, with reduced motion).
      */
     function sliverShow(anim) {
+      riCache = 0;
       if (!run || run.finished || run.mode !== 'rest' || g || pending || stage.classList.contains('carousel')) { sliverHide(); return; }
       var tl = run.tl, sg = tl.segments[H.segmentAt(tl, elapsedNow()) + 1];
       if (!sg) { sliverHide(); return; }
@@ -2589,7 +2611,7 @@
     function stamp(e) { var t = e.timeStamp, n = performance.now(); return t > 0 && Math.abs(t - n) < 5000 ? t : n; }
     function down(id, kind, x, y, target, t) {
       eatClick = false; // (the click of the last swipe, if any, has been and gone)
-      if (g && performance.now() - g.real > 8000) abort(); // a gesture whose end never came
+      if (g && g.kind === 'pointer' && performance.now() - g.real > 8000) abort(); // a mouse whose release never came
       if (g || multi || blocked(target)) return;
       if (kind === 'touch' && (x < EDGE || x > window.innerWidth - EDGE)) return; // the system back gesture
       if (pending) land(true); // a new swipe during the last one's slide: that one lands now
@@ -2598,51 +2620,63 @@
       g = { id: id, kind: kind, x: x, y: y, t: t, on: false, dead: false, dx: 0, dir: 0, s: [[t, x]], buzzed: false, real: performance.now() };
     }
     /** The finger's speed along x (px/ms) over its last ~100 ms; 0 if it has come to rest. */
+    /** How long without a move means the finger has stopped: three of its usual gaps between
+     *  moves on the events' own clock (sparse on a slow phone), at least 90 ms. */
+    function restGap(s) { return Math.max(90, 3 * (s.egap || 0)); }
     function velocity(s, now) {
       var last = s.s[s.s.length - 1], i = s.s.length - 1;
-      if (now - last[0] > 90) return 0;
+      if (now - last[0] > restGap(s)) return 0;
       while (i > 0 && last[0] - s.s[i - 1][0] <= 100) i--;
       var dt = last[0] - s.s[i][0];
       return dt >= 8 ? (last[1] - s.s[i][1]) / dt : 0;
     }
     /**
-     * Would letting go at time now go there? A flick (moving on at 0.25 px/ms or more), a
+     * Would letting go at time now (the events' own clock) go there? A flick (moving on at
+     * 0.25 px/ms or more, and once flicking, until below 0.18: no flicker near the line), a
      * short fast swipe, or a drag past commitDist() that isn't flicking back. `armed` shows
-     * exactly this, so the tab never promises a move that a release won't make.
+     * this, and the release decides by it (keep: the flick state carries on, as at a release).
      */
-    function wouldCommit(s, now) {
+    function wouldCommit(s, now, keep) {
       if (!s.on || !dest || dest.edge) return false;
       var adx = Math.abs(s.dx), v = velocity(s, now) * -(s.dir || 1), dt = Math.max(1, now - s.t);
-      var flick = v > FLICK_V && adx >= FLICK_MIN;
-      var moving = now - s.s[s.s.length - 1][0] <= 90;
+      var flick = adx >= FLICK_MIN && v >= (s.fl ? 0.18 : FLICK_V);
+      if (keep) s.fl = flick;
+      var moving = now - s.s[s.s.length - 1][0] <= restGap(s);
       var quick = moving && dt < 260 && adx >= 36 && adx / dt > 0.2 && v > -0.1; // short and fast, all of it, not stopped
       var far = adx >= commitDist() && v > -FLICK_V;
       return flick || quick || far;
     }
-    /** The time now on the gesture's own clock (its events' time stamps). */
     /** While a swipe is held, re-check `armed` every frame: a finger that stops is no longer a
-     *  flick, though no event says so. It has stopped once no move has come for three of its
-     *  usual gaps between moves, or three frames (at least 90 ms); `armed` then shows what letting go after
-     *  that rest would do. (And let go of a swipe whose end never arrived.) */
+     *  flick, though no event says so. The events' clock is taken to have run on since the last
+     *  move at the pace it kept against ours during the swipe (on a struggling phone, moves are
+     *  handled late and bunched, and wall time overstates how long the finger has rested), so
+     *  `armed` shows what a release now would do. (A mouse whose release never arrived is let
+     *  go after 8 s; a touch is reset by the next touchstart.) */
     var watchRaf = 0;
     function watch() {
       watchRaf = 0;
       if (!g || !g.on) return;
-      var t = performance.now(), idle = t - g.real;
-      if (idle > 8000) { abort(); return; }
-      // (on a busy page frames come slower, and so may the moves: wait three of either)
-      if (g.lastF) g.fdt = Math.min(100, g.fdt ? g.fdt * 0.7 + (t - g.lastF) * 0.3 : t - g.lastF);
-      g.lastF = t;
-      if (idle > Math.max(90, 3 * (g.gap || 0), 3 * (g.fdt || 0))) arm(wouldCommit(g, g.s[g.s.length - 1][0] + 91));
+      var idle = performance.now() - g.real;
+      if (idle > 8000 && g.kind === 'pointer') { abort(); return; }
+      // (only once moves have been missing for three of their usual gaps as we receive them: no
+      // flicker between moves that simply arrive slowly)
+      if (idle > 3 * (g.rgap || 16)) {
+        var span = g.real - g.r0, rate = span > 30 ? Math.max(0.6, Math.min(1, (g.s[g.s.length - 1][0] - g.t0) / span)) : 1;
+        arm(wouldCommit(g, g.s[g.s.length - 1][0] + idle * rate, false));
+      }
       watchRaf = requestAnimationFrame(watch);
     }
     /** A move of the gesture; true when it's ours (the caller then keeps the browser out of it). */
     function move(x, y, now, scrolling) {
       if (!g || g.dead) return false;
       var dx = x - g.x, dy = y - g.y, adx = Math.abs(dx), ady = Math.abs(dy);
+      var lastT = g.s[g.s.length - 1][0];
       g.s.push([now, x]); if (g.s.length > 12) g.s.shift();
-      var rn = performance.now(), gp = Math.min(60, rn - g.real); // (how often moves arrive: see watch())
-      if (g.s.length > 2) g.gap = g.gap ? g.gap * 0.7 + gp * 0.3 : gp;
+      // how often moves come, on the events' clock (see restGap())
+      var eg = Math.min(60, Math.max(0, now - lastT));
+      if (g.s.length > 2) g.egap = g.egap ? g.egap * 0.7 + eg * 0.3 : eg;
+      var rn = performance.now();
+      if (g.on) g.rgap = Math.min(200, g.rgap ? g.rgap * 0.7 + (rn - g.real) * 0.3 : rn - g.real);
       g.real = rn;
       if (!g.on) {
         // Flatter than ~51° once 10 px out: ours. Steeper than ~56° for 24 px, or still undecided
@@ -2653,6 +2687,7 @@
         if (scrolling || (ady >= 24 && ady > adx * 1.5) || (adx + ady > 40 && adx < ady * 0.8)) { g.dead = true; return false; }
         if (adx < SLOP || adx < ady * 0.8) return true; // still deciding: hold the browser off until we know
         g.on = true;
+        g.t0 = now; g.r0 = g.real; // (the two clocks, from here: see watch())
         eatClick = true; clearTimeout(eatT); // a swipe that started on a button must not also press it
         open();
         if (!watchRaf) watchRaf = requestAnimationFrame(watch);
@@ -2664,7 +2699,7 @@
       if (dest.edge) { place(rubber(adx, D * 0.25), dir, 0); arm(false); return true; } // nothing there: resistance
       var off = adx <= D ? adx : D + rubber(adx - D, D * 0.15);
       place(off, dir, Math.min(1, adx / commitDist()));
-      arm(wouldCommit(g, now));
+      arm(wouldCommit(g, now, true));
       return true;
     }
     /** The gesture ends; true when it was a swipe. */
@@ -2676,9 +2711,11 @@
       var adx = Math.abs(s.dx), dir = s.dir || 1, D = travel();
       var v = velocity(s, now) * -dir, off = adx <= D ? adx : D;
       if (!dest || dest.edge) { springBack(dir, rubber(adx, D * 0.25), 0); return true; }
-      // exactly what `armed` showed a moment ago decides (wouldCommit(), kept fresh by move() and
-      // watch()): a flick, a short fast swipe, or a drag far enough; flicking back cancels
-      var go = tp.classList.contains('armed');
+      // the same rule as `armed` (wouldCommit(), with its flick state), at the release's own time:
+      // a flick, a short fast swipe, or a drag far enough; flicking back cancels. (On a busy
+      // page a late-handled release still counts as the flick it was; `armed` follows.)
+      var go = !cancelled && (tp.classList.contains('armed') || wouldCommit(s, now, true)); // (what it showed always holds)
+      arm(go);
       if (cancelled || !go) { springBack(dir, off, Math.max(0, -v)); return true; }
       commit(dir, dir > 0 ? skip : prev, false, { off: off, v: Math.max(v, 0) });
       return true;

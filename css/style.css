@@ -1424,8 +1424,9 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 
 /* ---- swipe carousel inside the ring; ⏭ / ⏮ charge as you swipe */
 /* the screen is a pager: the browser may pan vertically (an embedding page) or zoom, never sideways */
-/* no pull-to-refresh or bounce while a workout is on screen */
-body[data-screen="workout"], html:has(> body[data-screen="workout"]) { overscroll-behavior: none; }
+/* no pull-to-refresh or bounce while a workout is on screen; only at the top level (html.top-level):
+   inside another page's frame, a vertical drag must still scroll that page */
+html.top-level body[data-screen="workout"], html.top-level:has(> body[data-screen="workout"]) { overscroll-behavior: none; }
 .workout { touch-action: pan-y pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ring-in { position: absolute; inset: 0; pointer-events: none; }
 .w-stage.carousel .ring-in { clip-path: circle(var(--ri, 140px) at 50% var(--cy, 50%)); }
@@ -1436,11 +1437,15 @@ body[data-screen="workout"], html:has(> body[data-screen="workout"]) { overscrol
 }
 /* where you're going: an exact copy of its own layout, easing in from the side */
 .ri-peek { position: absolute; inset: 0; display: none; opacity: var(--po, 0); transform: translateX(var(--px, 0px)); }
+/* clipped at its own leading edge (--pcl from its centre: the curtain's edge), so its figure never
+   spills over what is leaving; the clip opens as it lands */
+.ri-peek.to-next { clip-path: inset(0 0 0 max(0px, calc(50% - var(--pcl, 9999px)))); }
+.ri-peek.to-prev { clip-path: inset(0 max(0px, calc(50% - var(--pcl, 9999px))) 0 0); }
 .w-stage.carousel .ri-peek { display: block; }
 /* letting go: the pages settle at the finger's speed (the swipe code sets --st / --se) */
 /* (begun a frame early: a transition starts a frame after it is set, and the finger didn't stop) */
 .w-stage.settle .ri-cur, .w-stage.settle .ri-peek, .w-stage.settle .ri-edge-c, .w-stage.settle .ri-edge-n {
-  transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity var(--st, .22s) ease -16ms;
+  transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity var(--st, .22s) ease -16ms, clip-path var(--st, .22s) ease -16ms;
 }
 .w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial { transition: none !important; }
 /* the incoming page's edge: a curtain in its colour that leads it in from the rim (its edge at
@@ -1455,33 +1460,39 @@ body[data-screen="workout"], html:has(> body[data-screen="workout"]) { overscrol
 .ri-edge.to-next .ri-edge-c { left: 50%; transform: translateX(var(--ex, 0px)); }
 .ri-edge.to-prev .ri-edge-c { right: 50%; transform: translateX(calc(-1 * var(--ex, 0px))) scaleX(-1); }
 .ri-edge-n {
-  position: absolute; top: calc(var(--cy, 50%) - var(--ri, 140px) * .5); margin: 0; translate: 0 -50%;
-  max-width: calc(var(--ri, 140px) * 1.4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding: 6px 11px; border-radius: 999px; background: var(--eb, var(--surface)); color: var(--en, var(--text));
-  font: 650 clamp(14px, calc(var(--ri, 140px) * .115), 20px)/1.1 var(--ui); letter-spacing: -.01em;
+  position: absolute; z-index: 1; display: none; pointer-events: none;
+  top: calc(var(--cy, 50%) - var(--ri, 140px) * .74); margin: 0; translate: 0 -50%;
+  max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: .35em .75em; border-radius: 999px; background: var(--eb, var(--surface)); color: var(--en, var(--text));
+  font: 650 clamp(13px, calc(var(--ri, 140px) * .11), 26px)/1.1 var(--ui); letter-spacing: -.01em;
   opacity: var(--pn, 0); box-shadow: 0 4px 14px -8px rgba(0, 0, 0, .35);
 }
-.ri-edge.to-next .ri-edge-n { left: 50%; transform: translateX(var(--nx, 0px)); }
-.ri-edge.to-prev .ri-edge-n { right: 50%; transform: translateX(calc(-1 * var(--nx, 0px))); }
+/* (--nx: from the centre to the tag's end at the curtain's side) */
+.w-stage.carousel .ri-edge-n { display: block; }
+.ri-edge-n.to-next { right: 50%; transform: translateX(var(--nx, 0px)); }
+.ri-edge-n.to-prev { left: 50%; transform: translateX(calc(-1 * var(--nx, 0px))); }
+.w-stage.carousel .ri-cur .dial-k { opacity: var(--cl, 1); }
 .ri-edge.peek-in .ri-edge-c { animation: edgeIn 1.1s cubic-bezier(.3, .9, .3, 1) .35s backwards; }
 @keyframes edgeIn {
   0% { transform: translateX(var(--ri, 140px)); }
   45% { transform: translateX(calc(var(--ri, 140px) - 38px)); }
   100% { transform: translateX(var(--ex, 0px)); }
 }
+/* resting, the sliver is a soft fade into the next page's colour, not a hard line */
+.w-stage.peeking:not(.carousel) .ri-edge-c { background: linear-gradient(to right, transparent, color-mix(in srgb, var(--ec, var(--c1)) 30%, transparent) 14px, color-mix(in srgb, var(--ec, var(--c1)) 10%, transparent) 60px); }
 @media (prefers-reduced-motion: reduce) { .ri-edge.peek-in .ri-edge-c { animation: none; } }
 .pk-fig { position: absolute; left: 50%; top: var(--fy, 50%); transform: translate(-50%, -50%); width: var(--fig-size, 60%); height: var(--fig-size, 60%); display: none; }
 .ri-peek.is-fig .pk-fig { display: block; }
 .ri-peek .pk-dial { display: none; }
 .ri-peek.is-dial .pk-dial { display: grid; opacity: 1; }
-/* (its own label waits while the edge's name tag shows the destination: one name at a time) */
-.ri-peek .pk-dial .dial-k { opacity: calc(1 - var(--pn, 0)); }
+/* (its own label waits until the edge's name tag has gone: one name at a time) */
+.ri-peek .pk-dial .dial-k { opacity: var(--pl, 1); }
 .w-head.swap .w-tag, .w-head.swap .w-name { animation: headSwap .18s ease; }
 .workout .w-head.pv-active .w-name { color: var(--text); }
 .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
 @keyframes headSwap { from { opacity: .25; } }
-/* ⏭ / ⏮ and the swipe. Idle, each disc shows a small chevron on the side facing the pause,
-   pointing at it: the way to pull (resting, the next page's edge also peeks in at the ring's rim). Swiping turns the disc into a tab
+/* ⏭ / ⏮ and the swipe. Idle, the discs are plain (resting, the next page's edge peeks in at the
+   ring's rim: that is the hint to swipe). Swiping turns the disc into a tab
    with a fixed word for what letting go will do ("Next ›", "‹ Restart", "‹ Redo", "Finish ›"),
    tinted in the destination's colour within the first ~20 px; once letting go would do it
    (armed) it turns solid. The ring's preview names the place; the tab says the action. The
@@ -1510,15 +1521,6 @@ body[data-screen="workout"], html:has(> body[data-screen="workout"]) { overscrol
 .ctl-side svg.ctl-chev { width: .5em; height: .875em; font-size: max(13px, calc(var(--pside, 48px) * .24)); fill: none; stroke-width: 2.2; }
 #skip .ctl-chev { margin-right: -2px; transform: translateX(calc(var(--k) * 3px)); }
 #prev .ctl-chev { margin-left: -2px; transform: translateX(calc(var(--k) * -3px)); }
-/* idle: the chevron facing the pause */
-.ctl-nub {
-  position: absolute; top: 0; bottom: 0; z-index: 0; width: max(10px, calc(var(--pside, 48px) * .2));
-  display: grid; place-items: center; pointer-events: none; color: var(--mute);
-  opacity: calc(1 - var(--m) * 4); transition: opacity .15s;
-}
-.ctl-side .ctl-nub svg { width: .57em; height: 1em; font-size: max(14px, calc(var(--pside, 48px) * .26)); fill: none; stroke-width: 2; }
-#skip .ctl-nub { right: calc(100% + 3px); }
-#prev .ctl-nub { left: calc(100% + 3px); }
 /* a finger is on it: the tab follows the finger exactly */
 .w-stage.swiping .ctl-side { transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s; }
 .transport.charge-next #skip, .transport.charge-prev #prev {
@@ -1544,10 +1546,8 @@ body[data-screen="workout"], html:has(> body[data-screen="workout"]) { overscrol
 .ctl-side.halo { --k: .25; }
 /* paused: everything tucked away (Resume sits over the row) */
 .transport.held .ctl-side { --k: 0 !important; animation: none; }
-.transport.held .ctl-nub { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .ctl-side, .ctl-tab, .ctl-nub { transition: none !important; }
-  .ctl-nub svg { animation: none !important; }
+  .ctl-side, .ctl-tab { transition: none !important; }
 }
 /* a bigger target on the inner side only: easy to hit with a thumb, nothing added toward the
    screen edge where the hand holding the phone rests */
