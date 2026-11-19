@@ -391,6 +391,8 @@
 [data-look="studio"] .brief .b-round-main.on .b-beats { filter: none; }
 /* "tap Start": the button calls for attention */
 [data-look="studio"] .b-start.on { animation: bReady 1.6s cubic-bezier(.2,.8,.3,1) 2; }
+/* setup: Start workout glows the same way, continuously */
+[data-look="studio"] #start:not(:disabled) { animation: bReady 1.6s cubic-bezier(.2,.8,.3,1) infinite; }
 @keyframes bReady {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btn-bg) 55%, transparent), 0 14px 30px -14px color-mix(in srgb, var(--btn-bg) 80%, transparent); }
   100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--btn-bg) 0%, transparent), 0 14px 30px -14px color-mix(in srgb, var(--btn-bg) 80%, transparent); }
@@ -436,7 +438,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   [data-look="studio"] .brief.talking .b-eq i { animation: none; height: 10px; }
-  [data-look="studio"] .b-start.on { animation: none; box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--btn-bg); }
+  [data-look="studio"] .b-start.on, [data-look="studio"] #start:not(:disabled) { animation: none; box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--btn-bg); }
   [data-look="studio"] .b-coach-v.swap { animation: none; }
 }
 
