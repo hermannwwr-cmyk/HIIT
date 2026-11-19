@@ -914,12 +914,16 @@
     // back / skip on the base line (see fit); never past the stage's edge
     var bx = Math.min(f.bx, w / 2 - 6 - p.side / 2);
     st.style.setProperty('--bx', px(bx));
-    // how far their swipe tab may slide out toward the pause (stopping 10 px short of it), and
-    // how much of that is left for the destination's name beside the icon
-    var tab = Math.max(0, bx - p.main / 2 - p.side / 2 - 10);
-    st.style.setProperty('--tab', px(tab));
-    this.tabText = Math.max(0, tab + p.side * 0.29 - 15);
-    st.style.setProperty('--tabtxt', px(this.tabText));
+    // The room round back / skip for their swipe tab ("Next ›", "‹ Restart"): toward the pause
+    // only while it stays 8 px clear of the ring's band (its nearest point is straight toward the
+    // centre), and out toward the screen's edge (into the page margin, 10 px short of the edge)
+    var capY = r.R * Math.cos(f.ga), hs = p.side / 2;
+    var nearX = Math.sqrt(Math.max(0, Math.pow(r.R + r.th / 2 + 8 + hs, 2) - capY * capY));
+    var sr = st.getBoundingClientRect(), vw = window.innerWidth || w;
+    var outL = Math.min(sr.left + w / 2 - bx - hs - 10, w / 2 - bx - hs + 16);
+    var outR = Math.min(vw - (sr.left + w / 2 + bx + hs) - 10, w / 2 - bx - hs + 16);
+    this.tabRoom = { tin: Math.max(0, bx - nearX), outL: Math.max(0, outL), outR: Math.max(0, outR), side: p.side };
+    st.style.setProperty('--tin', px(this.tabRoom.tin));
     st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
     st.style.setProperty('--fh', px(regionH));
     st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));
@@ -1294,6 +1298,7 @@
       veilGuard = setTimeout(function () { veil.classList.remove('guard'); }, 500);
     }
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
+    $('transport').classList.toggle('held', !!paused); // ⏮ / ⏭ keep their tabs and hints tucked away
     setInert(!$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden);
     ring.needs = 2;
     if (paused && run) {
@@ -1577,36 +1582,56 @@
     else if (seg.type === 'warmup') label = nx.type === 'warmup' ? 'Next warm-up move: ' + labelName(nx) : 'Finish warm-up';
     else label = 'Skip to ' + labelName(nx);
     $('skip').setAttribute('aria-label', label);
-    setTab('skip', nx, nx ? tabName(nx) : 'Finish', 'Next');
+    setTab('skip', nx, nx ? 'Next' : 'Finish');
   }
-  /** What ⏭ / ⏮'s tab calls an interval: "Rest", "Push Ups", "Set break", "Calf Stretch". */
-  function tabName(sg) {
-    return sg.type === 'work' ? exName(sg.exercise) : sg.type === 'rest' ? 'Rest' : sg.type === 'jacks' ? 'Jacks'
-      : sg.type === 'setrest' ? 'Set break' : sg.type === 'prep' ? 'Get ready' : sg.move === 'jog' ? warmName(sg) : exName(sg.move);
+  /** Contrast ratio (WCAG) of two hex colours. */
+  function contrastOf(a, b) { var x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  /** a mixed toward b by w (0..1), as hex. */
+  function mixHex(a, b, w) {
+    var p = hexRgb(a), q = hexRgb(b);
+    return '#' + ((1 << 24) | p.map(function (v, i) { return Math.round(v + (q[i] - v) * w); }).reduce(function (n, v) { return (n << 8) | v; }, 0)).toString(16).slice(-6);
+  }
+  /** Step a toward b until it keeps 4.6:1 against bg (WCAG AA for text, with a margin). */
+  function aaOn(a, b, bg) {
+    for (var i = 0; i < 24 && contrastOf(a, bg) < 4.6; i++) a = mixHex(a, b, 0.12);
+    return a;
   }
   /**
-   * ⏭ / ⏮'s tab: where a swipe (or a tap) that way lands, in that interval's colour, with its
-   * name when the name fits beside the icon (else the short word). Only touched when it changes.
+   * ⏭ / ⏮'s tab: a fixed word for what it does ("Next", "Finish", "Restart", "Redo", "Back"),
+   * in the colour of where it lands; the ring's preview names the place. Its colours keep
+   * AA contrast both as a tint (swiping) and solid (letting go will do it), and its size and
+   * place fit the room round the button (see Ring.layout). Only touched when something changes.
    */
   var tabKey = { skip: '', prev: '' };
-  function setTab(id, sg, name, short) {
-    var col = solidOnPage((sg ? PHASE[sg.type] : PHASE.done).colors[0]), key = name + '|' + col;
+  function setTab(id, sg, word) {
+    var col = solidOnPage((sg ? PHASE[sg.type] : PHASE.done).colors[0]), light = LOOKS[look].scheme === 'light';
+    var room = ring && ring.tabRoom, key = word + '|' + col + '|' + look + '|' + (room ? room.tin + ',' + room.outL + ',' + room.outR : '');
     if (tabKey[id] === key) return;
     tabKey[id] = key;
     var btn = $(id), d = $(id + 'Dest');
-    btn.style.setProperty('--tcol', col);
-    btn.style.setProperty('--tfg', inkOn(col));
-    d.textContent = name; d.className = 'ctl-dest';
-    var room = ring && ring.tabText ? ring.tabText - 4 : 0;
-    if (!room || d.scrollWidth <= d.clientWidth) return;
-    if (name.indexOf(' ') > 0) {
-      // one word a line, if each word fits
-      d.className = 'ctl-dest two';
-      if (d.scrollWidth <= d.clientWidth && d.scrollHeight < 34) return;
-      d.className = 'ctl-dest';
-    }
-    d.textContent = short;
-    if (d.scrollWidth > d.clientWidth) d.textContent = '';
+    // colours: the tint is the phase colour washed into the button's surface; its ink and the
+    // solid fill are pushed darker (light page) or lighter (dark page) until they read at AA
+    var surf = (getComputedStyle(document.documentElement).getPropertyValue('--surface-solid') || '').trim();
+    if (!/^#[0-9a-f]{6}$/i.test(surf)) surf = light ? '#ffffff' : '#2e2e31';
+    var tint = mixHex(surf, col, light ? 0.14 : 0.2);
+    var ink = aaOn(col, light ? '#000000' : '#ffffff', tint);
+    var on = light ? '#ffffff' : '#111318', solid = aaOn(col, light ? '#000000' : '#ffffff', on);
+    btn.style.setProperty('--t-tint', tint);
+    btn.style.setProperty('--t-ink', ink);
+    btn.style.setProperty('--t-solid', solid);
+    btn.style.setProperty('--t-on', on);
+    if (d.textContent !== word) d.textContent = word;
+    // size: the word, its chevron and padding; place: toward the pause as far as the ring allows,
+    // the rest out toward the edge
+    if (!room) return;
+    var tab = d.parentNode, cs = getComputedStyle(tab);
+    var need = Math.ceil(tab.scrollWidth ? d.offsetWidth + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.columnGap || cs.gap || 0) + tab.querySelector('.ctl-chev').getBoundingClientRect().width : 0);
+    var W = Math.max(room.side, need), extra = W - room.side, out = id === 'skip' ? room.outR : room.outL;
+    var tin = Math.min(room.tin, extra / 2);
+    if (extra - tin > out) tin = Math.min(room.tin, extra - out);
+    var shift = (extra - tin) / 2 - tin / 2; // + outward
+    btn.style.setProperty('--tw', Math.round(W) + 'px');
+    btn.style.setProperty('--tx', Math.round(id === 'skip' ? shift : -shift) + 'px');
   }
   /** ⏮ says what it will do: "Restart Push Ups", "Back to rest", "Redo Push Ups". */
   function syncPrevLabel() {
@@ -1615,7 +1640,7 @@
     var label = b.kind === 'restart' ? 'Restart ' + name : b.kind === 'redo' ? 'Redo ' + name : 'Back to ' + name;
     var btn = $('prev');
     if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
-    setTab('prev', b.seg, b.kind === 'restart' ? 'Restart' : b.kind === 'redo' ? 'Redo' : b.seg ? tabName(b.seg) : 'Back', 'Back');
+    setTab('prev', b.seg, b.kind === 'restart' ? 'Restart' : b.kind === 'redo' ? 'Redo' : 'Back');
   }
   // the buttons' own icons in a tip (not emoji), with words for screen readers
   var ICON_NEXT = '<svg aria-hidden="true"><use href="#i-next"/></svg><span class="sr-only">the skip button</span>';
@@ -2297,26 +2322,28 @@
         peekFig.setPlaying(true);
       }
     }
-    /** Armed: the title and the ring switch to the destination, so letting go changes nothing more. */
+    /** Armed: letting go now would go there (⏭ / ⏮'s tab turns solid, with a tick). */
     function arm(on) {
       if (on === tp.classList.contains('armed')) return;
       tp.classList.toggle('armed', on);
-      if (on) {
-        if (!g || !g.buzzed) { if (g) g.buzzed = true; buzz(12); }
-        if (dest && dest.seg) {
-          saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
-          var h = headFor(dest.seg);
-          chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
-          wEx.innerHTML = h.ex;
-          // the head wears the destination's colours too
-          var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
-          head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
-          head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
-          head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
-          ring.fastUntil = performance.now() + 300;
-          ring.setColors(dest.colors[0], dest.colors[1]);
-        }
-      } else restoreHead();
+      if (on) { if (!g || !g.buzzed) { if (g) g.buzzed = true; buzz(12); } }
+    }
+    /** Committed: the title and the ring switch to the destination as it slides in, so landing
+     *  changes nothing more. (Not while dragging: until you let go, the head and the timer both
+     *  stay on what's on now, and the preview in the ring is the only thing that names where to.) */
+    function showDest() {
+      if (!dest || !dest.seg) return;
+      saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
+      var h = headFor(dest.seg);
+      chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
+      wEx.innerHTML = h.ex;
+      // the head wears the destination's colours too
+      var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
+      head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
+      head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
+      head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
+      ring.fastUntil = performance.now() + 300;
+      ring.setColors(dest.colors[0], dest.colors[1]);
     }
     function clearHeadColours() {
       head.style.removeProperty('--c1'); head.style.removeProperty('--c2');
@@ -2368,6 +2395,7 @@
     }
     function springBack(dir, off, v) {
       arm(false);
+      restoreHead();
       var ms = settleWith(off || travel() * 0.3, v);
       stage.classList.add('settle');
       place(0, dir, 0);
@@ -2392,6 +2420,7 @@
       stage.classList.add('settle');
       place(D, dir, 1);
       arm(true);
+      showDest();
       pending = { t: setTimeout(land, ms), act: act };
     }
     /** Swap in the real interval: it looks exactly like the preview, so snap without animating. */

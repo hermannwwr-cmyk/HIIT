@@ -74,6 +74,8 @@
   <symbol id="i-look" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.1"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5L8 12l6.5 6.5"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 8 14"><path d="M2 2l4.5 5L2 12"/></symbol>
+  <symbol id="i-chev-l" viewBox="0 0 8 14"><path d="M6 2L1.5 7 6 12"/></symbol>
   <symbol id="i-replay" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4v4h4"/></symbol>
   <symbol id="i-whistle" viewBox="0 0 24 24"><path d="M9.5 9H21v3.5l-4 1.2A6.5 6.5 0 1 1 9.5 9z"/><circle cx="9" cy="15.5" r="1.6"/><path d="M5 6l1.5 1.5M9 3.5V6M2.5 9.5H5"/></symbol>
 </svg>
@@ -304,10 +306,10 @@
         </div>
       </div>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">
-        <!-- ⏮ / ⏭ each hold a tab (where you'd land: its name, in its colour) that slides out toward the pause as you swipe -->
-        <button id="prev" class="ctl ctl-side" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"><span class="ctl-tab" aria-hidden="true"><span class="ctl-dest" id="prevDest"></span></span><svg aria-hidden="true"><use href="#i-prev"/></svg></button>
+        <!-- ⏮ / ⏭: a chevron facing the pause; swiping turns each into a tab saying what letting go does ("Next ›") -->
+        <button id="prev" class="ctl ctl-side" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"><span class="ctl-nub" aria-hidden="true"><svg><use href="#i-chev-l"/></svg></span><span class="ctl-tab" aria-hidden="true"><svg class="ctl-chev"><use href="#i-chev-l"/></svg><span class="ctl-dest" id="prevDest">Restart</span></span><svg class="ctl-ico" aria-hidden="true"><use href="#i-prev"/></svg></button>
         <button id="pause" class="ctl ctl-main" type="button" aria-label="Pause" aria-keyshortcuts="Space"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
-        <button id="skip" class="ctl ctl-side ctl-skip" type="button" aria-label="Next interval" aria-keyshortcuts="ArrowRight"><span class="ctl-tab" aria-hidden="true"><span class="ctl-dest" id="skipDest"></span></span><svg aria-hidden="true"><use href="#i-next"/></svg></button>
+        <button id="skip" class="ctl ctl-side ctl-skip" type="button" aria-label="Next interval" aria-keyshortcuts="ArrowRight"><span class="ctl-nub" aria-hidden="true"><svg><use href="#i-chev-r"/></svg></span><span class="ctl-tab" aria-hidden="true"><span class="ctl-dest" id="skipDest">Next</span><svg class="ctl-chev"><use href="#i-chev-r"/></svg></span><svg class="ctl-ico" aria-hidden="true"><use href="#i-next"/></svg></button>
       </div>
     </div>
     <div class="w-lower">

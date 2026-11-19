@@ -1446,77 +1446,77 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .workout .w-head.pv-active .w-name { color: var(--text); }
 .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
 @keyframes headSwap { from { opacity: .25; } }
-/* ⏭ / ⏮ and the swipe. Each disc holds a tab: where you'd land that way (its name, in its
-   colour; see setTab). Swiping slides it out toward the pause with the finger (--k follows the
-   gesture's --ck), as a tint; once letting go would do it (armed) it turns solid in that colour.
-   The other way's disc steps back. A tap plays the same slide, so the tab confirms where it went.
-   Hover (with a pointer) or keyboard focus shows the tab too: "this goes to Rest". */
-.ctl-side { position: relative; --tc: var(--tcol, var(--c1)); --tk: var(--tfg, #fff); --k: 0;
-  transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s; }
-.ctl-side > svg { position: relative; z-index: 1; }
+/* ⏭ / ⏮ and the swipe. Idle, each disc shows a small chevron on the side facing the pause
+   ("there's more this way"; on rest it nudges now and then). Swiping turns the disc into a tab
+   with a fixed word for what letting go will do ("Next ›", "‹ Restart", "‹ Redo", "Finish ›"),
+   tinted in the destination's colour within the first ~20 px; once letting go would do it
+   (armed) it turns solid. The ring's preview names the place; the tab says the action. The
+   tab's size and place are set by setTab (--tw, --tx: clear of the ring's band) and its colours
+   keep AA contrast (--t-tint / --t-ink, --t-solid / --t-on). The other way's disc steps back.
+   Hover, keyboard focus and the first-use hint show the tab too. */
+@property --k { syntax: '<number>'; inherits: true; initial-value: 0; }
+.ctl-side {
+  position: relative; --k: 0; --m: min(1, calc(var(--k) * 5));
+  transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s, --k .2s cubic-bezier(.3, .9, .3, 1);
+}
+.ctl-side svg.ctl-ico { position: relative; z-index: 2; opacity: calc(1 - var(--m) * 1.6); }
 .ctl-tab {
-  position: absolute; top: -1px; bottom: -1px; z-index: 0; box-sizing: border-box;
-  width: calc(100% + 2px + var(--k) * var(--tab, 60px));
-  display: flex; align-items: center; overflow: hidden; border-radius: 999px; pointer-events: none;
-  background: color-mix(in srgb, var(--tc) 13%, var(--surface-solid, #fff));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tc) 28%, transparent);
-  opacity: 0;
-  transition: width .24s cubic-bezier(.3, .9, .3, 1), opacity .12s, background-color .14s, box-shadow .14s;
+  position: absolute; top: -1px; bottom: -1px; left: 50%; z-index: 1; box-sizing: border-box;
+  width: calc(var(--pside, 48px) + 2px + (var(--tw, 48px) - var(--pside, 48px)) * var(--m));
+  transform: translateX(calc(-50% + var(--tx, 0px) * var(--m)));
+  display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 10px;
+  border-radius: 999px; overflow: hidden; pointer-events: none;
+  background: var(--t-tint, var(--surface)); color: var(--t-ink, var(--text));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-ink, var(--text)) 16%, transparent);
+  opacity: min(1, calc(var(--m) * 4));
+  transition: background-color .12s, color .12s, box-shadow .12s;
 }
-/* the name sits beside the icon; the tab's edge uncovers it as it slides out */
-#skip .ctl-tab { right: -1px; justify-content: flex-end; padding-right: calc(var(--pside, 48px) * .71 + 5px); }
-#prev .ctl-tab { left: -1px; padding-left: calc(var(--pside, 48px) * .71 + 5px); }
-.ctl-dest {
-  flex: none; box-sizing: border-box; width: var(--tabtxt, 60px); padding: 0 2px; text-align: center; white-space: nowrap;
-  font: 600 max(14px, calc(var(--pside, 48px) * .25))/1 var(--ui); letter-spacing: -.01em; color: color-mix(in srgb, var(--tc) 72%, var(--text));
-  opacity: calc((var(--k) - .55) * 3); transition: color .14s;
+.ctl-tab > * { flex: none; opacity: calc(var(--m) * 1.5 - .5); }
+.ctl-dest { font: 600 max(13px, calc(var(--pside, 48px) * .24))/1 var(--ui); letter-spacing: -.01em; white-space: nowrap; }
+.ctl-side svg.ctl-chev { width: .5em; height: .875em; font-size: max(13px, calc(var(--pside, 48px) * .24)); fill: none; stroke-width: 2.2; }
+#skip .ctl-chev { margin-right: -2px; transform: translateX(calc(var(--k) * 3px)); }
+#prev .ctl-chev { margin-left: -2px; transform: translateX(calc(var(--k) * -3px)); }
+/* idle: the chevron facing the pause */
+.ctl-nub {
+  position: absolute; top: 0; bottom: 0; z-index: 0; width: max(10px, calc(var(--pside, 48px) * .2));
+  display: grid; place-items: center; pointer-events: none; color: var(--mute);
+  opacity: calc(1 - var(--m) * 4); transition: opacity .15s;
 }
-/* a two-word name that's too long for one line: one word a line */
-.ctl-dest.two { white-space: normal; font-size: max(12.5px, calc(var(--pside, 48px) * .21)); line-height: 1.06; letter-spacing: -.005em; }
-#skip .ctl-dest { transform: translateX(calc((1 - var(--k)) * 10px)); }
-#prev .ctl-dest { transform: translateX(calc((var(--k) - 1) * 10px)); }
-/* a finger is on it: the tab follows the finger, no easing (letting go eases it home) */
-.w-stage.swiping .ctl-tab { transition: opacity .12s, background-color .14s, box-shadow .14s; }
+.ctl-side .ctl-nub svg { width: .57em; height: 1em; font-size: max(14px, calc(var(--pside, 48px) * .26)); fill: none; stroke-width: 2; }
+#skip .ctl-nub { right: calc(100% + 3px); }
+#prev .ctl-nub { left: calc(100% + 3px); }
+/* rest, get ready, the set break: now and then ⏭'s chevron gives a little nudge */
+.workout[data-mode="rest"] .transport:not(.charge-next):not(.charge-prev):not(.held) #skip .ctl-nub svg { animation: nubNudge 5s ease-in-out 1.5s infinite; }
+@keyframes nubNudge { 0%, 74%, 100% { transform: none; } 80% { transform: translateX(3px); } 86% { transform: none; } 91% { transform: translateX(2px); } }
+/* a finger is on it: the tab follows the finger exactly */
+.w-stage.swiping .ctl-side { transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s; }
 .transport.charge-next #skip, .transport.charge-prev #prev {
-  --k: var(--ck, 0); --tc: var(--dc, var(--tcol, var(--c1))); --tk: var(--dfg, var(--tfg, #fff));
-  transform: none; background: transparent; border-color: transparent; box-shadow: none; color: color-mix(in srgb, var(--tc) 72%, var(--text));
+  --k: var(--ck, 0); transform: none; background: transparent; border-color: transparent; box-shadow: none;
 }
-.transport.charge-next #skip .ctl-tab, .transport.charge-prev #prev .ctl-tab { opacity: 1; }
 /* the other way steps back while you swipe */
 .transport.charge-next #prev, .transport.charge-prev #skip { opacity: .35; }
-/* armed: solid, so it's plain that letting go goes there */
-.transport.armed.charge-next #skip, .transport.armed.charge-prev #prev { color: var(--tk); }
+/* armed: solid (a light shadow: pause stays the heaviest thing in the row) */
 .transport.armed.charge-next #skip .ctl-tab, .transport.armed.charge-prev #prev .ctl-tab {
-  background: var(--tc); box-shadow: 0 10px 22px -12px var(--tc);
+  background: var(--t-solid, var(--c1)); color: var(--t-on, #fff); box-shadow: 0 6px 14px -10px var(--t-solid, var(--c1));
 }
-.transport.armed.charge-next #skip .ctl-dest, .transport.armed.charge-prev #prev .ctl-dest { color: var(--tk); }
 /* pointer hover (after a beat, so passing over doesn't flash) and keyboard focus: the tab, tinted */
 @media (hover: hover) and (pointer: fine) {
-  .transport:not(.charge-next):not(.charge-prev) .ctl-side:hover { --k: 1; }
-  .transport:not(.charge-next):not(.charge-prev) .ctl-side:hover .ctl-tab { opacity: 1; transition-delay: .25s; }
+  .transport:not(.charge-next):not(.charge-prev) .ctl-side:hover { --k: .25; transition-delay: .2s; }
 }
-.transport:not(.charge-next):not(.charge-prev) .ctl-side:focus-visible { --k: 1; }
-.transport:not(.charge-next):not(.charge-prev) .ctl-side:focus-visible .ctl-tab { opacity: 1; }
-@media (hover: hover) and (pointer: fine) {
-  .transport:not(.charge-next):not(.charge-prev) .ctl-side:hover { color: color-mix(in srgb, var(--tc) 72%, var(--text)); transition-delay: .25s; }
-}
-.transport:not(.charge-next):not(.charge-prev) .ctl-side:focus-visible { color: color-mix(in srgb, var(--tc) 72%, var(--text)); }
-/* the focus ring goes round the tab, not the disc inside it */
+.transport:not(.charge-next):not(.charge-prev) .ctl-side:focus-visible { --k: .25; }
 [data-look] .ctl-side:focus-visible { outline: none; }
-.ctl-side:focus-visible .ctl-tab { outline: 2px solid var(--accent, var(--c2)); outline-offset: 3px; overflow: hidden; }
-/* a hint ("this is where next lives"): the tab peeks out with its name once, then tucks back */
-.ctl-side.pulse { --k: 1; }
-.ctl-side.pulse .ctl-tab { animation: tabPeek 2.2s cubic-bezier(.3, .9, .3, 1); }
-@keyframes tabPeek {
-  0%, 100% { opacity: 0; width: calc(100% + 2px); }
-  16%, 76% { opacity: 1; width: calc(100% + 2px + var(--tab, 60px)); }
-  92% { opacity: 1; width: calc(100% + 2px); }
-}
+.ctl-side:focus-visible .ctl-tab { outline: 2px solid var(--accent, var(--c2)); outline-offset: 3px; }
+/* a hint ("this is where next lives"): the tab shows itself once, then tucks back */
+.ctl-side.pulse { animation: tabPeek 2.2s cubic-bezier(.3, .9, .3, 1); }
+@keyframes tabPeek { 0%, 100% { --k: 0; } 14%, 76% { --k: .25; } }
 /* reduced motion: the same tab, shown still for a moment */
-.ctl-side.halo { --k: 1; }
-.ctl-side.halo .ctl-tab { opacity: 1; }
+.ctl-side.halo { --k: .25; }
+/* paused: everything tucked away (Resume sits over the row) */
+.transport.held .ctl-side { --k: 0 !important; animation: none; }
+.transport.held .ctl-nub { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .ctl-tab, .ctl-dest, .ctl-side { transition: none !important; }
+  .ctl-side, .ctl-tab, .ctl-nub { transition: none !important; }
+  .ctl-nub svg { animation: none !important; }
 }
 /* a bigger target on the inner side only: easy to hit with a thumb, nothing added toward the
    screen edge where the hand holding the phone rests */
