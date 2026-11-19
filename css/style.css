@@ -1447,6 +1447,9 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 .w-stage.settle .ri-cur, .w-stage.settle .ri-peek, .w-stage.settle .ri-edge-c, .w-stage.settle .ri-edge-n {
   transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity var(--st, .22s) ease -16ms, clip-path var(--st, .22s) ease -16ms;
 }
+/* letting go hands the name over: the tag fades in the first half, the page's own label in the second */
+.w-stage.settle .ri-edge-n { transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity calc(var(--st, .22s) * .45) ease; }
+.w-stage.settle .ri-peek .pk-dial .dial-k { transition: opacity calc(var(--st, .22s) * .45) ease calc(var(--st, .22s) * .5); }
 .w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial { transition: none !important; }
 /* the incoming page's edge: a curtain in its colour that leads it in from the rim (its edge at
    --ex from the centre, moving with the finger), with its name riding on it inside the visible
@@ -1461,10 +1464,10 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 .ri-edge.to-prev .ri-edge-c { right: 50%; transform: translateX(calc(-1 * var(--ex, 0px))) scaleX(-1); }
 .ri-edge-n {
   position: absolute; z-index: 1; display: none; pointer-events: none;
-  top: calc(var(--cy, 50%) - var(--ri, 140px) * .74); margin: 0; translate: 0 -50%;
+  top: calc(var(--cy, 50%) - var(--ny, calc(var(--ri, 140px) * .74))); margin: 0; translate: 0 -50%;
   max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: .35em .75em; border-radius: 999px; background: var(--eb, var(--surface)); color: var(--en, var(--text));
-  font: 650 clamp(13px, calc(var(--ri, 140px) * .11), 26px)/1.1 var(--ui); letter-spacing: -.01em;
+  font: 650 clamp(14px, calc(var(--ri, 140px) * .12), 26px)/1.1 var(--ui); letter-spacing: -.01em;
   opacity: var(--pn, 0); box-shadow: 0 4px 14px -8px rgba(0, 0, 0, .35);
 }
 /* (--nx: from the centre to the tag's end at the curtain's side) */
@@ -1485,7 +1488,7 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 .ri-peek.is-fig .pk-fig { display: block; }
 .ri-peek .pk-dial { display: none; }
 .ri-peek.is-dial .pk-dial { display: grid; opacity: 1; }
-/* (its own label waits until the edge's name tag has gone: one name at a time) */
+/* (its own label waits while the edge's name tag names the place: one name at a time) */
 .ri-peek .pk-dial .dial-k { opacity: var(--pl, 1); }
 .w-head.swap .w-tag, .w-head.swap .w-name { animation: headSwap .18s ease; }
 .workout .w-head.pv-active .w-name { color: var(--text); }

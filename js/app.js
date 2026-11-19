@@ -830,6 +830,10 @@
     return this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01;
   };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
+  /** Switch colours at once (no blend through the middle). */
+  Ring.prototype.snapColors = function (a, b) {
+    this.setColors(a, b); this.a = this.ta.slice(); this.b = this.tb.slice(); this.needs = 2;
+  };
   Ring.prototype.shock = function (strength) { this.shocks.push({ t: 0, s: strength || 1 }); this.needs = 2; };
   Ring.prototype.resize = function () {
     if (!this.sizeDirty && this.w) return true;
@@ -2410,8 +2414,8 @@
       head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
       head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
       head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
-      ring.fastUntil = performance.now() + 300;
-      ring.setColors(dest.colors[0], dest.colors[1]);
+      // the ring switches outright, under the slide (a blend of, say, blue and coral is mud)
+      ring.snapColors(dest.colors[0], dest.colors[1]);
     }
     function clearHeadColours() {
       head.style.removeProperty('--c1'); head.style.removeProperty('--c2');
@@ -2440,22 +2444,27 @@
       // the curtain's edge moves with the finger from the ring's rim; the name rides on it,
       // but never further out than the visible chord (it can be read from the first 20 px)
       // (the name tag sits high in the ring, 0.74 r above the centre, where the chord reaches
-      // 0.67 r each way, just ahead of the curtain's edge: over the leaving page, clear of the
-      // incoming figure's head and of the leaving one's, which has moved off with the finger.
-      // It is gone before the incoming page's own label fades in, from p = .7; the leaving
-      // page's label steps aside as soon as the drag starts: one name at a time)
-      var ex = r - SLIVER - off, clamp01 = function (q) { return Math.max(0, Math.min(1, q)); };
+      // 0.67 r each way (on a small ring, at its top edge, clear of the big digits), just ahead
+      // of the curtain's edge: over the leaving page, clear of the incoming figure's head and
+      // of the leaving one's, which has moved off with the finger. The tag is the one name, at
+      // full strength, for as long as the finger is down; the incoming page's own label (a
+      // dial's "Push Ups in") waits. Letting go hands over: the title takes the name at once
+      // (showDest), the tag fades in the first half of the landing and the label fades in in
+      // the second (see commit() and the CSS), so the two never show together. The leaving
+      // page's label steps aside as soon as the drag starts)
+      var ex = r - SLIVER - off;
       stage.style.setProperty('--ex', ex.toFixed(1) + 'px');
       stage.style.setProperty('--co', real ? (1 - p * p).toFixed(3) : '0');
       // (inside the visible chord if it fits there, else centred: it may cross the ring's band)
       var ch = r * 0.67 - 8, tw = dest && dest.tw || 0;
       stage.style.setProperty('--nx', (tw <= 2 * ch ? Math.max(tw - ch, Math.min(ch, ex - 8)) : tw / 2).toFixed(1) + 'px');
       stage.style.setProperty('--cl', (1 - Math.min(1, off / 16)).toFixed(3));
-      stage.style.setProperty('--pn', real ? (Math.min(1, off / 20) * (1 - clamp01((p - 0.42) / 0.2))).toFixed(3) : '0');
-      stage.style.setProperty('--pl', clamp01((p - 0.7) / 0.22).toFixed(3));
-      // the incoming page is clipped at its edge (its figure never spills over what's leaving),
-      // opening up as it lands
-      stage.style.setProperty('--pcl', (0.3 * r + SLIVER + r * clamp01((p - 0.6) / 0.35)).toFixed(1) + 'px');
+      stage.style.setProperty('--ny', (r < 100 ? r - 4 : r * 0.74).toFixed(1) + 'px');
+      stage.style.setProperty('--pn', real ? Math.min(1, off / 20).toFixed(3) : '0');
+      stage.style.setProperty('--pl', 0);
+      // the incoming page is clipped at its edge (its figure never spills over what's leaving)
+      // while the finger is down; the clip opens as it lands (see commit())
+      stage.style.setProperty('--pcl', (0.3 * r + SLIVER).toFixed(1) + 'px');
       tp.style.setProperty('--ck', ck.toFixed(3));
       tp.classList.toggle('charge-next', dir > 0 && ck > 0);
       tp.classList.toggle('charge-prev', dir < 0 && ck > 0);
@@ -2533,6 +2542,9 @@
       stage.classList.remove('swiping');
       stage.classList.add('settle');
       place(D, dir, 1);
+      stage.style.setProperty('--pcl', (3 * ri()) + 'px'); // landing: the whole page shows
+      stage.style.setProperty('--pn', 0); // the title has its name now (showDest); the tag
+      stage.style.setProperty('--pl', 1); // hands over to the page's own label as it lands
       arm(true);
       showDest();
       pending = { t: setTimeout(land, ms), act: act };
