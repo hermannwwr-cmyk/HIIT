@@ -847,6 +847,10 @@
 [data-look="studio"] .dial-k { font: 700 clamp(13px, calc(var(--fh, 200px) * .085), 20px)/1.15 var(--ui); letter-spacing: .02em; text-transform: none; color: color-mix(in srgb, var(--c1) 75%, var(--text)); }
 [data-look="studio"] .dial .digits { --dg: min(calc(var(--fh, 200px) * .56), calc(var(--rr, 120px) * 1.1)); }
 [data-look="studio"] .dial .digits.long { font-size: min(calc(var(--dg) * .76), calc(var(--rr, 120px) * .74)); }
+/* short landscape: the dial sits high in a small ring, where the ring is narrower: one step smaller */
+@media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  [data-look="studio"] .dial .digits.long { font-size: min(calc(var(--dg) * .7), calc(var(--rr, 120px) * .64)); }
+}
 [data-look="studio"] .dial-sub { font: 500 15px/1.2 var(--ui); letter-spacing: 0; color: var(--mute); }
 [data-look="studio"] .digits .d.of { width: auto; font-size: .4em; font-weight: 400; color: var(--mute); opacity: 1; }
 
@@ -886,7 +890,7 @@
 }
 @media (max-height: 700px) and (max-aspect-ratio: 5/4) {
   [data-look="studio"] .coach { margin-top: 0; padding: 6px 6px 6px 14px; }
-  [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 0; }
+  [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 2.6em; } /* two lines, long tip or short: the ring never moves */
 }
 
 /* swipe carousel + first-run tip (Studio) */

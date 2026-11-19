@@ -1311,14 +1311,16 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .upnext.compact .un-act .link-btn span { display: none; }
 .un-figwrap { cursor: pointer; }
 .upnext.compact .un-start { max-width: none; height: 46px; padding: 0 14px; }
-/* a narrow card (short landscape phones): the label keeps its button, the icon makes way */
+/* a narrow card (short landscape phones): a short label ("Start"), then the icon makes way */
 .un-act { container-type: inline-size; }
+.un-short { display: none; }
 @container (max-width: 180px) {
-  .upnext .un-start { padding: 0 10px; gap: 6px; }
-  .upnext .un-start svg { display: none; }
+  .upnext .un-long { display: none; }
+  .upnext .un-short { display: inline; }
 }
-@container (max-width: 140px) {
-  [data-look] .upnext .un-start { padding: 0 6px; font-size: 14px; letter-spacing: -.02em; }
+@container (max-width: 135px) {
+  .upnext .un-start { padding: 0 12px; }
+  .upnext .un-start svg { display: none; }
 }
 @media (max-width: 359px) { .un-mus, .ex-word { display: none; } }
 
@@ -1328,7 +1330,7 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
   .coach-top { order: 2; flex: none; }
   .coach .link-btn { max-width: none; }
   .coach-k { display: none; }
-  .coach-v { order: 1; flex: 1 1 auto; min-width: 0; min-height: 0; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .coach-v { order: 1; flex: 1 1 auto; min-width: 0; min-height: 2.6em; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
 
 /* ---- undo after a skip: lives in the strip row, never over content */
@@ -1386,8 +1388,10 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
   .un-name { font-size: clamp(22px, 6.6vw, 30px); }
 }
 @media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  .w-stage { margin-bottom: max(10px, env(safe-area-inset-bottom, 0px)); } /* the pause clear of the bottom edge */
   .w-prog { padding-top: 4px; padding-bottom: 2px; gap: 4px; }
-  .wp-meta { font-size: 12px; min-height: 20px; }
+  .wp-meta { font-size: 12px; min-height: 24px; }
+  .wp-skip { height: 24px; } /* the warm-up's Skip fits the row, so the ring keeps its size */
   .wp-track { height: 10px; }
   .wp-cell { height: 6px; } .wp-cell.is-now, .wp-cell.is-next { height: 10px; }
   .un-name { font-size: clamp(20px, 3.6vw, 26px); }
@@ -1494,8 +1498,8 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 .beats { gap: 8px; margin-top: -6px; }
 .beats i { width: 9px; height: 9px; border-width: 2px; }
 .beats i:last-child { width: 12px; height: 12px; margin-top: -1.5px; }
-/* their row is kept through the whole warm-up, so the ring keeps one size from move to move */
-body[data-phase="warmup"] .beats[hidden] { display: flex !important; visibility: hidden; }
+/* their row is kept through the whole workout, so the ring keeps one size from the warm-up to the end */
+.workout .beats[hidden] { display: flex !important; visibility: hidden; }
 /* the countdown (5-4-3-2-1, then BEGIN): the number is the big, urgent element; "Starts in" is the small label above it */
 .wl-box.runway .wl-sub { order: -1; font: 700 14px/1 var(--ui); letter-spacing: .28em; text-transform: uppercase; color: var(--c1); }
 .wl-box.runway .wl-title { font-size: var(--dg, clamp(84px, 27vw, 150px)); line-height: .92; font-variant-numeric: tabular-nums; }
