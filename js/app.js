@@ -2404,14 +2404,20 @@
         if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
       }
       var restMode = run.mode === 'rest';
-      // during exercise only a drag that starts on one of the three buttons counts (with a
-      // little slack round each); the row between them, over the ring and the figure's feet,
-      // doesn't. From ⏮ it can only go back, from ⏭ only on; from pause, either way.
-      var on = restMode ? 0 : onControl(e.clientX, e.clientY), ignored = on === null;
+      // during exercise a drag counts when it starts on one of the three buttons (with a little
+      // slack round each; from ⏮ it can only go back, from ⏭ only on, from pause either way) or
+      // anywhere on the ring itself (either way, and it must be dragged until ⏭ / ⏮ fills: no
+      // flicks). The lower half (timer, coach card) stays still for a sweaty wipe.
+      var on = restMode ? 0 : onControl(e.clientX, e.clientY), fromCtl = !restMode && on !== null;
+      if (!restMode && on === null) {
+        var sr = stage.getBoundingClientRect();
+        if (e.clientX >= sr.left && e.clientX <= sr.right && e.clientY >= sr.top && e.clientY <= sr.bottom) on = 0;
+      }
+      var ignored = on === null;
       hinted = false;
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
       keyQueue.length = 0; // and any arrow presses still waiting
-      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored, only: on || 0 };
+      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ctl: fromCtl, ignored: ignored, only: on || 0 };
     });
     area.addEventListener('pointermove', function (e) {
       if (!g || e.pointerId !== g.id) return;
@@ -2448,7 +2454,7 @@
       if (!s.on) return;
       var dt = Math.max(1, performance.now() - s.t), adx = Math.abs(s.dx);
       var full = adx >= threshold();
-      var flick = s.rest && adx > 56 && adx / dt > 0.45; // flicks only while resting
+      var flick = (s.rest || s.ctl) && adx > 56 && adx / dt > 0.45; // flicks while resting, or from the buttons
       if (cancelled || !(full || flick)) { arm(false); springBack(s.dir || 1); return; }
       eatClick = true; // a swipe that started on a button must not also press it
       setTimeout(function () { eatClick = false; }, 350);
