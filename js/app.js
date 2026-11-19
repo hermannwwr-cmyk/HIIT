@@ -880,7 +880,9 @@
       function clearX(g) { return Math.sqrt(Math.max(0, Math.pow(outR + g, 2) - capY * capY)); }
       var room = w / 2 - 16 - p.side / 2, sg = gap;
       if (clearX(sg) > room) sg = Math.max(12, Math.min(sg, Math.sqrt(room * room + capY * capY) - outR));
-      var bx = clearX(sg);
+      // …and at least as far out as the ring is wide (a disc's outer edge flush with the ring's),
+      // so on a big ring they still sit at the far left and right, not tucked in under it
+      var bx = Math.max(clearX(sg), Math.min(r.R + r.th / 2 - p.side / 2, room));
       var air = Math.round(Math.max(8, Math.min(16, S * 0.035))); // between the row and what's below
       return { S: S, r: r, p: p, ga: ga, capY: capY, bx: bx,
         below: Math.max(capY + p.ph / 2, capY + r.ext) + air, wide: 2 * (bx + p.side / 2 + 16) };
