@@ -1220,6 +1220,7 @@
   }
 
   function setPlaying(on) {
+    if (!on && carousel) carousel.clearKeys(); // pausing stops queued arrow presses too
     if (!run || run.finished || on === run.playing) return;
     run.base = elapsedNow();
     run.anchor = performance.now();
@@ -1236,6 +1237,7 @@
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
+    if (carousel) carousel.clearKeys();
     if (!run || !run.playing) return;
     run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
     A.stopVoice();
@@ -2287,16 +2289,13 @@
       close();
     }
     /** Finish the move from wherever it is (swipes, ⏭ / ⏮ taps and arrow keys). */
-    var keyQueue = null;
+    var keyQueue = []; // arrow presses waiting for the slide before them (at most 4)
     function commit(dir, act, key) {
       if (!run) return;
       if (locked()) {
         // no double skips from a double tap; but quick arrow presses are meant: each one
-        // slides on in turn once the current slide is done
-        if (key) {
-          if (keyQueue && keyQueue.dir === dir) keyQueue.n = Math.min(keyQueue.n + 1, 5);
-          else keyQueue = { dir: dir, act: act, n: 1 };
-        }
+        // slides on in turn once the current slide is done (held keys don't repeat: see the keydown)
+        if (key && keyQueue.length < 4) keyQueue.push({ dir: dir, act: act });
         return;
       }
       lockUntil = performance.now() + (key ? (reduced ? 120 : 260) : reduced ? 300 : 600);
@@ -2339,10 +2338,12 @@
         dest = null;
         requestAnimationFrame(function () { requestAnimationFrame(function () {
           stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
-          if (keyQueue) {
-            var q = keyQueue; keyQueue = --q.n > 0 ? q : null;
+          var q = keyQueue.shift();
+          if (q) {
             lockUntil = 0;
-            if (run && !run.finished) commit(q.dir, q.act, true);
+            // (pausing, the quit dialog, Undo or a swipe clear the queue; this is a backstop)
+            if (run && !run.finished && $('pausedVeil').hidden && $('quitDialog').hidden && $('coachSheet').hidden) commit(q.dir, q.act, true);
+            else keyQueue.length = 0;
           }
         }); });
       }, reduced ? 0 : 220);
@@ -2367,7 +2368,7 @@
         showTip(dir > 0 ? 'Swipe from ' + ICON_NEXT + ' to skip' : 'Swipe from ' + ICON_PREV + ' to go back', 5000);
       }
     }
-    carousel = { commit: commit, nudge: nudge };
+    carousel = { commit: commit, nudge: nudge, clearKeys: function () { keyQueue.length = 0; } };
 
     /** Which of back, pause or skip is (x, y) on: -1, 0 or 1 (null: none). Each is a disc;
      *  count a finger's width of slack round it. */
@@ -2394,6 +2395,7 @@
       var on = restMode ? 0 : onControl(e.clientX, e.clientY), ignored = on === null;
       hinted = false;
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
+      keyQueue.length = 0; // and any arrow presses still waiting
       g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored, only: on || 0 };
     });
     area.addEventListener('pointermove', function (e) {
@@ -2566,6 +2568,7 @@
   var resumeAfterDialog = false;
   function openQuit() {
     if (!run) return;
+    if (carousel) carousel.clearKeys();
     resumeAfterDialog = run.playing;
     pauseQuietly();
     $('pausedVeil').hidden = true;
@@ -2684,6 +2687,7 @@
     $('unStart').addEventListener('click', skip);
     $('wpSkip').addEventListener('click', skipWarmup);
     $('toastUndo').addEventListener('click', function () {
+      if (carousel) carousel.clearKeys();
       if (run && undo.at != null) { A.play('click'); seek(undo.at); }
       hideUndo();
     });
@@ -2752,8 +2756,12 @@
         var ae = document.activeElement;
         if (ae && ae.tagName === 'BUTTON' && ae !== $('pause') && focusByKeyboard) return;
         e.preventDefault(); setPlaying(!run.playing);
-      } else if (e.key === 'ArrowRight') { e.preventDefault(); if (carousel) carousel.commit(1, skip, true); else skip(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); if (carousel) carousel.commit(-1, prev, true); else prev(); }
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (e.repeat) return; // a held key is one press, not a run through the workout
+        var fwd = e.key === 'ArrowRight';
+        if (carousel) carousel.commit(fwd ? 1 : -1, fwd ? skip : prev, true); else if (fwd) skip(); else prev();
+      }
     });
 
     var scrollRaf = 0;
