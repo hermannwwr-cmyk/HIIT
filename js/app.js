@@ -787,6 +787,24 @@
     var n = parseInt(hex.slice(1), 16);
     return [n >> 16 & 255, n >> 8 & 255, n & 255];
   }
+  /** Relative luminance (WCAG) of a hex colour. */
+  function lumOf(hex) {
+    var c = hexRgb(hex).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  /** The icon colour on a solid hex fill: white while it keeps 3:1 (WCAG, graphics), else near-black. */
+  function inkOn(hex) { return 1.05 / (lumOf(hex) + 0.05) >= 3 ? '#fff' : '#111318'; }
+  /** A phase colour as a solid control on the light page: darkened a step at a time until it
+   *  stands out from the page by 3.3:1 (#0a84ff, for one, is only 3.0:1). Dark pages: as is. */
+  function solidOnPage(hex) {
+    if (LOOKS[look].scheme !== 'light') return hex;
+    var c = hexRgb(hex);
+    for (var i = 0; i < 8 && 0.89 / (lumOf(hex) + 0.05) < 3.3; i++) {
+      c = c.map(function (v) { return Math.round(v * 0.9); });
+      hex = '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1);
+    }
+    return hex;
+  }
   function rgba(c, a) { return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')'; }
 
   function Ring(canvas) {
@@ -1214,6 +1232,7 @@
   }
 
   function setPlaying(on) {
+    if (!on && carousel) carousel.clearKeys(); // pausing stops queued arrow presses too
     if (!run || run.finished || on === run.playing) return;
     run.base = elapsedNow();
     run.anchor = performance.now();
@@ -1230,6 +1249,7 @@
   }
   /** Stop the clock without showing the pause screen (dialogs, guide). */
   function pauseQuietly() {
+    if (carousel) carousel.clearKeys();
     if (!run || !run.playing) return;
     run.base = elapsedNow(); run.anchor = performance.now(); run.playing = false;
     A.stopVoice();
@@ -1534,6 +1554,50 @@
   /** No label inside small rings (or short landscape ones): the countdown gets the room. */
   function dialBare() { return !!(ring.geo && (ring.geo.S < 300 || (window.innerWidth > window.innerHeight && ring.geo.fh < 200))); }
 
+  /** An interval's name for a button label: "rest", "Push Ups", "calf stretch, right side". */
+  function labelName(sg) {
+    return sg.type === 'warmup' && sg.side ? exName(sg.move).toLowerCase() + ', ' + sg.side + ' side' : segName(sg);
+  }
+  /** ⏭ says what it will do: "Skip to rest", "Start now: Push Ups", "Finish workout"... */
+  function syncSkipLabel(seg) {
+    var nx = run.tl.segments[seg.index + 1], label;
+    if (!nx) label = 'Finish workout';
+    else if (seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest') label = (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise);
+    else if (seg.type === 'warmup') label = nx.type === 'warmup' ? 'Next warm-up move: ' + labelName(nx) : 'Finish warm-up';
+    else label = 'Skip to ' + labelName(nx);
+    $('skip').setAttribute('aria-label', label);
+  }
+  /** ⏮ says what it will do: "Restart Push Ups", "Back to rest", "Redo Push Ups". */
+  function syncPrevLabel() {
+    if (!run || run.finished) return;
+    var b = backTarget(), name = b.seg ? labelName(b.seg) : '';
+    var label = b.kind === 'restart' ? 'Restart ' + name : b.kind === 'redo' ? 'Redo ' + name : 'Back to ' + name;
+    var btn = $('prev');
+    if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
+  }
+  // the buttons' own icons in a tip (not emoji), with words for screen readers
+  var ICON_NEXT = '<svg aria-hidden="true"><use href="#i-next"/></svg><span class="sr-only">the skip button</span>';
+  var ICON_PREV = '<svg aria-hidden="true"><use href="#i-prev"/></svg><span class="sr-only">the back button</span>';
+  /** A short line in the progress row (where "N sets left" sits) for a few seconds. */
+  var tipT = 0;
+  function showTip(html, ms) {
+    var tip = $('wpTip');
+    tip.innerHTML = html;
+    tip.hidden = false; $('wProg').classList.add('tipping');
+    clearTimeout(tipT);
+    tipT = setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, ms);
+  }
+  /** ⏭ / ⏮ glow once: "this is where that lives". With reduced motion: a still halo for a moment. */
+  function pulseCtl(btn) {
+    if (reduced) {
+      btn.classList.add('halo');
+      clearTimeout(btn._haloT);
+      btn._haloT = setTimeout(function () { btn.classList.remove('halo'); }, 1500);
+      return;
+    }
+    btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
+  }
+
   function enterSegment(idx) {
     var tl = run.tl, seg = tl.segments[idx], ph = PHASE[seg.type];
     run.segIdx = idx;
@@ -1616,16 +1680,16 @@
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
-    $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Next warm-up move'
-      : restMode ? (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise)
-      : 'Next interval');
+    syncSkipLabel(seg);
+    syncPrevLabel();
 
     updateProgress(seg);
     if (restMode && seg.type !== 'setrest' && !state.swipeTip) {
       state.swipeTip = true; savePrefs();
-      $('wpTip').hidden = false; $('wProg').classList.add('tipping');
-      setTimeout(function () { $('wpTip').hidden = true; $('wProg').classList.remove('tipping'); }, 7000);
+      showTip('Swipe ← or tap ' + ICON_NEXT + ' for next', 7000);
+      // the slide shows the swipe; then ⏭ glows once, so "tap ⏭" points at something
       setTimeout(function () { if (carousel) carousel.nudge(); }, 1300);
+      setTimeout(function () { if (run && run.mode === 'rest') pulseCtl($('skip')); }, reduced ? 600 : 2300); // (no slide with reduced motion)
     }
 
     // phase wipe, sound, voice
@@ -1732,6 +1796,7 @@
 
   /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
+    syncPrevLabel(); // ⏮ goes back in the first 3 s, restarts after
     if (seg.type === 'warmup') {
       if (!seg.counts && moving(seg)) setDigits(String(whole), whole + ' seconds left');
       return;
@@ -2140,7 +2205,9 @@
       if (dir > 0) sg = tl.segments[idx + 1];
       else { var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : ''; }
       dest = { dir: dir, seg: sg, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
-      tp.style.setProperty('--dc', dest.colors[0]);
+      var dc = solidOnPage(dest.colors[0]);
+      tp.style.setProperty('--dc', dc);
+      tp.style.setProperty('--dfg', inkOn(dc)); // the armed button's icon
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
       if (!sg) { peek.classList.add('is-end'); return; }
       var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
@@ -2235,9 +2302,16 @@
       close();
     }
     /** Finish the move from wherever it is (swipes, ⏭ / ⏮ taps and arrow keys). */
-    function commit(dir, act) {
-      if (!run || locked()) return;
-      lockUntil = performance.now() + (reduced ? 300 : 600); // no double skips
+    var keyQueue = []; // arrow presses waiting for the slide before them (at most 4)
+    function commit(dir, act, key) {
+      if (!run) return;
+      if (locked()) {
+        // no double skips from a double tap; but quick arrow presses are meant: each one
+        // slides on in turn once the current slide is done (held keys don't repeat: see the keydown)
+        if (key && keyQueue.length < 4) keyQueue.push({ dir: dir, act: act });
+        return;
+      }
+      lockUntil = performance.now() + (key ? (reduced ? 120 : 260) : reduced ? 300 : 600);
       if (!dest || dest.dir !== dir || !stage.classList.contains('carousel')) { open(); prepare(dir); }
       stage.classList.remove('swiping');
       stage.classList.add('settle');
@@ -2270,11 +2344,21 @@
         stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
         stage.style.setProperty('--po', 0);
         tp.classList.remove('armed');
+        tp.style.setProperty('--ck', 0);
         stage.classList.remove('carousel', 'swiping');
         tp.classList.remove('charge-next', 'charge-prev');
         if (peekFig) peekFig.setPlaying(false);
         dest = null;
-        requestAnimationFrame(function () { requestAnimationFrame(function () { stage.classList.remove('snap'); document.body.classList.remove('instant-phase'); }); });
+        requestAnimationFrame(function () { requestAnimationFrame(function () {
+          stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+          var q = keyQueue.shift();
+          if (q) {
+            lockUntil = 0;
+            // (pausing, the quit dialog, Undo or a swipe clear the queue; this is a backstop)
+            if (run && !run.finished && $('pausedVeil').hidden && $('quitDialog').hidden && $('coachSheet').hidden) commit(q.dir, q.act, true);
+            else keyQueue.length = 0;
+          }
+        }); });
       }, reduced ? 0 : 220);
     }
     /** One-time nudge that shows the next interval is just a swipe away. */
@@ -2290,16 +2374,26 @@
     function hintControls(dir) {
       if (hinted) return;
       hinted = true;
-      var btn = dir > 0 ? $('skip') : $('prev');
-      btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
+      pulseCtl(dir > 0 ? $('skip') : $('prev'));
       if (!state.dragTip) {
         state.dragTip = true; savePrefs();
-        var tip = $('wpTip'); tip.textContent = 'During exercise, drag from the controls to skip';
-        tip.hidden = false; $('wProg').classList.add('tipping');
-        setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, 5000);
+        // (mid-exercise the screen itself ignores swipes, so a sweaty arm can't skip)
+        showTip(dir > 0 ? 'Swipe from ' + ICON_NEXT + ' to skip' : 'Swipe from ' + ICON_PREV + ' to go back', 5000);
       }
     }
-    carousel = { commit: commit, nudge: nudge };
+    carousel = { commit: commit, nudge: nudge, clearKeys: function () { keyQueue.length = 0; } };
+
+    /** Which of back, pause or skip is (x, y) on: -1, 0 or 1 (null: none). Each is a disc;
+     *  count a finger's width of slack round it. */
+    var ctls = [$('prev'), $('pause'), $('skip')];
+    function onControl(x, y) {
+      for (var i = 0; i < ctls.length; i++) {
+        var r = ctls[i].getBoundingClientRect(), rad = r.width / 2 + 18;
+        var dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
+        if (dx * dx + dy * dy <= rad * rad) return i - 1;
+      }
+      return null;
+    }
 
     area.addEventListener('pointerdown', function (e) {
       if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
@@ -2307,15 +2401,15 @@
         if (e.width > 40 || e.height > 40) return; // a palm or a wipe, not a fingertip
         if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
       }
-      var restMode = run.mode === 'rest', ignored = false;
-      if (!restMode) {
-        // during exercise only a drag that starts on the controls counts
-        var r = tp.getBoundingClientRect(), m = 16;
-        ignored = e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
-      }
+      var restMode = run.mode === 'rest';
+      // during exercise only a drag that starts on one of the three buttons counts (with a
+      // little slack round each); the row between them, over the ring and the figure's feet,
+      // doesn't. From ⏮ it can only go back, from ⏭ only on; from pause, either way.
+      var on = restMode ? 0 : onControl(e.clientX, e.clientY), ignored = on === null;
       hinted = false;
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
-      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored };
+      keyQueue.length = 0; // and any arrow presses still waiting
+      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored, only: on || 0 };
     });
     area.addEventListener('pointermove', function (e) {
       if (!g || e.pointerId !== g.id) return;
@@ -2333,6 +2427,14 @@
         open();
       }
       var dir = dx < 0 ? 1 : -1;
+      if (g.only && dir !== g.only) {
+        // the wrong way for this button: nothing charges (letting go springs back), and the
+        // button that does go that way lights up
+        if (g.dx) { arm(false); set(0, g.dir); }
+        g.dx = 0;
+        if (Math.abs(dx) > 48) hintControls(dir);
+        return;
+      }
       if (dir !== g.dir) { if (g.dir) arm(false); g.dir = dir; prepare(dir); }
       g.dx = dx;
       var th = threshold(), adx = Math.abs(dx);
@@ -2479,6 +2581,7 @@
   var resumeAfterDialog = false;
   function openQuit() {
     if (!run) return;
+    if (carousel) carousel.clearKeys();
     resumeAfterDialog = run.playing;
     pauseQuietly();
     $('pausedVeil').hidden = true;
@@ -2597,6 +2700,7 @@
     $('unStart').addEventListener('click', skip);
     $('wpSkip').addEventListener('click', skipWarmup);
     $('toastUndo').addEventListener('click', function () {
+      if (carousel) carousel.clearKeys();
       if (run && undo.at != null) { A.play('click'); seek(undo.at); }
       hideUndo();
     });
@@ -2665,8 +2769,12 @@
         var ae = document.activeElement;
         if (ae && ae.tagName === 'BUTTON' && ae !== $('pause') && focusByKeyboard) return;
         e.preventDefault(); setPlaying(!run.playing);
-      } else if (e.key === 'ArrowRight') { e.preventDefault(); if (carousel) carousel.commit(1, skip); else skip(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); if (carousel) carousel.commit(-1, prev); else prev(); }
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (e.repeat) return; // a held key is one press, not a run through the workout
+        var fwd = e.key === 'ArrowRight';
+        if (carousel) carousel.commit(fwd ? 1 : -1, fwd ? skip : prev, true); else if (fwd) skip(); else prev();
+      }
     });
 
     var scrollRaf = 0;

@@ -507,10 +507,6 @@
 
 /* the workout controls' discs: see "each control is its own disc" below */
 [data-look="studio"] .ctl-main svg { stroke-width: 2.6; }
-[data-look="studio"] .ctl-skip.has-text {
-  border-color: var(--line-hi); background: var(--surface); box-shadow: var(--shadow-1); color: var(--text);
-}
-[data-look="studio"] .ctl-skip.has-text .ctl-text { font: 600 14px/1 var(--ui); letter-spacing: 0; text-transform: none; }
 
 /* phase change: a colour disc grows out of the ring, the word rises, then an iris opens */
 @property --hole { syntax: '<length>'; inherits: false; initial-value: 0px; }
