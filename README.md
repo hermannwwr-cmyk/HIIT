@@ -101,7 +101,7 @@ Every session opens with a 10 s get-ready countdown (after the warm-up, the coac
 | Next interval | ⏭, or swipe left | → |
 | Back (restart the interval, or redo the last exercise during a rest) | ⏮, or swipe right | ← |
 
-Pause sits in the ring's opening; ⏮ and ⏭ sit at the far left and right on the same line, at the base of the ring. Swiping slides a preview of where you're going into the ring while ⏭ / ⏮ fills up; let go once it's full. You can swipe anywhere on the workout screen. During rest, get ready and the set break a quick flick is enough; during an exercise drag until ⏭ / ⏮ fills (or flick from the buttons themselves: from ⏮ it only goes back, from ⏭ only on), so a quick wipe of the screen never skips, and Undo is there for 8 s. Browser Back during a workout asks before ending it.
+Pause sits in the ring's opening; ⏮ and ⏭ sit at the far left and right on the same line, at the base of the ring. Swiping slides a preview of where you're going into the ring, and a tab with its name slides out of ⏭ / ⏮ with your finger; it turns solid once letting go will take you there. (Hovering or focusing ⏭ / ⏮ shows the same tab.) You can swipe anywhere on the workout screen. During rest, get ready and the set break a quick flick is enough; during an exercise drag until ⏭ / ⏮ fills (or flick from the buttons themselves: from ⏮ it only goes back, from ⏭ only on), so a quick wipe of the screen never skips, and Undo is there for 8 s. Browser Back during a workout asks before ending it.
 | End workout | ✕ | Esc |
 
 The screen is kept awake during a workout where the browser supports the Wake Lock API, and phones vibrate on each phase change.

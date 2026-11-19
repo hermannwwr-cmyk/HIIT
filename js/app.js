@@ -913,13 +913,23 @@
     st.style.setProperty('--pmain', px(p.main));
     st.style.setProperty('--pside', px(p.side));
     // back / skip on the base line (see fit); never past the stage's edge
-    st.style.setProperty('--bx', px(Math.min(f.bx, w / 2 - 6 - p.side / 2)));
+    var bx = Math.min(f.bx, w / 2 - 6 - p.side / 2);
+    st.style.setProperty('--bx', px(bx));
+    // how far their swipe tab may slide out toward the pause (stopping 10 px short of it), and
+    // how much of that is left for the destination's name beside the icon
+    var tab = Math.max(0, bx - p.main / 2 - p.side / 2 - 10);
+    st.style.setProperty('--tab', px(tab));
+    this.tabText = Math.max(0, tab + p.side * 0.29 - 15);
+    st.style.setProperty('--tabtxt', px(this.tabText));
     st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
     st.style.setProperty('--fh', px(regionH));
     st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));
     // on the stage, so the swipe preview's figure gets exactly the same size and place
     st.style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
     sizeUpNext();
+    // (the tabs' room changed: refit their names)
+    var sg = typeof run !== 'undefined' && run && !run.finished && run.tl.segments[run.segIdx];
+    if (sg && tabKey) { tabKey.skip = tabKey.prev = ''; syncSkipLabel(sg); syncPrevLabel(); }
   };
   /** The up-next card overlays the readout's space; its demo tile fills that height. */
   /**
@@ -1568,6 +1578,36 @@
     else if (seg.type === 'warmup') label = nx.type === 'warmup' ? 'Next warm-up move: ' + labelName(nx) : 'Finish warm-up';
     else label = 'Skip to ' + labelName(nx);
     $('skip').setAttribute('aria-label', label);
+    setTab('skip', nx, nx ? tabName(nx) : 'Finish', 'Next');
+  }
+  /** What ⏭ / ⏮'s tab calls an interval: "Rest", "Push Ups", "Set break", "Calf Stretch". */
+  function tabName(sg) {
+    return sg.type === 'work' ? exName(sg.exercise) : sg.type === 'rest' ? 'Rest' : sg.type === 'jacks' ? 'Jacks'
+      : sg.type === 'setrest' ? 'Set break' : sg.type === 'prep' ? 'Get ready' : sg.move === 'jog' ? warmName(sg) : exName(sg.move);
+  }
+  /**
+   * ⏭ / ⏮'s tab: where a swipe (or a tap) that way lands, in that interval's colour, with its
+   * name when the name fits beside the icon (else the short word). Only touched when it changes.
+   */
+  var tabKey = { skip: '', prev: '' };
+  function setTab(id, sg, name, short) {
+    var col = solidOnPage((sg ? PHASE[sg.type] : PHASE.done).colors[0]), key = name + '|' + col;
+    if (tabKey[id] === key) return;
+    tabKey[id] = key;
+    var btn = $(id), d = $(id + 'Dest');
+    btn.style.setProperty('--tcol', col);
+    btn.style.setProperty('--tfg', inkOn(col));
+    d.textContent = name; d.className = 'ctl-dest';
+    var room = ring && ring.tabText ? ring.tabText - 4 : 0;
+    if (!room || d.scrollWidth <= d.clientWidth) return;
+    if (name.indexOf(' ') > 0) {
+      // one word a line, if each word fits
+      d.className = 'ctl-dest two';
+      if (d.scrollWidth <= d.clientWidth && d.scrollHeight < 34) return;
+      d.className = 'ctl-dest';
+    }
+    d.textContent = short;
+    if (d.scrollWidth > d.clientWidth) d.textContent = '';
   }
   /** ⏮ says what it will do: "Restart Push Ups", "Back to rest", "Redo Push Ups". */
   function syncPrevLabel() {
@@ -1576,6 +1616,7 @@
     var label = b.kind === 'restart' ? 'Restart ' + name : b.kind === 'redo' ? 'Redo ' + name : 'Back to ' + name;
     var btn = $('prev');
     if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
+    setTab('prev', b.seg, b.kind === 'restart' ? 'Restart' : b.kind === 'redo' ? 'Redo' : b.seg ? tabName(b.seg) : 'Back', 'Back');
   }
   // the buttons' own icons in a tip (not emoji), with words for screen readers
   var ICON_NEXT = '<svg aria-hidden="true"><use href="#i-next"/></svg><span class="sr-only">the skip button</span>';
@@ -2838,6 +2879,7 @@
         if (workFig) workFig.setColors(c[0], c[1]);
         if (run.mode === 'rest') showUpNext(seg);
         updateProgress(seg);
+        syncSkipLabel(seg); syncPrevLabel(); // the tabs' colours
       }
     }
     ring.sizeDirty = true;
