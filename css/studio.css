@@ -357,6 +357,8 @@
 [data-look="studio"] .brief.talking .b-eq i:nth-child(3) { animation-delay: -.6s; }
 @keyframes bEq { 0%, 100% { height: 5px; } 50% { height: 16px; } }
 [data-look="studio"] .b-go { background: rgba(0,0,0,.16); border-radius: 50%; }
+/* setup's Start matches the brief's: label, then the session's length, quieter; the play circle at the end */
+[data-look="studio"] .start-dur { margin-left: 10px; font-weight: 500; opacity: .78; font-variant-numeric: tabular-nums; }
 [data-look="studio"] .b-go svg { fill: currentColor; stroke-width: 1.5; }
 
 /* the part the coach is talking about: everything else steps back; the part itself lifts */
@@ -428,7 +430,7 @@
   [data-look="studio"] .b-fact b { font-size: 19px; }
   [data-look="studio"] .b-coach-v, [data-look="studio"] .b-coach-v.long { font-size: 17px; }
   [data-look="studio"] .b-kicker { font-size: 13px; }
-  [data-look="studio"] .b-start { min-height: 68px; font-size: 19px; }
+  [data-look="studio"] .b-start, [data-look="studio"] #start { min-height: 68px; font-size: 19px; }
 }
 /* phones on their side: one-line title, everything a notch smaller */
 @media (max-height: 500px) and (min-aspect-ratio: 5/4) {
