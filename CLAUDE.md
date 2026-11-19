@@ -32,6 +32,19 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - Warm-up segments also carry `lead` (seconds of lead-in before the move) and `countdown` (5, or 3 for a leg switch).
 - `tests/workout.test.js` pins exact numbers: the lead values, `WARMUP_SECONDS` formatting to `'4:14'`, and session totals. So timing changes need test updates, plus the static fallback in `index.html` (`#wuTime`).
 
+**Start flow and the coach's brief.**
+- Screens: setup → brief (`#brief`) → workout (`#workout`) → done (`#done`).
+- On the setup screen, `#start` calls `openBrief()`. The coach reads the plan aloud, and `#bStart` ("Start warm-up", or "Start workout" with the warm-up off) calls `startWorkout()`. `#briefBack`, Esc and browser Back return to setup.
+- `HIIT.brief(tl)` in `workout.js` is a pure function. From the timeline it returns the plan (exercises, groups, level, set break, warm-up, total) and the spoken `lines: [{say, show}]`.
+- `show` names the part of the screen to light while that line is spoken: `intro`, `warmup`, `exercises`, `ex:<id>`, `intervals`, `sets`, `setbreak`, `total` or `ready`. It matches elements with `data-part="…"`; `briefShow()` toggles `.on`.
+- `tests/workout.test.js` pins the brief's wording rules:
+  - every line ends in `.`, `!` or `?`, never a comma (each line is its own speech utterance);
+  - no digits;
+  - "HIIT" is written as "hit" so text-to-speech says the word;
+  - a 25–41 s length.
+- The welcome lives in the brief, so the warm-up opens with "Let's warm up…".
+- Playwright scripts must click `#start` and then `#bStart` to reach the workout.
+
 **`js/app.js` drives the clock in one loop.**
 - The clock is `run.base` plus the time since `run.anchor`, read through `elapsedNow()`.
 - `update()` runs every animation frame:
@@ -49,6 +62,11 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - Only the "Studio" look exists. An inline script in `<head>` sets `html[data-look="studio"]` and `data-scheme="light|dark"` before first paint, following the system setting unless the user overrides it.
 - `css/style.css` holds the base layout. `css/studio.css` holds everything scoped to `[data-look="studio"]`, including the compact media queries (the countdown digits size via `--dg`).
 - Preferences and stats live in localStorage under `overdrive-hiit:v1`.
+- Phase colours live in two places that must agree:
+  - `app.js`: `PHASE`, `LOOKS[…].phase` and `.group` for light and dark, and `DARK_VARIANTS.charcoal` (the default dark scheme);
+  - the CSS custom properties, e.g. `--warm-a`/`--warm-b` in `style.css` and `studio.css`.
+- Current phase colours: warm-up leaf green, work coral, rest blue, jacks amber, set break mint-teal. The WARM UP and BEGIN wipes use their own deep green, passed through the `flash()` kind argument, so white text stays readable.
+- The only font is Geist, loaded from Google Fonts in `index.html`.
 
 **Audio and voice (`js/audio.js`).**
 - All sounds are synthesised with Web Audio; there are no audio files.
