@@ -1434,6 +1434,8 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 /* ⏭ / ⏮: a hint glows round the disc (keeping its own shadow) */
 #skip.pulse, #prev.pulse { animation: ctlPulse .6s ease 2; }
 @keyframes ctlPulse { 50% { box-shadow: var(--shadow-1, 0 0 #0000), 0 0 0 7px color-mix(in srgb, var(--c1) 35%, transparent); } }
+/* reduced motion: the same halo, held still for a moment instead of pulsing */
+#skip.halo, #prev.halo { box-shadow: var(--shadow-1, 0 0 #0000), 0 0 0 6px color-mix(in srgb, var(--c1) 40%, transparent); }
 #prev, #skip { position: relative; transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s; }
 /* a bigger target on the inner side only: easy to hit with a thumb, nothing added toward the
    screen edge where the hand holding the phone rests */
@@ -1443,7 +1445,7 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 /* charging: the destination's colour fills the disc's rim clockwise over a faint track of it */
 #prev::before, #skip::before {
   content: ""; position: absolute; inset: -1px; border-radius: 50%; pointer-events: none;
-  background: conic-gradient(var(--dc, var(--c1)) calc(var(--ck, 0) * 1turn), color-mix(in srgb, var(--dc, var(--c1)) 22%, transparent) 0);
+  background: conic-gradient(var(--dc, var(--c1)) calc(var(--ck, 0) * 1turn), color-mix(in srgb, var(--dc, var(--c1)) 35%, transparent) 0);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   opacity: 0; transition: opacity .12s ease;
