@@ -63,7 +63,8 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - Exercises live in the `EX` table: `period`, `cam`, draw `order`, and `pose(p)` built from keyframes.
 - All instances share one `requestAnimationFrame` loop, which sleeps while no figure needs frames.
 - Warm-up moves stay on the count:
-  - `app.js` `warmFigOpts()` passes `setExercise(id, {time, period, ready})`. That gives the move's tempo, plus a count-in that waits in a breathing ready pose until BEGIN.
+  - `app.js` `warmFigOpts()` passes `setExercise(id, {time, period})` with a negative time during the lead-in, so the move is demonstrated without a break and a fresh rep starts exactly on the go. (The figure still supports `ready`, a count-in that waits in a breathing pose, but the app no longer uses it.)
+  - From the countdown on, `lockFig()` glides the figure back onto the count after any hold for the coach.
   - `update()` re-syncs through `setTime(t, ease)` when the figure drifts more than 40 ms off the count. Errors up to about 150 ms glide; bigger ones snap.
 - Exercise changes cross-dissolve over 0.25 s. The stage uses one body scale for every move; the setup hero and the How-to sheet use `fit: 'fill'`.
 - Figure ids differ from workout ids for sided and paced warm-up moves. `app.js` `figIdFor()` and `warmFigId()` map them, e.g. `jog` → `jog-slow`/`jog-quick`, `hamstring` → `hamstring-l`/`-r`.

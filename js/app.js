@@ -1392,7 +1392,9 @@
   function warmFigOpts(seg, t) {
     var o = {};
     if (seg.counts) o.period = warmPeriod(seg);
-    if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + (seg.counts ? 2 : 1); }
+    // the move is demonstrated without a break through the lead-in and the countdown, its loop
+    // timed so a fresh rep starts exactly on the go (clock time 0)
+    if (seg.lead) o.time = t - seg.start - seg.lead;
     return o;
   }
   function warmPeriod(seg) { return seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat; }
@@ -1403,11 +1405,12 @@
    * 40 ms out of phase its clock is put right at once; up to 150 ms off, what it shows catches
    * up over 120–240 ms instead of popping (a bigger jump follows a visible freeze or a seek).
    */
-  function lockFig(seg, t) {
+  function lockFig(seg, t, lead) {
     if (!workFig || !workFig.setTime || !run.playing) return;
     var want = t - seg.start - seg.lead, per = warmPeriod(seg);
     var d = (workFig.getTime() - want) / per, off = Math.abs(d - Math.round(d)) * per;
-    if (off > 0.04) workFig.setTime(want, off <= 0.15 ? 0.12 : 0);
+    // in the lead-in (after a hold for the coach) it glides back onto the count, even from far
+    if (off > 0.04) workFig.setTime(want, lead ? Math.min(1, Math.max(0.12, 2 * off)) : off <= 0.15 ? 0.12 : 0);
   }
   function warmName(seg) {
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
@@ -1968,6 +1971,8 @@
         else { w.said = true; A.say(goWord(seg)); }
       }
     }
+    // no more holds from here: keep the moving figure on course for a rep on the go
+    if (seg.counts) lockFig(seg, t, true);
     if (t < cs) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     // the numbers: big, pulsing, one per second; 3-2-1 also pulse the screen edge
     var k = Math.min(slots - 1, Math.floor(t - cs + 1e-6));
@@ -1998,13 +2003,9 @@
     $('dLabel').textContent = seg.counts ? 'Count' : 'Time left';
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
-    if (workFig) {
-      // the go: the figure's loop starts now, phase-locked to the count. It was waiting in
-      // the start pose; jumped in mid-move, it cuts straight to the right point of the loop.
-      var fo = warmFigOpts(seg, elapsedNow());
-      fo.time = Math.max(0, fo.time); fo.ready = 0; fo.instant = !loud;
-      workFig.setExercise(warmFigId(seg), fo);
-    }
+    // the go: the figure has been moving all along, timed to start a rep right now; put its
+    // clock right in case a hold or a stalled frame left it off (lockFig keeps it there)
+    if (workFig && workFig.setTime && seg.counts) lockFig(seg, elapsedNow());
     if (!loud) return;
     // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
     if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
