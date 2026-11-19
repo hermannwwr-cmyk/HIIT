@@ -43,9 +43,17 @@ The default is **Automatic**: Studio in light or dark to match the phone's syste
 - Tap any exercise to add or remove it. The numbered badges show the order they run in. **Start** stays locked until upper body, abs and legs are all covered.
 - **Shuffle** rolls a new random set at the current count.
 
+### Coach's brief
+
+**Start** opens the brief before anything runs: today's plan on one screen, and the coach reading it aloud ("Welcome to today's HIIT session! Here's the plan…").
+
+- **On screen:** total time and when you'll finish, the session to scale (warm-up, sets, 5:00 breaks) with a one-line summary ("30 s exercise → 30 s rest · ×3 sets · 5:00 breaks"), the exercises in order on coloured upper body / abs / legs rails with live mini demos, one set drawn as 30 s on / 30 s off, and the number of sets.
+- **While the coach speaks,** the part being talked about lights up and the rest steps back; the current line is shown under it as a caption. If the voice can't play, the highlights still step through at reading pace. With the voice off (the mic button), the plan simply shows in full.
+- **Start warm-up** (or **Start workout** with the warm-up off) can be tapped at any time; the coach stops and the workout begins. Tap an exercise for its trainer's guide. **‹**, Esc or the browser's Back return to setup.
+
 ### Warm-up
 
-When a workout starts, the coach welcomes you ("Welcome to today's HIIT session") and a 4:16 SAF-style warm-up runs first:
+After the brief, a 4:14 SAF-style warm-up runs first ("Let's warm up. First, jogging on the spot, nice and easy."):
 
 | Step | How long |
 | --- | --- |
@@ -101,7 +109,7 @@ The screen is kept awake during a workout where the browser supports the Wake Lo
 ## Project layout
 
 ```
-index.html          markup for the three screens (setup, workout, done)
+index.html          markup for the screens (setup, brief, workout, done)
 css/style.css       base layout and components; phase colours are CSS custom properties
 css/studio.css      Studio look, scoped to html[data-look="studio"] (dark/light via data-scheme)
 js/workout.js       pure workout logic: catalogue + trainer content, random full-body pick, timeline

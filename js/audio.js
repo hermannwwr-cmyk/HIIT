@@ -193,14 +193,16 @@
     voice.misses++;
     if (voice.misses >= 2 && !voice.ok && !voice.told && voice.onProblem) { voice.told = true; voice.onProblem(); }
   }
+  var deferred = 0; // a line waiting out the pause after cancel(); stopVoice() drops it
   function say(text) {
     if (!settings.voice || !window.speechSynthesis || !text) return;
     try {
       var s = window.speechSynthesis;
+      clearTimeout(deferred);
       if (s.speaking || s.pending) {
         s.cancel();
         voice.seq++; // the interrupted line isn't a failure
-        setTimeout(function () { try { speakNow(text); } catch (e) { /* ignore */ } }, 60);
+        deferred = setTimeout(function () { try { speakNow(text); } catch (e) { /* ignore */ } }, 60);
       } else speakNow(text);
     } catch (e) { /* ignore */ }
   }
@@ -210,7 +212,7 @@
     try { return !!(settings.voice && window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)); } catch (e) { return false; }
   }
 
-  function stopVoice() { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+  function stopVoice() { clearTimeout(deferred); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
 
   /** Let the audio hardware idle (paused / finished). play() wakes it again. */
   function sleep(delayMs) {

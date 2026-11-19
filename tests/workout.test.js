@@ -219,7 +219,7 @@ test('warm-up: jog slow/quick ×2, then 5 counts of 4 for each move, then get re
     'hamstring:left', 'hamstring:right', 'calf:left', 'calf:right']);
   // every new move (and the very first jog) gets a lead-in before it starts; a leg switch a shorter one
   wu.slice(0, 4).forEach((s, i) => assert.equal(s.duration, s.lead + 10));
-  assert.deepEqual(wu.map(s => s.lead), [12, 0, 0, 0, 11, 11, 11, 12, 7.5, 12, 7.5]);
+  assert.deepEqual(wu.map(s => s.lead), [10, 0, 0, 0, 11, 11, 11, 12, 7.5, 12, 7.5]);
   // a spoken 5-4-3-2-1 before every new move, 3-2-1 for a leg switch, none for a jog pace change
   assert.deepEqual(wu.map(s => s.countdown), [5, 0, 0, 0, 5, 5, 5, 5, 3, 5, 3]);
   wu.slice(4).forEach(s => { assert.equal(s.counts, 5); assert.equal(s.beats, 4); assert.equal(s.duration, s.lead + s.counts * s.beats * s.beat); });
@@ -229,7 +229,7 @@ test('warm-up: jog slow/quick ×2, then 5 counts of 4 for each move, then get re
   assert.equal(tl.segments[wu.length + 1].type, 'work');
   assert.equal(tl.warmupEnd, H.WARMUP_SECONDS);
   assert.equal(tl.warmupSeconds, H.WARMUP_SECONDS);
-  assert.equal(H.formatTime(H.WARMUP_SECONDS), '4:16');
+  assert.equal(H.formatTime(H.WARMUP_SECONDS), '4:14');
   const plain = H.buildTimeline(ids, 'easy');
   assert.equal(tl.total, plain.total + H.WARMUP_SECONDS);
   assert.equal(tl.intervals, plain.intervals);
@@ -243,4 +243,115 @@ test('warm-up moves have trainer content and are not selectable workout exercise
     assert.ok(m.cue && m.breathe && m.cues.length >= 3, k);
   }
   assert.deepEqual(H.sanitize(['jog', 'pecstretch', 'pushup']), ['pushup']);
+});
+
+// ---- the coach's brief ----
+const KEYS = /^(intro|warmup|exercises|ex:[a-z]+|intervals|sets|setbreak|total|ready)$/;
+const spokenText = b => b.lines.map(l => l.say).join(' ');
+const words = s => s.split(/\s+/).filter(Boolean).length;
+
+test('brief: plan, groups and spoken lines follow the workout order', () => {
+  const tl = H.buildTimeline(['squat', 'twist', 'pushup', 'crunch', 'lunge'], 'easy', { warmup: true });
+  const b = H.brief(tl);
+  assert.deepEqual(b.exercises.map(e => e.id), tl.exercises);
+  assert.deepEqual(b.exercises[0], { id: 'pushup', name: 'Push Ups', group: 'upper' });
+  assert.deepEqual(b.groups, [
+    { group: 'upper', label: 'Upper body', ids: ['pushup'] },
+    { group: 'abs', label: 'Abs', ids: ['twist', 'crunch'] },
+    { group: 'legs', label: 'Legs', ids: ['squat', 'lunge'] }]);
+  assert.deepEqual(b.level, { id: 'easy', name: 'Easy', work: 30, recover: 30, recoverType: 'rest', sets: 3 });
+  assert.equal(b.setBreak, 300);
+  assert.equal(b.warmup, H.WARMUP_SECONDS);
+  assert.equal(b.total, tl.total);
+  assert.ok(b.lines.every(l => typeof l.say === 'string' && l.say.length && KEYS.test(l.show)), 'keys');
+  assert.deepEqual(b.lines.map(l => l.show), ['intro', 'warmup', 'exercises',
+    'ex:pushup', 'ex:twist', 'ex:crunch', 'ex:squat', 'ex:lunge',
+    'intervals', 'sets', 'setbreak', 'total', 'ready']);
+  const say = k => b.lines.find(l => l.show === k).say;
+  assert.equal(say('intro'), 'Welcome to today’s hit session, easy level. Here’s the plan.');
+  assert.match(say('warmup'), /four-minute warm-up/);
+  assert.equal(say('exercises'), 'After that, five exercises.');
+  assert.equal(say('ex:pushup'), 'Upper body: push ups.');
+  assert.equal(say('ex:twist'), 'Then abs: Russian twists.');
+  assert.equal(say('ex:crunch'), 'And crunches.');
+  assert.match(say('intervals'), /thirty seconds of work, then thirty seconds of rest\. Push hard/);
+  assert.equal(say('sets'), 'One round of all five is a set. We’ll do three sets.');
+  assert.match(say('setbreak'), /five-minute break/);
+  assert.match(say('total'), /about twenty-eight minutes in all, warm-up included/); // 27:54
+  assert.match(say('ready'), /tap Start warm-up\.$/);
+});
+
+test('brief: medium recovers with jumping jacks; no warm-up means Start workout', () => {
+  const b = H.brief(H.buildTimeline(['pushup', 'crunch', 'squat'], 'medium'));
+  assert.equal(b.level.recoverType, 'jacks');
+  assert.equal(b.level.sets, 2);
+  assert.equal(b.warmup, 0);
+  assert.ok(!b.lines.some(l => l.show === 'warmup'));
+  const text = spokenText(b);
+  assert.match(b.lines[0].say, /medium level/);
+  assert.match(text, /thirty seconds of jumping jacks to keep your heart rate up/);
+  assert.match(text, /Three exercises today/);
+  assert.match(text, /We’ll do two sets\./);
+  assert.match(text, /about eleven minutes in all\./); // 11:10
+  assert.doesNotMatch(text, /warm-up/i);
+  assert.match(b.lines[b.lines.length - 1].say, /tap Start workout\.$/);
+});
+
+test('brief: set break off is said as back to back, with no set-break line', () => {
+  const b = H.brief(H.buildTimeline(['pushup', 'crunch', 'squat'], 'easy', { setRest: 0 }));
+  assert.equal(b.setBreak, 0);
+  assert.ok(!b.lines.some(l => l.show === 'setbreak'));
+  assert.match(b.lines.find(l => l.show === 'sets').say, /three sets, back to back\.$/);
+});
+
+test('brief: every count, level and option reads well and fits about 25 to 41 seconds', () => {
+  for (let n = H.MIN_EXERCISES; n <= H.MAX_EXERCISES; n++) {
+    for (const level of ['easy', 'medium']) {
+      for (const warmup of [false, true]) {
+        for (const setRest of [undefined, 0]) {
+          const ids = H.randomPick(n, seeded(n * 7 + 1));
+          const tl = H.buildTimeline(ids, level, { warmup, setRest });
+          const b = H.brief(tl);
+          const tag = `${n} ${level} warmup=${warmup} setRest=${setRest}`;
+          // every exercise is named once, on its own line, in workout order
+          const exLines = b.lines.filter(l => l.show.startsWith('ex:'));
+          assert.deepEqual(exLines.map(l => l.show.slice(3)), tl.exercises, tag);
+          exLines.forEach(l => assert.ok(l.say.toLowerCase().includes(H.get(l.show.slice(3)).name.toLowerCase()), tag));
+          assert.deepEqual(b.groups.flatMap(g => g.ids), tl.exercises, tag);
+          assert.ok(b.lines.every(l => KEYS.test(l.show)), tag);
+          assert.equal(b.lines[0].show, 'intro');
+          assert.equal(b.lines[b.lines.length - 1].show, 'ready');
+          // each line is its own utterance: a trailing comma leaves the voice hanging
+          b.lines.forEach(l => assert.match(l.say, /[.!?]$/, `${tag}: ${l.say}`));
+          b.lines.forEach(l => assert.match(l.say, /^[A-Z]/, `${tag}: ${l.say}`));
+          const text = spokenText(b);
+          assert.doesNotMatch(text, /HIIT/, tag);          // TTS would spell it out
+          assert.doesNotMatch(text, /\d/, tag);            // numbers as words
+          assert.doesNotMatch(text, /\b1 sets\b|\bone sets\b/, tag);
+          assert.ok(text.toLowerCase().includes(['three', 'four', 'five', 'six', 'seven', 'eight'][n - 3] + ' exercises'), tag);
+          const secs = words(text) / 2.6;
+          assert.ok(secs >= 25 && secs <= 41, `${tag}: about ${secs.toFixed(1)} s of speech`);
+        }
+      }
+    }
+  }
+});
+
+test('brief: grammar for groups of one and of several', () => {
+  const b = H.brief(H.buildTimeline(H.EXERCISES.map(e => e.id), 'easy'));
+  assert.deepEqual(b.lines.filter(l => l.show.startsWith('ex:')).map(l => l.say), [
+    'Upper body: push ups.', 'And shoulder taps.',
+    'Then abs: crunches.', 'Leg raises.', 'Flutter kicks.', 'And Russian twists.',
+    'Then legs: squats.', 'And lunges.']);
+  // the longest list skips "Here's the plan" to stay brisk
+  assert.equal(b.lines[0].say, 'Welcome to today’s hit session, easy level.');
+});
+
+test('brief: no line ends with a comma', () => {
+  for (let n = H.MIN_EXERCISES; n <= H.MAX_EXERCISES; n++) {
+    for (const level of ['easy', 'medium']) {
+      const b = H.brief(H.buildTimeline(H.randomPick(n, seeded(n)), level, { warmup: true }));
+      b.lines.forEach(l => assert.doesNotMatch(l.say, /,\s*$/, l.say));
+    }
+  }
 });

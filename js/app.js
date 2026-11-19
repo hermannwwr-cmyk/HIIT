@@ -18,7 +18,7 @@
     work: { colors: ['#ff2bd6', '#ff8a1f'], energy: 1.0, chip: 'Work', flash: 'GO!' },
     rest: { colors: ['#22e5ff', '#4a6bff'], energy: 0.18, chip: 'Rest', flash: 'REST' },
     jacks: { colors: ['#c6ff1a', '#ffe14a'], energy: 0.8, chip: 'Cardio', flash: 'JACKS!' },
-    warmup: { colors: ['#b18cff', '#22e5ff'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
+    warmup: { colors: ['#95d26b', '#7cba5c'], energy: 0.5, chip: 'Warm-up', flash: 'WARM UP' },
     setrest: { colors: ['#36ffc0', '#9b5cff'], energy: 0.1, chip: 'Set break', flash: 'BREAK' },
     done: { colors: ['#ffd23f', '#ff2bd6'], energy: 0.55, chip: '', flash: '' }
   };
@@ -39,20 +39,20 @@
       phase: {
         setup: [['#ff5a36', '#4f7dff'], 0.15], prep: [['#c3c9d4', '#8790a3'], 0.3], work: [['#ff5a36', '#ff3b30'], 0.7],
         rest: [['#2fb8ff', '#3b82f6'], 0.2], jacks: [['#ffc23d', '#ff9f0a'], 0.6], setrest: [['#34d399', '#14b8a6'], 0.1],
-        warmup: [['#a78bfa', '#7c6cf0'], 0.4],
+        warmup: [['#95d26b', '#7cba5c'], 0.4],
         done: [['#ff5a36', '#ffb020'], 0.5]
       },
-      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'], warmup: ['#a78bfa', '#7c6cf0'] }
+      group: { upper: ['#ff7a59', '#ff5a36'], abs: ['#38bdf8', '#3b82f6'], legs: ['#fbbf24', '#f59e0b'], cardio: ['#ffc23d', '#ff9f0a'], rest: ['#2fb8ff', '#3b82f6'], warmup: ['#95d26b', '#7cba5c'] }
     },
     'studio-light': {
       style: 'studio', scheme: 'light', meta: '#f4f3ef', fps: 30,
       phase: {
         setup: [['#f0441f', '#3d6bff'], 0.15], prep: [['#64748b', '#3f4a5c'], 0.3], work: [['#f0441f', '#d92d20'], 0.7],
         rest: [['#0a84ff', '#2563eb'], 0.2], jacks: [['#bd6b00', '#b45309'], 0.6], setrest: [['#059669', '#0f766e'], 0.1],
-        warmup: [['#6d4fd8', '#5b3fc4'], 0.4],
+        warmup: [['#3f7d2a', '#2f6420'], 0.4],
         done: [['#d4380f', '#c76a0a'], 0.5]
       },
-      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'], warmup: ['#6d4fd8', '#5b3fc4'] }
+      group: { upper: ['#ea580c', '#d4380f'], abs: ['#0284c7', '#2563eb'], legs: ['#c76a0a', '#b45309'], cardio: ['#bd6b00', '#b45309'], rest: ['#0a84ff', '#2563eb'], warmup: ['#3f7d2a', '#2f6420'] }
     }
   };
   var htmlEl = document.documentElement;
@@ -73,7 +73,7 @@
     charcoal: {
       material: 'stone', meta: '#1a1918',
       phase: { setup: ['#d8c8b8', '#c9b8a6'], prep: ['#c9bfb2', '#8f867b'], work: ['#ff6b3d', '#f04a2a'], rest: ['#5fb3e8', '#6b8fd6'],
-        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'], warmup: ['#b7a3f0', '#8f7ad8'] }
+        jacks: ['#f2b544', '#e8873a'], setrest: ['#5fcf9f', '#3fb3a0'], done: ['#ff6b3d', '#f2b544'], warmup: ['#a2d280', '#84bf6a'] }
     }
   };
   var darkVariant = DARK_VARIANTS[htmlEl.getAttribute('data-dark')] ? htmlEl.getAttribute('data-dark') : 'charcoal';
@@ -418,6 +418,7 @@
     if (workFig) workFig.setSuspended(on);
     if (nextFig) nextFig.setSuspended(on);
     if (doneFig) doneFig.setSuspended(on);
+    Object.keys(briefThumbs).forEach(function (k) { briefThumbs[k].fig.setSuspended(on); });
     if (currentScreen !== 'workout') bg.setRunning(!on);
     setInert(on);
   }
@@ -457,17 +458,327 @@
   var currentScreen = 'setup';
   function showScreen(name) {
     currentScreen = name;
-    ['setup', 'workout', 'done'].forEach(function (s) { $(s).hidden = s !== name; });
+    ['setup', 'brief', 'workout', 'done'].forEach(function (s) { $(s).hidden = s !== name; });
     document.body.dataset.screen = name;
     bg.setFrameRate(LOOKS[look].fps || (name === 'workout' ? 0 : 30));
-    if (name === 'setup') {
+    if (name !== 'brief') briefLeave();
+    if (name === 'setup' || name === 'brief') {
       document.body.dataset.phase = 'setup';
       bg.setMood(PHASE.setup.colors[0], PHASE.setup.colors[1], PHASE.setup.energy);
       bg.setRunning(true);
-      requestAnimationFrame(function () { focusOn($('heroFig')); });
+      requestAnimationFrame(function () { focusOn(name === 'brief' ? $('briefTitle') : $('heroFig')); });
       window.scrollTo(0, 0);
-      renderMe();
+      if (name === 'setup') renderMe();
     }
+  }
+
+  // ================================================================ BRIEF
+  // Before the workout the coach talks you through today's plan: the screen shows it all
+  // at a glance, and the part the coach is on lights up while the rest steps back.
+
+  var briefOf = H.brief; // the plan and the coach's lines (js/workout.js)
+
+  var brief = { tl: null, data: null, i: -1, tok: 0, timer: 0, talking: false, clock: 0 };
+  var briefThumbs = {}; // id -> { canvas, fig }: one animated mannequin per move, reused between visits
+  var BRIEF_GAP = 260;  // a breath between the coach's lines
+
+  function briefThumb(id, group) {
+    var t = briefThumbs[id];
+    if (!t) {
+      var c = document.createElement('canvas');
+      c.setAttribute('aria-hidden', 'true');
+      var gc = GROUP_COLORS[group] || PHASE.warmup.colors;
+      t = briefThumbs[id] = { canvas: c, group: group, fig: makeFig(c, { exercise: figIdFor(id), primary: gc[0], secondary: gc[1], quality: 'low', energy: 0.45 }) };
+    }
+    return t;
+  }
+  function briefColors() {
+    Object.keys(briefThumbs).forEach(function (id) {
+      var t = briefThumbs[id], gc = GROUP_COLORS[t.group] || PHASE.warmup.colors;
+      t.fig.setColors(gc[0], gc[1]);
+    });
+  }
+  function mk(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many || one + 's'); }
+  /** "6:42" or "6:42 PM": the wall-clock time the session ends if it starts now. */
+  function finishAt(sec) {
+    var d = new Date(Date.now() + sec * 1000);
+    try { return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  }
+  function briefClock() { if (brief.data) $('bFinish').textContent = finishAt(brief.data.total); }
+
+  function renderBrief(tl, b) {
+    var lv = b.level, segs = tl.segments, warm = !!b.warmup;
+    // each part keeps together on a narrow phone ("8 exercises" never splits)
+    $('bSub').innerHTML = [lv.name, plural(b.exercises.length, 'exercise'), plural(lv.sets, 'set')]
+      .map(function (x) { return '<span>' + esc(x) + '</span>'; }).join('<span class="b-dot" aria-hidden="true"> · </span>');
+    $('bTotal').textContent = H.formatTime(b.total);
+    $('bTotal').setAttribute('aria-label', 'Total ' + H.formatTime(b.total));
+    briefClock();
+
+    // the session to scale: warm-up | set 1 | break | set 2 … (the 10 s get-ready rides with set 1)
+    var map = $('bMap');
+    map.textContent = '';
+    var blocks = [];
+    segs.forEach(function (s) {
+      var key = s.type === 'warmup' ? 'warmup' : s.type === 'setrest' ? 'break' + s.set : 'set' + s.set;
+      var last = blocks[blocks.length - 1];
+      if (!last || last.key !== key) blocks.push(last = { key: key, segs: [], dur: 0, set: s.set });
+      last.segs.push(s); last.dur += s.duration;
+    });
+    blocks.forEach(function (bk) {
+      var kind = bk.key === 'warmup' ? 'warmup' : /^break/.test(bk.key) ? 'break' : 'set';
+      var d = mk('div', 'bm-b bp bm-' + kind);
+      d.title = kind === 'warmup' ? 'Warm-up ' + H.formatTime(bk.dur) : kind === 'break' ? 'Break ' + H.formatTime(bk.dur) : 'Set ' + bk.set;
+      d.dataset.part = kind === 'warmup' ? 'warmup' : kind === 'break' ? 'setbreak' : 'sets';
+      d.style.flex = bk.dur + ' 1 0';
+      var bar = mk('div', 'bm-bar');
+      if (kind === 'set') bk.segs.forEach(function (s) { var i = mk('i', 's-' + s.type); i.style.flex = s.duration + ' 1 0'; bar.appendChild(i); });
+      d.appendChild(bar);
+      d.appendChild(mk('span', 'bm-l', kind === 'warmup' ? 'Warm-up' : kind === 'break' ? 'Break' : 'Set ' + bk.set));
+      map.appendChild(d);
+    });
+
+    // the sequence: warm-up, then the exercises grouped upper body / abs / legs
+    var seq = $('bSeq');
+    seq.textContent = '';
+    function row(id, group, num, name, meta, part, time) {
+      var li = mk('li', 'b-item');
+      var btn = mk('button', 'b-row bp');
+      btn.type = 'button';
+      btn.dataset.part = part;
+      btn.dataset.group = group;
+      var th = mk('span', 'b-thumb');
+      var t = briefThumb(id, group);
+      th.appendChild(t.canvas);
+      btn.appendChild(th);
+      if (num) btn.appendChild(mk('span', 'b-num', String(num)));
+      var tx = mk('span', 'b-row-text');
+      tx.appendChild(mk('span', 'b-row-name', name));
+      tx.appendChild(mk('span', 'b-row-meta', meta));
+      btn.appendChild(tx);
+      if (time) btn.appendChild(mk('span', 'b-row-time', time));
+      var info = mk('span', 'b-row-info');
+      info.innerHTML = '<svg aria-hidden="true"><use href="#i-info"/></svg>';
+      btn.appendChild(info);
+      btn.setAttribute('aria-label', (num ? num + '. ' : '') + name + ', ' + meta + '. How to');
+      btn.addEventListener('click', function () { briefStopTalk(true); openGuide(id, 'brief', btn); });
+      li.appendChild(btn);
+      return li;
+    }
+    function grp(group, label, items, part) {
+      var g = mk('div', 'b-grp');
+      g.dataset.group = group;
+      if (part) g.dataset.part = part;
+      // the warm-up is not a muscle group: its row names it, the rail stays (no label twice)
+      var h = mk(label ? 'h3' : 'span', 'b-grp-h', label);
+      g.appendChild(h);
+      var ol = mk('ol', 'b-list');
+      items.forEach(function (li) { ol.appendChild(li); });
+      g.appendChild(ol);
+      return g;
+    }
+    if (warm) {
+      seq.appendChild(grp('warmup', '', [row('jog', 'warmup', 0, 'Warm-up', H.formatTime(b.warmup) + ' · jog, jacks & stretches', 'warmup')]));
+    }
+    var exWrap = mk('div', 'b-exs');
+    exWrap.dataset.part = 'exercises';
+    var n = 0;
+    b.groups.forEach(function (g) {
+      exWrap.appendChild(grp(g.group, g.label, g.ids.map(function (id) {
+        var ex = H.get(id);
+        n++;
+        // the two main muscles: a third one only gets cut off on a phone
+        return row(id, g.group, n, ex.name, ex.muscles.split(' · ').slice(0, 2).join(' · '), 'ex:' + id);
+      })));
+    });
+    seq.appendChild(exWrap);
+
+    // one set, to scale: 30 s on, 30 s off, numbered like the list
+    var jacks = lv.recoverType === 'jacks';
+    $('bPattern').innerHTML = '<span class="bp-w"><b>' + lv.work + ' s</b> exercise</span><span class="bp-arrow" aria-hidden="true">→</span>' +
+      '<span class="bp-r' + (jacks ? ' j' : '') + '"><b>' + lv.recover + ' s</b> ' + (jacks ? 'jumping jacks' : 'rest') + '</span>';
+    var beats = $('bBeats');
+    beats.textContent = '';
+    beats.classList.toggle('jacks', jacks);
+    segs.forEach(function (s) {
+      if (s.set !== 1 || (s.type !== 'work' && s.type !== 'rest' && s.type !== 'jacks')) return;
+      var i = mk('i', 'bb bp bb-' + s.type);
+      i.style.flex = s.duration + ' 1 0';
+      if (s.type === 'work') { i.dataset.part = 'ex:' + s.exercise; i.dataset.group = H.get(s.exercise).group; i.textContent = String(s.slot + 1); }
+      beats.appendChild(i);
+    });
+    // the same in one line up top, so the pattern is on screen at once even when the card is below the fold
+    $('bSum').innerHTML =
+      '<span class="bs bp" data-part="intervals"><i class="b-sw b-sw-w"></i>' + lv.work + ' s exercise <span class="bs-arrow" aria-hidden="true">→</span> <i class="b-sw b-sw-' + (jacks ? 'j' : 'r') + '"></i>' +
+        lv.recover + ' s ' + (jacks ? 'jumping jacks' : 'rest') + '</span>' +
+      '<span class="bs-g"><span class="bs bp" data-part="sets">×' + lv.sets + ' ' + (lv.sets === 1 ? 'set' : 'sets') + '</span>' +
+      (b.setBreak ? '<span class="bs bp" data-part="setbreak">' + H.formatTime(b.setBreak) + ' breaks</span>' : '') + '</span>';
+    $('bSets').innerHTML = '<b>×' + lv.sets + '</b> ' + (lv.sets === 1 ? 'set' : 'sets');
+    $('bBreak').innerHTML = '<b>' + H.formatTime(b.setBreak) + '</b> break between sets';
+    $('bBreak').hidden = !b.setBreak;
+
+    $('bStartLabel').textContent = warm ? 'Start warm-up' : 'Start workout';
+  }
+  /** A map label that doesn't fit its block (the warm-up's, on a phone) steps aside rather than collide. */
+  function briefFitMap() {
+    var r = document.createRange(), blocks = document.querySelectorAll('#bMap .bm-b'), spill = 0;
+    Array.prototype.forEach.call(blocks, function (d, i) {
+      r.selectNodeContents(d.querySelector('.bm-l'));
+      var need = r.getBoundingClientRect().width, room = d.clientWidth - 8;
+      // the warm-up always keeps its label: it may run on over the next block, whose label then gives way
+      var warm = d.classList.contains('bm-warmup');
+      d.classList.toggle('spill', warm && need > room);
+      d.classList.toggle('tight', !warm && (need > room || spill > 0));
+      spill = warm && need > room ? need - room : 0;
+    });
+  }
+  window.addEventListener('resize', function () { if (currentScreen === 'brief') briefFitMap(); });
+
+  /** Setup's Start: build today's plan and let the coach brief it. */
+  function openBrief() {
+    var v = H.validate(state.ids);
+    if (!v.ok) { $('startError').textContent = v.reason; return; }
+    A.unlock();
+    var tl = H.buildTimeline(state.ids, state.level, { warmup: state.warmup });
+    brief.tl = tl;
+    brief.data = briefOf(tl);
+    renderBrief(tl, brief.data);
+    briefShow(null);
+    $('brief').classList.remove('talking');
+    $('bCoachV').textContent = '';
+    showScreen('brief');
+    briefFitMap();
+    try { document.fonts.ready.then(function () { if (currentScreen === 'brief') briefFitMap(); }); } catch (e) { /* no font API: fine */ }
+    $('bScroll').scrollTop = 0;
+    // Back from here returns to setup, not out of the app
+    try { if (!(history.state && history.state.brief)) history.pushState({ brief: 1 }, ''); } catch (e) { /* sandboxed: fine */ }
+    Object.keys(briefThumbs).forEach(function (k) { briefThumbs[k].fig.setPlaying(true); briefThumbs[k].fig.setEnergy(0.45, true); });
+    clearInterval(brief.clock);
+    brief.clock = setInterval(briefClock, 15000);
+    requestAnimationFrame(function () { $('briefTitle').focus({ preventScroll: true }); });
+    if (A.get('voice') && !A.voiceSupported()) notice(VOICE_HELP);
+    briefPlay();
+  }
+  /** Leaving the brief screen (any way): the coach stops, nothing keeps animating behind. */
+  function briefLeave() {
+    if (!brief.data) return;
+    briefStopTalk(false);
+    clearInterval(brief.clock);
+    Object.keys(briefThumbs).forEach(function (k) { briefThumbs[k].fig.setPlaying(false); });
+  }
+  function closeBrief() {
+    if (currentScreen !== 'brief') return;
+    A.stopVoice();
+    showScreen('setup');
+    try { if (history.state && history.state.brief) history.back(); } catch (e) { /* ignore */ }
+    $('start').focus({ preventScroll: true });
+  }
+  function briefStart() {
+    if (currentScreen !== 'brief') return;
+    briefStopTalk(false);
+    A.stopVoice();
+    // the brief's history entry becomes the workout's (Back mid-workout still asks first)
+    try { if (history.state && history.state.brief) history.replaceState({ hiit: 1 }, ''); } catch (e) { /* ignore */ }
+    startWorkout(state.ids);
+  }
+
+  /** Light up the part(s) of the screen named by a line's `show` key; null clears. */
+  function briefShow(key) {
+    var scr = $('brief');
+    Array.prototype.forEach.call(scr.querySelectorAll('[data-part].on'), function (e) { e.classList.remove('on'); });
+    // reduced motion: only the move being named is demonstrated
+    Object.keys(briefThumbs).forEach(function (k) { briefThumbs[k].fig.setEnergy(0.45); briefThumbs[k].fig.setPlaying(!reduced || !key); });
+    // "tap Start" closes the brief: the whole plan comes back, the button calls
+    scr.classList.toggle('dim', !!key && key !== 'ready');
+    if (!key) return;
+    var hits = Array.prototype.filter.call(scr.querySelectorAll('[data-part]'), function (e) { return e.dataset.part === key; });
+    hits.forEach(function (e) { e.classList.add('on'); });
+    // the exercise being named moves with full energy
+    var m = /^ex:(.+)$/.exec(key) || (key === 'warmup' ? [0, 'jog'] : null);
+    if (m && briefThumbs[m[1]]) { briefThumbs[m[1]].fig.setPlaying(true); briefThumbs[m[1]].fig.setEnergy(1); briefThumbs[m[1]].fig.pulse(); }
+    // keep it in view (the list can be taller than a small phone)
+    var first = hits.filter(function (e) { return $('bScroll').contains(e); })[0];
+    if (first) briefReveal(first);
+  }
+  function briefReveal(e) {
+    var sc = $('bScroll'), r = e.getBoundingClientRect(), v = sc.getBoundingClientRect(), pad = 12;
+    var dy = r.top < v.top + pad ? r.top - v.top - pad : r.bottom > v.bottom - pad ? Math.min(r.bottom - v.bottom + pad, r.top - v.top - pad) : 0;
+    if (Math.abs(dy) > 1) sc.scrollBy({ top: dy, behavior: reduced ? 'auto' : 'smooth' });
+  }
+
+  /** Reading pace for a line the voice can't say (the highlights still step). */
+  function briefReadMs(text) { return Math.max(1500, text.split(/\s+/).length * 330 + 500); }
+  function briefPlay() {
+    briefStopTalk(false);
+    var scr = $('brief');
+    $('bReplay').hidden = true;
+    if (!A.get('voice') || !A.voiceSupported()) { briefDone(false); return; }
+    brief.talking = true;
+    scr.classList.add('talking');
+    briefCaption(brief.data.lines[0].say); // on screen at once; the voice follows
+    var tok = brief.tok;
+    brief.timer = setTimeout(function () { if (tok === brief.tok) briefLine(0); }, 450); // let the screen land first
+  }
+  /**
+   * Say line i, then the next once it has been spoken. Lines chain on the speech engine's
+   * own end (polled); if the voice doesn't actually play, the highlights step at reading pace.
+   */
+  function briefLine(i) {
+    var lines = brief.data.lines, tok = ++brief.tok;
+    if (i >= lines.length) { briefDone(true); return; }
+    brief.i = i;
+    var ln = lines[i];
+    briefShow(ln.show);
+    briefCaption(ln.say);
+    A.say(ln.say);
+    var t0 = performance.now(), heard = false, est = briefReadMs(ln.say);
+    function next(gap) { brief.timer = setTimeout(function () { if (tok === brief.tok) briefLine(i + 1); }, gap); }
+    (function poll() {
+      if (tok !== brief.tok) return;
+      var t = performance.now() - t0;
+      if (t > 1300 && !A.voiceWorks()) { if (t >= est) next(0); else brief.timer = setTimeout(poll, 100); return; }
+      if (A.speaking()) {
+        heard = true;
+        if (t > est * 3 + 4000) next(0); // a stuck engine
+        else brief.timer = setTimeout(poll, 80);
+        return;
+      }
+      if (heard) { next(BRIEF_GAP); return; }
+      if (t >= est) next(0); else brief.timer = setTimeout(poll, 80);
+    })();
+  }
+  /** The coach's line as a caption: the whole line, smaller when it is a long one. */
+  function briefCaption(say) {
+    var cv = $('bCoachV'), text = say.replace(/\bhit\b/g, 'HIIT'); // spelt "hit" for the voice only
+    if (cv.textContent === text) return;
+    cv.textContent = text;
+    cv.classList.toggle('long', text.length > 80);
+    cv.classList.remove('swap'); void cv.offsetWidth; cv.classList.add('swap');
+  }
+  /** The brief is over (or the voice is off): everything shows at full strength. */
+  function briefDone(spoke) {
+    brief.tok++;
+    clearTimeout(brief.timer);
+    brief.talking = false;
+    $('brief').classList.remove('talking');
+    briefShow(null);
+    var voice = A.get('voice') && A.voiceSupported();
+    briefCaption(!voice ? 'Voice coach is off. Here’s today’s plan.' : spoke ? 'That’s the plan. Ready when you are.' : 'Here’s today’s plan.');
+    $('bReplay').hidden = !voice;
+  }
+  /** Stop the coach mid-brief; `show` leaves the plan fully visible (otherwise the caller moves on). */
+  function briefStopTalk(show) {
+    var was = brief.talking;
+    brief.tok++;
+    clearTimeout(brief.timer);
+    if (was) { A.stopVoice(); brief.talking = false; }
+    if (was && show) briefDone(false);
   }
 
   // ================================================================ RING
@@ -482,7 +793,7 @@
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.progress = 1;
-    this.a = hexRgb('#9b5cff'); this.b = hexRgb('#ff2bd6');
+    this.a = hexRgb('#ff5a36'); this.b = hexRgb('#4f7dff');
     this.ta = this.a.slice(); this.tb = this.b.slice();
     this.beat = 0; this.hot = 0;
     this.paused = false;
@@ -832,8 +1143,7 @@
       tl: tl, ids: tl.exercises.slice(), level: state.level,
       base: 0, anchor: performance.now(), playing: true,
       segIdx: -1, lastWhole: null, lastClock: -1, coachIdx: -1, figSwapped: false,
-      played: tl.segments.map(function () { return 0; }), lastT: 0, cuePending: -1, finished: false,
-      welcome: true // the coach's welcome is still to come (said once, with the first cue)
+      played: tl.segments.map(function () { return 0; }), lastT: 0, cuePending: -1, finished: false
     };
     showScreen('workout');
     if (!workFig) workFig = makeFig($('fig'), { exercise: ids[0], primary: PHASE.prep.colors[0], secondary: PHASE.prep.colors[1], quality: 'high', energy: 0.6 });
@@ -1082,7 +1392,9 @@
   function warmFigOpts(seg, t) {
     var o = {};
     if (seg.counts) o.period = warmPeriod(seg);
-    if (seg.lead) { o.time = t - seg.start - seg.lead; o.ready = (seg.countdown || 5) + (seg.counts ? 2 : 1); }
+    // the move is demonstrated without a break through the lead-in and the countdown, its loop
+    // timed so a fresh rep starts exactly on the go (clock time 0)
+    if (seg.lead) o.time = t - seg.start - seg.lead;
     return o;
   }
   function warmPeriod(seg) { return seg.move === 'jacks' ? seg.beat : seg.move === 'squat' ? 2 * seg.beat : seg.beats * seg.beat; }
@@ -1093,18 +1405,17 @@
    * 40 ms out of phase its clock is put right at once; up to 150 ms off, what it shows catches
    * up over 120–240 ms instead of popping (a bigger jump follows a visible freeze or a seek).
    */
-  function lockFig(seg, t) {
+  function lockFig(seg, t, lead) {
     if (!workFig || !workFig.setTime || !run.playing) return;
     var want = t - seg.start - seg.lead, per = warmPeriod(seg);
     var d = (workFig.getTime() - want) / per, off = Math.abs(d - Math.round(d)) * per;
-    if (off > 0.04) workFig.setTime(want, off <= 0.15 ? 0.12 : 0);
+    // in the lead-in (after a hold for the coach) it glides back onto the count, even from far
+    if (off > 0.04) workFig.setTime(want, lead ? Math.min(1, Math.max(0.12, 2 * off)) : off <= 0.15 ? 0.12 : 0);
   }
   function warmName(seg) {
     if (seg.move === 'jog') return seg.pace === 'quick' ? 'Quick jog' : 'Slow jog';
     return exName(seg.move) + (seg.side ? ' · ' + (seg.side === 'left' ? 'Left' : 'Right') : '');
   }
-  // "HIIT" is said "hit"; spelt this way so no voice reads out the letters
-  var WELCOME = 'Welcome to today\u2019s hit session!';
   // how the coach names a warm-up move, and one short form cue (kept brief: the countdown follows)
   var WARM_SAY = { jog: 'jogging on the spot', pecstretch: 'chest stretch' };
   /** Was most of the warm-up actually done (not skipped)? */
@@ -1116,11 +1427,8 @@
   /** What the coach says as a warm-up step begins (before its 5, 4, 3, 2, 1). */
   function warmAnnounce(seg, pv) {
     var first = !pv || pv.type !== 'warmup';
-    if (first) {
-      if (run.welcome) { run.welcome = false; run.welcomeIdx = seg.index; return WELCOME + ' Let\u2019s warm up, jogging on the spot, nice and easy.'; }
-      run.welcomeIdx = -1;
-      return 'Warm-up. Jogging on the spot, nice and easy.';
-    }
+    // the brief has already welcomed you
+    if (first) return 'Let\u2019s warm up. First, jogging on the spot, nice and easy.';
     if (pv.move === seg.move && pv.side !== seg.side) return 'Switch to your ' + seg.side + ' leg.';
     if (pv.move === seg.move) return seg.pace === 'quick' ? 'Quick jog!' : 'Back to an easy jog.'; // pace change, no countdown
     // "Next warm-up: jumping jacks. Five counts of four." (the form tip is on screen, in the Form card)
@@ -1301,7 +1609,7 @@
     }
 
     // phase wipe, sound, voice
-    if (flashWord) flash(flashWord, sub, false, c);
+    if (flashWord) flash(flashWord, sub, false, c, seg.type);
     if (run.playing) cueSegment(seg);
     else run.cuePending = idx; // play the cues when the user resumes
   }
@@ -1325,9 +1633,8 @@
     var nextName = seg.next ? spoken(seg.next) : '';
     if (seg.type === 'prep') {
       var pw = run.tl.segments[seg.index - 1];
-      var intro = run.welcome ? WELCOME + ' ' : pw && pw.type === 'warmup' && !run.praised && warmedUp() ? 'Warm-up done, nice work. ' : '';
-      if (intro && !run.welcome) run.praised = true;
-      run.welcome = false;
+      var intro = pw && pw.type === 'warmup' && !run.praised && warmedUp() ? 'Warm-up done, nice work. ' : '';
+      if (intro) run.praised = true;
       A.say(intro + 'Get ready. First up, ' + spoken(seg.exercise) + '.');
     }
     else if (seg.type === 'work') sayLater((seg.slot === 0 && seg.set > 1 ? 'Set ' + seg.set + '. ' : '') + spoken(seg.exercise) + '. Go!', 350);
@@ -1352,10 +1659,11 @@
   window.addEventListener('resize', function () { if (currentScreen === 'workout') fitName(); });
 
   var flashTimer = 0;
-  function flash(text, sub, count, colors) {
+  function flash(text, sub, count, colors, kind) {
     var el = $('flash'), t = $('flashText');
     if (!text) return;
     if (colors) { el.style.setProperty('--c1', colors[0]); el.style.setProperty('--c2', colors[1]); }
+    el.setAttribute('data-kind', kind || ''); // a phase whose wipe needs its own depth (warm-up)
     t.textContent = text;
     t.dataset.text = text;
     t.style.setProperty('--n', Math.max(3, text.length));
@@ -1632,8 +1940,7 @@
     if (w.go) return t;
     var wk = $('workout'), box = $('wlBox');
     wk.classList.add('wu-lead');
-    // the screen greets you while the coach does, then gives the instruction
-    var title = run.welcomeIdx === seg.index && t - seg.start < 3.5 ? 'Welcome' : 'Get ready';
+    var title = 'Get ready';
     // whole seconds: a half-second lead shows its first number for a full second
     var startsIn = 'Starts in ' + Math.max(1, Math.min(Math.floor(seg.lead), Math.ceil(leadEnd - t - 1e-6)));
     box.classList.remove('listen');
@@ -1664,6 +1971,8 @@
         else { w.said = true; A.say(goWord(seg)); }
       }
     }
+    // no more holds from here: keep the moving figure on course for a rep on the go
+    if (seg.counts) lockFig(seg, t, true);
     if (t < cs) { box.classList.remove('runway'); leadText(title, startsIn); return t; }
     // the numbers: big, pulsing, one per second; 3-2-1 also pulse the screen edge
     var k = Math.min(slots - 1, Math.floor(t - cs + 1e-6));
@@ -1685,7 +1994,7 @@
       }
     }
     // BEGIN's wipe: with the spoken "Begin!" (after "one" has had its moment); it opens as the count begins
-    if (!w.flashed && run.playing && t >= leadEnd - (slots - cd) - 0.35) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors); }
+    if (!w.flashed && run.playing && t >= leadEnd - (slots - cd) - 0.35) { w.flashed = true; flash('BEGIN', warmName(seg), false, PHASE.warmup.colors, 'warmup'); }
     return t;
   }
   /** The count (or the jog timer) begins: an obvious signal you can hear and see. */
@@ -1694,13 +2003,9 @@
     $('dLabel').textContent = seg.counts ? 'Count' : 'Time left';
     $('beats').hidden = !seg.counts;
     run.lastWhole = null; run.lastBeat = null;
-    if (workFig) {
-      // the go: the figure's loop starts now, phase-locked to the count. It was waiting in
-      // the start pose; jumped in mid-move, it cuts straight to the right point of the loop.
-      var fo = warmFigOpts(seg, elapsedNow());
-      fo.time = Math.max(0, fo.time); fo.ready = 0; fo.instant = !loud;
-      workFig.setExercise(warmFigId(seg), fo);
-    }
+    // the go: the figure has been moving all along, timed to start a rep right now; put its
+    // clock right in case a hold or a stalled frame left it off (lockFig keeps it there)
+    if (workFig && workFig.setTime && seg.counts) lockFig(seg, elapsedNow());
     if (!loud) return;
     // a working voice says "Begin!": keep only the low thump under it, so the word stays clear
     if (A.get('sfx')) A.play(A.voiceWorks() && run.warm && run.warm.said ? 'thump' : 'start');
@@ -1734,8 +2039,6 @@
   function skipWarmup() {
     if (!run) return;
     var from = elapsedNow();
-    // the welcome was cut short: the get-ready says it instead
-    if (run.welcomeIdx === 0 && A.speaking() && from < 8) run.welcome = true;
     A.play('click'); A.stopVoice();
     seek(run.tl.warmupEnd);
     offerUndo('Skipped warm-up', from);
@@ -2052,6 +2355,7 @@
     try { if (!(history.state && history.state.hiit)) history.pushState({ hiit: 1 }, ''); } catch (e) { /* sandboxed: fine */ }
   }
   window.addEventListener('popstate', function () {
+    if (currentScreen === 'brief') { closeBrief(); return; }
     if (currentScreen === 'workout' && run && !run.finished) {
       guardHistory();
       if ($('quitDialog').hidden) openQuit();
@@ -2201,7 +2505,7 @@
 
   // ================================================================ EVENTS
   function syncToggles() {
-    [['sfxToggle', 'sfx', '#i-sound', '#i-mute'], ['wSound', 'any', '#i-sound', '#i-mute'], ['voiceToggle', 'voice', '#i-voice', '#i-voice-off']].forEach(function (t) {
+    [['sfxToggle', 'sfx', '#i-sound', '#i-mute'], ['wSound', 'any', '#i-sound', '#i-mute'], ['voiceToggle', 'voice', '#i-voice', '#i-voice-off'], ['bVoice', 'voice', '#i-voice', '#i-voice-off']].forEach(function (t) {
       var on = t[1] === 'any' ? A.get('sfx') || A.get('voice') : A.get(t[1]);
       var b = $(t[0]);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2241,7 +2545,16 @@
       showHero(state.ids[0]);
       renderSetup();
     });
-    $('start').addEventListener('click', function () { startWorkout(state.ids); });
+    $('start').addEventListener('click', openBrief);
+    $('bStart').addEventListener('click', briefStart);
+    $('briefBack').addEventListener('click', closeBrief);
+    $('bReplay').addEventListener('click', function () { A.unlock(); briefPlay(); });
+    $('bVoice').addEventListener('click', function () {
+      var on = !A.get('voice'); A.set('voice', on); A.unlock();
+      syncToggles(); savePrefs();
+      if (on) briefPlay(); // the coach starts the brief again
+      else { briefStopTalk(false); briefDone(false); }
+    });
     $('heroGuide').addEventListener('click', function (e) { openGuide(hero.shown || state.ids[0], 'setup', e.currentTarget); });
 
     $('sfxToggle').addEventListener('click', function () { A.set('sfx', !A.get('sfx')); A.unlock(); A.play('click'); syncToggles(); savePrefs(); });
@@ -2320,6 +2633,7 @@
         else if (e.key === 'Tab') trapTab(e, $('coachSheet'));
         return;
       }
+      if (currentScreen === 'brief') { if (e.key === 'Escape') { e.preventDefault(); closeBrief(); } return; }
       if (currentScreen !== 'workout' || !run) return;
       var dialogOpen = !$('quitDialog').hidden;
       if (e.key === 'Escape') { e.preventDefault(); if (dialogOpen) closeQuit(true); else openQuit(); return; }
@@ -2340,7 +2654,7 @@
       if (scrollRaf) return;
       scrollRaf = requestAnimationFrame(function () {
         scrollRaf = 0;
-        focusOn(currentScreen === 'setup' ? $('heroFig') : currentScreen === 'workout' ? $('stage') : $('doneFig'));
+        focusOn(currentScreen === 'setup' ? $('heroFig') : currentScreen === 'brief' ? $('briefTitle') : currentScreen === 'workout' ? $('stage') : $('doneFig'));
       });
     }
     window.addEventListener('scroll', refocus, { passive: true });
@@ -2381,6 +2695,7 @@
     var mat = figMaterial();
     figs.forEach(function (f) { f.setStyle(L.style, L.scheme, mat); }); // one repaint each
     H.EXERCISES.forEach(function (ex) { var gc = GROUP_COLORS[ex.group]; thumbs[ex.id].setColors(gc[0], gc[1]); });
+    briefColors();
     if (hero.shown) showHero(hero.shown);
     if (run && !run.finished && currentScreen === 'workout') {
       var seg = run.tl.segments[run.segIdx];
@@ -2475,6 +2790,8 @@
     seek: function (t) { seek(t); },
     advance: function (sec) { if (run && !run.finished) { run.base += sec; update(); } },
     start: function () { startWorkout(state.ids); },
+    brief: function () { openBrief(); },
+    get briefData() { return brief.data; },
     finish: function () { if (run) seek(run.tl.total); },
     guide: function (id) { openGuide(id, run ? 'workout' : 'setup'); },
     look: function (name) { setLook(name); }

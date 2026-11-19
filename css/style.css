@@ -19,15 +19,15 @@
   --setup-a: #9b5cff; --setup-b: #22e5ff;
   --gold-a: #ffd23f; --gold-b: #ff2bd6;
   --break-a: #36ffc0; --break-b: #9b5cff;
-  --warm-a: #b18cff; --warm-b: #22e5ff;
+  --warm-a: #95d26b; --warm-b: #7cba5c;
 
   --g-upper: #ff4fd8;
   --g-abs: #2ee6ff;
   --g-legs: #ffb21f;
   --danger: #ff4d6d;
 
-  --display: 'Unbounded', 'Arial Black', 'Helvetica Neue', system-ui, sans-serif;
-  --ui: 'Chakra Petch', 'Segoe UI', 'Roboto', system-ui, sans-serif;
+  --display: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ui: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --r-lg: 22px;
   --r-md: 14px;
@@ -37,8 +37,8 @@
   color-scheme: dark;
 }
 
-@property --c1 { syntax: '<color>'; inherits: true; initial-value: #9b5cff; }
-@property --c2 { syntax: '<color>'; inherits: true; initial-value: #22e5ff; }
+@property --c1 { syntax: '<color>'; inherits: true; initial-value: #ff5a36; }
+@property --c2 { syntax: '<color>'; inherits: true; initial-value: #4f7dff; }
 @property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -547,6 +547,168 @@ svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2
   .ex-grid { grid-template-columns: minmax(0, 1fr); }
   .start { padding: 0 18px; font-size: 15px; gap: 10px; }
   .start-time { font-size: 15px; padding: 7px 10px; }
+}
+
+/* ---------- BRIEF ---------- */
+/* Today's plan before the workout: a fixed screen whose middle scrolls, so Start never moves. */
+body[data-screen="brief"] { overflow: hidden; }
+.brief {
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  padding-left: var(--gutter-l);
+  padding-right: var(--gutter-r);
+}
+.b-top, .b-main, .b-dock { width: 100%; max-width: 640px; margin-inline: auto; }
+.b-top { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 12px; min-height: 52px; }
+.b-kicker { justify-self: center; margin: 0; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.b-kicker svg { font-size: 17px; }
+
+.b-scroll {
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  margin-inline: calc(-1 * var(--gutter-l)) calc(-1 * var(--gutter-r));
+  padding: 10px var(--gutter-r) 18px var(--gutter-l);
+  scrollbar-width: none;
+  -webkit-mask: linear-gradient(to bottom, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+  mask: linear-gradient(to bottom, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+}
+.b-scroll::-webkit-scrollbar { display: none; }
+.b-main { display: grid; gap: 18px; align-content: start; }
+
+/* title, total time, and the session to scale */
+.b-intro {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "head total" "map map" "sum sum";
+  align-items: end; gap: 16px 14px;
+}
+.b-head { grid-area: head; min-width: 0; }
+.b-title { margin: 0; outline: none; }
+.b-sub { margin: 8px 0 0; }
+.b-sub > span:not(.b-dot) { white-space: nowrap; }
+.b-total { grid-area: total; text-align: right; }
+.b-total-l { margin: 0 0 4px; }
+.b-total-v { margin: 0; font-variant-numeric: tabular-nums; }
+.b-total-k { margin: 6px 0 0; white-space: nowrap; }
+.b-map { grid-area: map; display: flex; gap: 5px; min-width: 0; }
+.bm-b { display: grid; gap: 7px; min-width: 0; }
+.bm-b.tight .bm-l { visibility: hidden; } /* too narrow for its label (set by briefFitMap) */
+.bm-b.spill .bm-l { overflow: visible; } /* the warm-up's label may run on over the next block */
+.bm-bar { display: flex; gap: 1px; height: 10px; border-radius: 3px; overflow: hidden; }
+.bm-bar i { display: block; min-width: 0; }
+.bm-l { white-space: nowrap; overflow: hidden; }
+/* one line with the pattern and the sets, on screen at once */
+.b-sum { grid-area: sum; margin: -4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.bs, .bs-g { display: inline-flex; align-items: center; white-space: nowrap; }
+.bs + .bs::before { content: "·"; margin: 0 9px; }
+.b-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2.5px; margin-right: 6px; flex: none; }
+.bs-arrow { margin: 0 6px; }
+
+/* the sequence: a coloured rail per muscle group */
+.b-seq { display: grid; gap: 4px; }
+.b-exs { display: grid; gap: 4px; }
+.b-grp { --gc: var(--g-upper); display: grid; grid-template-columns: 70px minmax(0, 1fr); column-gap: 10px; }
+.b-grp[data-group="abs"] { --gc: var(--g-abs); }
+.b-grp[data-group="legs"] { --gc: var(--g-legs); }
+.b-grp[data-group="warmup"] { --gc: var(--warm-a); }
+.b-grp-h { margin: 0; padding-top: 14px; overflow-wrap: break-word; }
+.b-list { list-style: none; margin: 0; padding: 0 0 0 10px; display: grid; gap: 2px; position: relative; }
+.b-list::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--gc); }
+.b-row {
+  --gc: var(--g-upper);
+  position: relative; width: 100%;
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  padding: 2px 10px 2px 2px; border-radius: 13px;
+  border: 1px solid transparent; background: transparent;
+  text-align: left; cursor: pointer;
+}
+.b-row[data-group="abs"] { --gc: var(--g-abs); }
+.b-row[data-group="legs"] { --gc: var(--g-legs); }
+.b-row[data-group="warmup"] { --gc: var(--warm-a); }
+.b-thumb { position: relative; width: 44px; height: 44px; border-radius: 11px; overflow: hidden; }
+.b-thumb canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.b-num {
+  position: absolute; left: -3px; top: -3px; z-index: 1;
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+}
+.b-row-text { display: grid; gap: 4px; min-width: 0; }
+.b-row-name, .b-row-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-row-time { font-variant-numeric: tabular-nums; }
+.b-row-info { display: grid; place-items: center; font-size: 16px; }
+
+/* one set to scale */
+.b-round { display: grid; gap: 12px; }
+.b-round-main { display: grid; gap: 12px; }
+.b-round-main { container-type: inline-size; }
+.b-round-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.b-pattern { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.b-pattern > span:not(.bp-arrow) { display: inline-flex; align-items: center; gap: 7px; }
+.b-pattern > span:not(.bp-arrow)::before { content: ""; width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.b-beats { display: flex; gap: 3px; height: 32px; }
+.bb { display: grid; place-items: center; min-width: 0; border-radius: 6px; font-style: normal; }
+.b-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* phones: the summary line under the map already says this */
+@media (max-width: 759px), (max-height: 500px) { .b-facts { display: none; } }
+.b-fact { margin: 0; display: inline-flex; align-items: baseline; gap: 6px; }
+
+/* the coach's line, and Start */
+.b-dock {
+  display: grid; gap: 8px;
+  padding-top: 4px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+}
+.b-coach { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 42px; }
+.b-coach-v { margin: 0; }
+.b-coach-v.swap { animation: swapIn .45s cubic-bezier(.2,.9,.3,1); }
+.b-ico { display: grid; place-items: center; height: 18px; }
+.b-ico > * { grid-area: 1 / 1; }
+.b-ico svg { font-size: 18px; }
+.b-eq { display: flex; align-items: center; justify-content: center; gap: 3px; height: 18px; }
+.brief:not(.talking) .b-eq, .brief.talking .b-ico svg { visibility: hidden; }
+.b-eq i { width: 3px; height: 6px; border-radius: 2px; }
+.b-coach .b-replay { max-width: none; height: 36px; padding: 0 14px 0 12px; }
+.b-go { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; }
+.b-go svg { font-size: 18px; }
+
+/* wide screens: plan on the left, the sequence on the right, Start beside the coach's line */
+@media (min-width: 760px) and (min-aspect-ratio: 5/4) {
+  .b-top, .b-main, .b-dock { max-width: 1080px; }
+  .b-main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "intro plan" "round plan";
+    grid-template-rows: auto 1fr;
+    align-items: start;
+    column-gap: clamp(28px, 4vw, 56px);
+  }
+  .b-intro { grid-area: intro; }
+  .b-plan { grid-area: plan; }
+  .b-round { grid-area: round; }
+  .b-dock { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); column-gap: clamp(28px, 4vw, 56px); align-items: center; }
+}
+@media (min-width: 760px) and (min-aspect-ratio: 5/4) and (min-height: 700px) {
+  .b-scroll { padding-block: 20px 28px; }
+  .b-dock { padding-bottom: max(28px, env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-height: 500px) and (min-aspect-ratio: 5/4) {
+  .b-top { min-height: 46px; }
+  .b-coach { min-height: 0; }
+  .b-scroll { padding-bottom: 28px; }
+}
+/* a narrow card: the pattern stacks, no arrow left hanging */
+@container (max-width: 290px) {
+  .b-pattern { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .b-pattern .bp-arrow { display: none; }
+}
+@media (max-width: 360px) {
+  .b-grp { grid-template-columns: 58px minmax(0, 1fr); column-gap: 8px; }
+  .b-row { gap: 10px; padding-right: 6px; }
+  .b-row-meta { display: none; }
+  .b-row[data-group="warmup"] .b-row-meta { display: block; } /* keep the warm-up's length */
+  .b-map { gap: 4px; }
+  .bm-l { font-size: 10.5px !important; }
+  .b-sum .bs-arrow { margin: 0 4px; }
+  .bs + .bs::before { margin: 0 6px; }
 }
 
 /* ---------- WORKOUT ---------- */
