@@ -517,10 +517,6 @@
 [data-look="studio"][data-scheme="light"] .ctl-main { box-shadow: 0 16px 34px -16px rgba(17,20,28,.45); }
 [data-look="studio"] .ctl-main:hover { background: var(--text); box-shadow: 0 0 0 6px color-mix(in srgb, var(--text) 12%, transparent); }
 [data-look="studio"] .ctl-main svg { stroke-width: 2.6; }
-[data-look="studio"] .ctl-skip.has-text {
-  border-color: var(--line-hi); background: var(--surface); box-shadow: var(--shadow-1); color: var(--text);
-}
-[data-look="studio"] .ctl-skip.has-text .ctl-text { font: 600 14px/1 var(--ui); letter-spacing: 0; text-transform: none; }
 
 /* phase change: a colour disc grows out of the ring, the word rises, then an iris opens */
 @property --hole { syntax: '<length>'; inherits: false; initial-value: 0px; }

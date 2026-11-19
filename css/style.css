@@ -1431,20 +1431,34 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .workout .w-head.pv-active .w-name { color: var(--text); }
 .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
 @keyframes headSwap { from { opacity: .25; } }
+/* ⏭ / ⏮: a hint glows round the disc (keeping its own shadow) */
 #skip.pulse, #prev.pulse { animation: ctlPulse .6s ease 2; }
-@keyframes ctlPulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--c1) 40%, transparent); } }
-#prev, #skip { position: relative; }
+@keyframes ctlPulse { 50% { box-shadow: var(--shadow-1, 0 0 #0000), 0 0 0 7px color-mix(in srgb, var(--c1) 35%, transparent); } }
+#prev, #skip { position: relative; transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s; }
+/* a bigger target on the inner side only: easy to hit with a thumb, nothing added toward the
+   screen edge where the hand holding the phone rests */
+#prev::after, #skip::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+#prev::after { right: -14px; left: 0; }
+#skip::after { left: -14px; right: 0; }
+/* charging: the destination's colour fills the disc's rim clockwise over a faint track of it */
 #prev::before, #skip::before {
-  content: ""; position: absolute; inset: 1px; border-radius: 50%; pointer-events: none;
-  background: conic-gradient(var(--dc, var(--c1)) calc(var(--ck, 0) * 1turn), transparent 0);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  content: ""; position: absolute; inset: -1px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--dc, var(--c1)) calc(var(--ck, 0) * 1turn), color-mix(in srgb, var(--dc, var(--c1)) 22%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   opacity: 0; transition: opacity .12s ease;
 }
 .transport.charge-next #skip::before, .transport.charge-prev #prev::before { opacity: 1; }
-.transport.armed.charge-next #skip, .transport.armed.charge-prev #prev { background: var(--dc, var(--c1)); color: #fff; }
+.transport.charge-next #skip, .transport.charge-prev #prev { transform: none; } /* the rim is the feedback, not a press */
+/* armed (let go to do it): solid in the destination's colour, a touch bigger, with a halo */
+.transport.armed.charge-next #skip, .transport.armed.charge-prev #prev {
+  background: var(--dc, var(--c1)); border-color: var(--dc, var(--c1)); color: var(--dfg, #fff);
+  transform: scale(1.08);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--dc, var(--c1)) 22%, transparent), 0 10px 24px -10px var(--dc, var(--c1));
+}
 .transport.armed.charge-next #skip::before, .transport.armed.charge-prev #prev::before { opacity: 0; }
 .wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
+.wp-tip svg { fill: currentColor; vertical-align: -.12em; margin: 0 .08em; } /* the same ⏭ / ⏮ as the buttons, not an emoji */
 .wp-tip[hidden] { display: none; }
 .w-prog.tipping .wp-left { display: none; }
 

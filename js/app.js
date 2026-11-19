@@ -787,6 +787,12 @@
     var n = parseInt(hex.slice(1), 16);
     return [n >> 16 & 255, n >> 8 & 255, n & 255];
   }
+  /** The icon colour on a solid hex fill: white while it keeps 3:1 (WCAG, graphics), else near-black. */
+  function inkOn(hex) {
+    var c = hexRgb(hex).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    var L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return 1.05 / (L + 0.05) >= 3 ? '#fff' : '#111318';
+  }
   function rgba(c, a) { return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')'; }
 
   function Ring(canvas) {
@@ -1521,6 +1527,28 @@
   /** No label inside small rings (or short landscape ones): the countdown gets the room. */
   function dialBare() { return !!(ring.geo && (ring.geo.S < 300 || (window.innerWidth > window.innerHeight && ring.geo.fh < 200))); }
 
+  /** ⏮ says what it will do: "Restart Push Ups", "Back to rest", "Redo Push Ups". */
+  function syncPrevLabel() {
+    if (!run || run.finished) return;
+    var b = backTarget(), name = b.seg ? segName(b.seg) : '';
+    var label = b.kind === 'restart' ? 'Restart ' + name : b.kind === 'redo' ? 'Redo ' + name : 'Back to ' + name;
+    var btn = $('prev');
+    if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
+  }
+  /** A short line in the progress row (where "N sets left" sits) for a few seconds. */
+  var tipT = 0;
+  function showTip(html, ms) {
+    var tip = $('wpTip');
+    tip.innerHTML = html;
+    tip.hidden = false; $('wProg').classList.add('tipping');
+    clearTimeout(tipT);
+    tipT = setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, ms);
+  }
+  /** ⏭ / ⏮ glow once: "this is where that lives". */
+  function pulseCtl(btn) {
+    btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
+  }
+
   function enterSegment(idx) {
     var tl = run.tl, seg = tl.segments[idx], ph = PHASE[seg.type];
     run.segIdx = idx;
@@ -1606,13 +1634,15 @@
     $('skip').setAttribute('aria-label', seg.type === 'warmup' ? 'Next warm-up move'
       : restMode ? (seg.type === 'setrest' ? 'Start set ' + (seg.set + 1) : 'Start now') + ': ' + exName(seg.next || seg.exercise)
       : 'Next interval');
+    syncPrevLabel();
 
     updateProgress(seg);
     if (restMode && seg.type !== 'setrest' && !state.swipeTip) {
       state.swipeTip = true; savePrefs();
-      $('wpTip').hidden = false; $('wProg').classList.add('tipping');
-      setTimeout(function () { $('wpTip').hidden = true; $('wProg').classList.remove('tipping'); }, 7000);
+      showTip('Swipe ← or tap <svg aria-hidden="true"><use href="#i-next"/></svg> for next', 7000);
+      // the slide shows the swipe; then ⏭ glows once, so "tap ⏭" points at something
       setTimeout(function () { if (carousel) carousel.nudge(); }, 1300);
+      setTimeout(function () { if (run && run.mode === 'rest') pulseCtl($('skip')); }, 2300);
     }
 
     // phase wipe, sound, voice
@@ -1719,6 +1749,7 @@
 
   /** Called once per whole second of countdown (and on any jump). */
   function onSecond(seg, whole, prev) {
+    syncPrevLabel(); // ⏮ goes back in the first 3 s, restarts after
     if (seg.type === 'warmup') {
       if (!seg.counts && moving(seg)) setDigits(String(whole), whole + ' seconds left');
       return;
@@ -2128,6 +2159,7 @@
       else { var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : ''; }
       dest = { dir: dir, seg: sg, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
       tp.style.setProperty('--dc', dest.colors[0]);
+      tp.style.setProperty('--dfg', inkOn(dest.colors[0])); // the armed button's icon
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
       if (!sg) { peek.classList.add('is-end'); return; }
       var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
@@ -2277,16 +2309,26 @@
     function hintControls(dir) {
       if (hinted) return;
       hinted = true;
-      var btn = dir > 0 ? $('skip') : $('prev');
-      btn.classList.remove('pulse'); void btn.offsetWidth; btn.classList.add('pulse');
+      pulseCtl(dir > 0 ? $('skip') : $('prev'));
       if (!state.dragTip) {
         state.dragTip = true; savePrefs();
-        var tip = $('wpTip'); tip.textContent = 'During exercise, drag from the controls to skip';
-        tip.hidden = false; $('wProg').classList.add('tipping');
-        setTimeout(function () { tip.hidden = true; $('wProg').classList.remove('tipping'); }, 5000);
+        // (mid-exercise the screen itself ignores swipes, so a sweaty arm can't skip)
+        showTip(dir > 0 ? 'Swipe from <svg aria-hidden="true"><use href="#i-next"/></svg> to skip'
+          : 'Swipe from <svg aria-hidden="true"><use href="#i-prev"/></svg> to go back', 5000);
       }
     }
     carousel = { commit: commit, nudge: nudge };
+
+    /** Is (x, y) on back, pause or skip? Each is a disc; count a finger's width of slack round it. */
+    var ctls = [$('prev'), $('pause'), $('skip')];
+    function onControl(x, y) {
+      for (var i = 0; i < ctls.length; i++) {
+        var r = ctls[i].getBoundingClientRect(), rad = r.width / 2 + 18;
+        var dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
+        if (dx * dx + dy * dy <= rad * rad) return true;
+      }
+      return false;
+    }
 
     area.addEventListener('pointerdown', function (e) {
       if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
@@ -2294,12 +2336,10 @@
         if (e.width > 40 || e.height > 40) return; // a palm or a wipe, not a fingertip
         if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
       }
-      var restMode = run.mode === 'rest', ignored = false;
-      if (!restMode) {
-        // during exercise only a drag that starts on the controls counts
-        var r = tp.getBoundingClientRect(), m = 16;
-        ignored = e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
-      }
+      var restMode = run.mode === 'rest';
+      // during exercise only a drag that starts on one of the three buttons counts (with a
+      // little slack round each); the row between them, over the ring and the figure's feet, doesn't
+      var ignored = !restMode && !onControl(e.clientX, e.clientY);
       hinted = false;
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
       g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ignored: ignored };
