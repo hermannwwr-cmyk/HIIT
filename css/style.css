@@ -1311,6 +1311,15 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .upnext.compact .un-act .link-btn span { display: none; }
 .un-figwrap { cursor: pointer; }
 .upnext.compact .un-start { max-width: none; height: 46px; padding: 0 14px; }
+/* a narrow card (short landscape phones): the label keeps its button, the icon makes way */
+.un-act { container-type: inline-size; }
+@container (max-width: 180px) {
+  .upnext .un-start { padding: 0 10px; gap: 6px; }
+  .upnext .un-start svg { display: none; }
+}
+@container (max-width: 140px) {
+  [data-look] .upnext .un-start { padding: 0 6px; font-size: 14px; letter-spacing: -.02em; }
+}
 @media (max-width: 359px) { .un-mus, .ex-word { display: none; } }
 
 /* short phones: the trainer tip becomes one line beside "How to", so the ring keeps its size */
@@ -1485,6 +1494,8 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 .beats { gap: 8px; margin-top: -6px; }
 .beats i { width: 9px; height: 9px; border-width: 2px; }
 .beats i:last-child { width: 12px; height: 12px; margin-top: -1.5px; }
+/* their row is kept through the whole warm-up, so the ring keeps one size from move to move */
+body[data-phase="warmup"] .beats[hidden] { display: flex !important; visibility: hidden; }
 /* the countdown (5-4-3-2-1, then BEGIN): the number is the big, urgent element; "Starts in" is the small label above it */
 .wl-box.runway .wl-sub { order: -1; font: 700 14px/1 var(--ui); letter-spacing: .28em; text-transform: uppercase; color: var(--c1); }
 .wl-box.runway .wl-title { font-size: var(--dg, clamp(84px, 27vw, 150px)); line-height: .92; font-variant-numeric: tabular-nums; }

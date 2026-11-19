@@ -839,27 +839,42 @@
       var th = Math.max(9, S * 0.05); return { R: S * 0.44 - th * 0.5, th: th, ext: th * 0.5, top: S * 0.44 + 2 };
     }
     function pill(S) {
-      // three fixed slots, so the opening never changes shape between phases
-      var ph = Math.round(Math.max(56, Math.min(84, S * 0.19)));
-      var side = Math.max(44, Math.round(ph * 0.72));
-      var main = Math.max(ph - 10, side + 8); // pause always clearly the biggest
-      ph = Math.max(ph, main + 10);
-      return { ph: ph, main: main, side: side, pw: main + 10 }; // the opening holds only the pause
+      // fixed sizes per ring, so nothing changes shape between phases; back / skip are
+      // clearly secondary to the pause (0.8 of it) but never under a 44 px target
+      var main = Math.round(Math.max(52, Math.min(76, S * 0.165)));
+      var side = Math.max(44, Math.round(main * 0.8));
+      return { ph: main + 10, main: main, side: side, pw: main + 10 }; // the opening holds only the pause
     }
     function fit(S) {
       var r = radius(S), p = pill(S);
       var half = p.pw / 2 + 12 + r.ext; // opening half-chord: pill + breathing room + cap
       var ga = Math.asin(Math.min(0.92, half / r.R));
       var capY = r.R * Math.cos(ga);
-      return { S: S, r: r, p: p, ga: ga, capY: capY, below: Math.max(capY + p.ph / 2, capY + r.ext) + 2 };
+      // every control keeps the same clearance from the ring: the pause's from the caps
+      var gap = (p.pw - p.main) / 2 + 12;
+      // back / skip: their outer edges flush with the ring's (the row is as wide as the
+      // ring), or further out if the arc above them needs it (beside the ring's base the
+      // nearest point of the band is straight towards the centre). A hand holding the
+      // phone needs room beside them (16 px inside the stage): on a narrow stage their
+      // clearance from the arc gives way first (down to 12 px), then the ring shrinks.
+      var outR = r.R + r.th / 2 + p.side / 2;
+      function clearX(g) { return Math.sqrt(Math.max(0, Math.pow(outR + g, 2) - capY * capY)); }
+      var room = w / 2 - 16 - p.side / 2;
+      if (clearX(gap) > room) gap = Math.max(12, Math.min(gap, Math.sqrt(room * room + capY * capY) - outR));
+      var clear = clearX(gap);
+      var bx = Math.max(r.R + r.th / 2 - p.side / 2, clear);
+      var air = Math.round(Math.max(8, Math.min(16, S * 0.035))); // between the row and what's below
+      return { S: S, r: r, p: p, ga: ga, capY: capY, bx: bx,
+        below: Math.max(capY + p.ph / 2, capY + r.ext) + air, wide: 2 * (clear + p.side / 2 + 16) };
     }
     // The bottom of the ring is an opening, so the ring may be taller than the
-    // stage: size it by what is actually drawn (top of the ring down to the pill).
+    // stage: size it by what is actually drawn (top of the ring down to the controls),
+    // and narrow enough that back and skip fit beside its base.
     var maxS = w / 0.9, S = Math.min(maxS, h * 1.6), f = fit(S);
-    for (var k = 0; k < 12; k++) {
+    for (var k = 0; k < 16; k++) {
       var need = f.r.top + f.below;
-      if (need <= h + 0.5) break;
-      S = Math.max(60, S * Math.pow(h / need, 0.9) * 0.998);
+      if (need <= h + 0.5 && f.wide <= w + 0.5) break;
+      S = Math.max(60, Math.min(S * Math.pow(h / need, 0.9), S * Math.pow(w / f.wide, 0.9)) * 0.998);
       f = fit(S);
     }
     var r = f.r, p = f.p;
@@ -877,11 +892,8 @@
     st.style.setProperty('--ph', px(p.ph));
     st.style.setProperty('--pmain', px(p.main));
     st.style.setProperty('--pside', px(p.side));
-    // back / skip: out at the sides on the base line, as far out as the stage allows (on a
-    // wide stage, under the ring's sides), and never touching the arc above them
-    var top = f.capY - p.side / 2, arcX = Math.sqrt(Math.max(0, r.R * r.R - top * top)) + r.th / 2;
-    var bx = Math.min(w / 2 - 6 - p.side / 2, Math.max(arcX + 10 + p.side / 2, r.R * 0.92));
-    st.style.setProperty('--bx', px(bx));
+    // back / skip on the base line (see fit); never past the stage's edge
+    st.style.setProperty('--bx', px(Math.min(f.bx, w / 2 - 6 - p.side / 2)));
     st.style.setProperty('--fy', px((innerTop + innerBot) / 2));
     st.style.setProperty('--fh', px(regionH));
     st.style.setProperty('--ri', px(r.R - r.th / 2 - 6));
