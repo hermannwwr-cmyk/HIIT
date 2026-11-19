@@ -102,7 +102,7 @@
     try {
       window.localStorage.setItem(STORE_KEY, JSON.stringify({
         level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
-        swipeTip: state.swipeTip, dragTip: state.dragTip,
+        swipeTip: state.swipeTip,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -117,7 +117,6 @@
     ids: H.randomPick(H.DEFAULT_COUNT),
     warmup: prefs.warmup !== false,
     swipeTip: !!prefs.swipeTip, // the "swipe to skip" tip has been shown once
-    dragTip: !!prefs.dragTip,   // "during exercise, drag from the controls" has been shown once
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -2172,17 +2171,27 @@
 
   // ---------------------------------------------------------------- swipe carousel: left = next, right = back
   /**
-   * The ring's inside is a carousel. Dragging slides what's on now out with the
-   * finger and slides a preview of the destination in from the other side,
-   * clipped to the ring: the next exercise's live demo, "Rest 0:30", "Restart
-   * Push Ups"... The ring blends toward the destination's colour, and ⏭ / ⏮
-   * charges with an arc that fills; when it's full (with a haptic tick) the
-   * button turns solid and letting go does it. Pause never moves.
-   *   - Rest, get ready, set break: swipe anywhere (you're at the phone).
-   *   - Exercise, jacks, warm-up: only a drag that starts on the controls, and
-   *     only a full charge; wipes, palms and picking the phone up do nothing.
-   * Tapping ⏭ / ⏮ plays the same slide. Edges (system back), palms, dialogs and
-   * the paused screen are ignored; double taps can't skip twice.
+   * The workout screen is a pager. Swiping anywhere on it (not the top bar or the
+   * progress strip) slides what's on now out of the ring with the finger, 1:1, and
+   * slides the destination in from the other side, clipped to the ring: the next
+   * exercise's live demo, "Rest 0:30", "Restart Push Ups"... Letting go commits
+   * when the swipe was a flick (fast enough) or went far enough; otherwise it
+   * springs back. Either way the content settles at the finger's speed.
+   * Past the ends of the plan (next on the last interval) it only gives a little,
+   * with resistance. Undo (8 s) is the safety net, not friction: the same
+   * gesture works in exercise, rest, get ready and the set break.
+   *
+   * Recognition: a touch is ours once it has moved 10 px mostly sideways; a
+   * mostly vertical one is left to the browser. Touch uses TouchEvents (the
+   * sideways moves are preventDefault-ed, so no browser, webview or embedding
+   * page can turn them into a pan and cancel us); mouse and pen use pointer
+   * events. A second finger cancels; the outer 16 px (system back gesture) are
+   * left alone. A tap on a button stays a tap; a swipe that starts on one swipes.
+   *
+   * Hooks for the controls (on #transport): --ck (0..1 toward a commit by
+   * distance), --dc / --dfg (the destination's colour and the ink on it),
+   * charge-next / charge-prev (dragging that way) and armed (letting go now
+   * would commit: far enough, or moving fast enough).
    */
   var carousel = null;
   function initSwipe() {
@@ -2190,28 +2199,36 @@
     var peek = $('riPeek'), pkDial = $('pkDial'), pkK = $('pkK'), pkDigits = $('pkDigits'), pkSub = $('pkSub');
     var chip = $('phaseChip'), wName = $('wName'), wEx = $('wEx'), head = document.querySelector('.w-head');
     var peekFig = null, saved = null, dest = null;
-    var g = null, eatClick = false, lockUntil = 0, settleT = 0, nudgeT = 0;
+    var g = null, eatClick = false, eatT = 0, lockUntil = 0, settleT = 0, nudgeT = 0, pending = null, multi = false;
+    var TOUCH = 'ontouchstart' in window;
+    var SLOP = 10, EDGE = 16, FLICK_V = 0.3, FLICK_MIN = 24; // px, px, px/ms, px
     function locked() { return performance.now() < lockUntil; }
-    function blocked(e) {
-      return !run || run.finished || currentScreen !== 'workout' || locked() ||
+    function blocked(target) {
+      return !run || run.finished || currentScreen !== 'workout' ||
         !$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden ||
-        (e.target.closest && e.target.closest('.w-top, .w-prog, .veil'));
+        !!(target && target.closest && target.closest('.w-top, .w-prog, .veil'));
     }
-    function threshold() { return Math.min(110, Math.max(64, window.innerWidth * 0.2)); }
+    /** How far a slow drag must go to commit: about a third of a phone's width. */
+    function commitDist() { return Math.max(56, Math.min(140, window.innerWidth * 0.3)); }
+    /** The pager's page width: across the inside of the ring and a little more. */
     function travel() { return 2 * (parseFloat(getComputedStyle(stage).getPropertyValue('--ri')) || 140) + 24; }
-    function easeOut(x) { return 1 - Math.pow(1 - x, 3); }
+    /** Rubber band: the further you pull, the less it gives (never more than c). */
+    function rubber(x, c) { return c * (1 - 1 / (x * 0.55 / c + 1)); }
 
     /** Where a move in direction dir (+1 next, -1 back) lands, and the preview of it. */
     function prepare(dir) {
-      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, prefix = '';
-      if (dir > 0) sg = tl.segments[idx + 1];
-      else { var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : ''; }
-      dest = { dir: dir, seg: sg, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
+      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, prefix = '', edge = false;
+      if (dir > 0) { sg = tl.segments[idx + 1]; edge = !sg; } // past the last interval: nothing to swipe to
+      else {
+        var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : '';
+        edge = bt.kind === 'restart' && sg.index === 0 && t - sg.start < 1; // the very start of the plan
+      }
+      dest = { dir: dir, seg: edge ? null : sg, edge: edge, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
       var dc = solidOnPage(dest.colors[0]);
       tp.style.setProperty('--dc', dc);
       tp.style.setProperty('--dfg', inkOn(dc)); // the armed button's icon
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
-      if (!sg) { peek.classList.add('is-end'); return; }
+      if (!dest.seg) { peek.classList.add('is-end'); return; }
       var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
       if (restLike) {
         // the dial exactly as it will look: same label, digits and breathing line
@@ -2244,7 +2261,7 @@
       if (on === tp.classList.contains('armed')) return;
       tp.classList.toggle('armed', on);
       if (on) {
-        buzz(12);
+        if (!g || !g.buzzed) { if (g) g.buzzed = true; buzz(12); }
         if (dest && dest.seg) {
           saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
           var h = headFor(dest.seg);
@@ -2273,21 +2290,32 @@
       }
       if (run) { var cur = run.tl.segments[run.segIdx]; if (cur) { var c = PHASE[cur.type].colors; ring.setColors(c[0], c[1]); } }
     }
-    /** Progress k (0..1+) of a move in direction dir: what's on now leaves with the finger, the destination eases in. */
-    function set(k, dir, over) {
-      var th = threshold(), D = travel(), kk = Math.min(1, k), e = easeOut(kk), extra = (over || 0) * 0.06;
-      stage.style.setProperty('--sx', (-dir * (kk * th + extra)).toFixed(1) + 'px');
-      stage.style.setProperty('--so', Math.max(0, 1 - kk / 0.35).toFixed(3));
-      stage.style.setProperty('--ss', (1 - 0.06 * kk).toFixed(4));
-      stage.style.setProperty('--px', (dir * 0.35 * D * (1 - e) - dir * extra).toFixed(1) + 'px');
-      stage.style.setProperty('--po', easeOut(Math.max(0, (kk - 0.25) / 0.75)).toFixed(3));
-      tp.style.setProperty('--ck', kk.toFixed(3));
-      tp.classList.toggle('charge-next', dir > 0 && kk > 0);
-      tp.classList.toggle('charge-prev', dir < 0 && kk > 0);
-      arm(kk >= 1);
+    /**
+     * Place the pages: what's on now sits off px toward -dir (it follows the finger), the
+     * destination comes in from the dir side and meets it. ck: 0..1 toward a commit.
+     */
+    function place(off, dir, ck) {
+      var D = travel(), p = Math.max(0, Math.min(1, off / D));
+      stage.style.setProperty('--sx', (-dir * off).toFixed(1) + 'px');
+      stage.style.setProperty('--so', (1 - 0.55 * p).toFixed(3));
+      stage.style.setProperty('--sk', (1 - 0.05 * p).toFixed(4));
+      stage.style.setProperty('--px', (dir * Math.max(0, D - off)).toFixed(1) + 'px');
+      stage.style.setProperty('--po', Math.min(1, 0.25 + p * 1.1).toFixed(3));
+      tp.style.setProperty('--ck', ck.toFixed(3));
+      tp.classList.toggle('charge-next', dir > 0 && ck > 0);
+      tp.classList.toggle('charge-prev', dir < 0 && ck > 0);
+    }
+    /** Time the settle: dist px to go, starting at the finger's speed v (px/ms). Returns ms. */
+    function settleWith(dist, v) {
+      var sp = Math.abs(v || 0), dur = reduced ? 0 : Math.round(Math.max(130, Math.min(300, dist / Math.max(sp, 1.1))));
+      // the curve starts at the finger's speed, so the hand-off doesn't jerk
+      var y1 = dur && dist > 1 ? Math.max(0.12, Math.min(1, sp * dur / dist * 0.2)) : 0.5;
+      stage.style.setProperty('--st', dur + 'ms');
+      stage.style.setProperty('--se', 'cubic-bezier(.2,' + y1.toFixed(3) + ',.3,1)');
+      return dur;
     }
     function open() { clearTimeout(settleT); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); }
-    function close(after) {
+    function close(ms) {
       stage.classList.remove('swiping');
       clearTimeout(settleT);
       settleT = setTimeout(function () {
@@ -2295,169 +2323,216 @@
         stage.classList.remove('settle', 'carousel');
         tp.classList.remove('charge-next', 'charge-prev');
         if (peekFig) peekFig.setPlaying(false);
-        if (after) after();
-      }, reduced ? 0 : 260);
+      }, (ms || 0) + 40);
     }
-    function springBack(dir) {
+    function springBack(dir, off, v) {
+      arm(false);
+      var ms = settleWith(off || travel() * 0.3, v);
       stage.classList.add('settle');
-      set(0, dir);
-      close();
+      place(0, dir, 0);
+      close(ms);
     }
     /** Finish the move from wherever it is (swipes, ⏭ / ⏮ taps and arrow keys). */
     var keyQueue = []; // arrow presses waiting for the slide before them (at most 4)
-    function commit(dir, act, key) {
+    function commit(dir, act, key, swipe) {
       if (!run) return;
-      if (locked()) {
+      if (locked() && !swipe) {
         // no double skips from a double tap; but quick arrow presses are meant: each one
         // slides on in turn once the current slide is done (held keys don't repeat: see the keydown)
         if (key && keyQueue.length < 4) keyQueue.push({ dir: dir, act: act });
         return;
       }
+      if (pending) land(true); // (a swipe during the slide before: that one lands first)
       lockUntil = performance.now() + (key ? (reduced ? 120 : 260) : reduced ? 300 : 600);
       if (!dest || dest.dir !== dir || !stage.classList.contains('carousel')) { open(); prepare(dir); }
+      var D = travel(), off = swipe ? swipe.off : 0;
+      var ms = settleWith(Math.max(1, D - off), swipe ? swipe.v : 0);
       stage.classList.remove('swiping');
       stage.classList.add('settle');
-      set(1, dir);
-      setTimeout(function () {
-        // swap in the real interval: it looks exactly like the preview, so snap without animating
-        saved = null;
-        clearHeadColours();
-        stage.classList.remove('settle');
-        stage.classList.add('snap');
-        document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
-        var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
-        run.quiet = true;
-        act();
-        run.quiet = false;
-        if (hand != null && workFig && dest.seg) {
-          // the real figure continues exactly where the preview was: same move, pose and colours
-          var nowSeg = run.tl.segments[run.segIdx];
-          if (nowSeg && nowSeg.index === dest.seg.index) {
-            // a warm-up step keeps its tempo and count-in; on the preview's clock, which runs at
-            // most the length of the swipe ahead (the count-in only waits longer, and BEGIN
-            // re-times the loop to the count)
-            var ho = dest.seg.type === 'warmup' ? warmFigOpts(dest.seg, elapsedNow()) : {};
-            ho.instant = true; ho.time = hand;
-            workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, ho);
-            workFig.setColors(dest.colors[0], dest.colors[1], true);
-            workFig.setEnergy(PHASE[dest.seg.type].energy, true);
-          }
+      place(D, dir, 1);
+      arm(true);
+      pending = { t: setTimeout(land, ms), act: act };
+    }
+    /** Swap in the real interval: it looks exactly like the preview, so snap without animating. */
+    function land(early) {
+      var p = pending; pending = null;
+      if (!p) return;
+      clearTimeout(p.t);
+      saved = null;
+      clearHeadColours();
+      stage.classList.remove('settle');
+      stage.classList.add('snap');
+      document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
+      var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
+      run.quiet = true;
+      p.act();
+      run.quiet = false;
+      if (hand != null && workFig && dest.seg) {
+        // the real figure continues exactly where the preview was: same move, pose and colours
+        var nowSeg = run.tl.segments[run.segIdx];
+        if (nowSeg && nowSeg.index === dest.seg.index) {
+          // a warm-up step keeps its tempo and count-in; on the preview's clock, which runs at
+          // most the length of the swipe ahead (the count-in only waits longer, and BEGIN
+          // re-times the loop to the count)
+          var ho = dest.seg.type === 'warmup' ? warmFigOpts(dest.seg, elapsedNow()) : {};
+          ho.instant = true; ho.time = hand;
+          workFig.setExercise(dest.seg.type === 'warmup' ? warmFigId(dest.seg) : dest.seg.exercise, ho);
+          workFig.setColors(dest.colors[0], dest.colors[1], true);
+          workFig.setEnergy(PHASE[dest.seg.type].energy, true);
         }
-        stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--ss', 1);
-        stage.style.setProperty('--po', 0);
-        tp.classList.remove('armed');
-        tp.style.setProperty('--ck', 0);
-        stage.classList.remove('carousel', 'swiping');
-        tp.classList.remove('charge-next', 'charge-prev');
-        if (peekFig) peekFig.setPlaying(false);
-        dest = null;
-        requestAnimationFrame(function () { requestAnimationFrame(function () {
-          stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
-          var q = keyQueue.shift();
-          if (q) {
-            lockUntil = 0;
-            // (pausing, the quit dialog, Undo or a swipe clear the queue; this is a backstop)
-            if (run && !run.finished && $('pausedVeil').hidden && $('quitDialog').hidden && $('coachSheet').hidden) commit(q.dir, q.act, true);
-            else keyQueue.length = 0;
-          }
-        }); });
-      }, reduced ? 0 : 220);
+      }
+      stage.style.setProperty('--sx', '0px'); stage.style.setProperty('--so', 1); stage.style.setProperty('--sk', 1);
+      stage.style.setProperty('--po', 0);
+      tp.classList.remove('armed');
+      tp.style.setProperty('--ck', 0);
+      stage.classList.remove('carousel', 'swiping');
+      tp.classList.remove('charge-next', 'charge-prev');
+      if (peekFig) peekFig.setPlaying(false);
+      dest = null;
+      if (early === true) {
+        // landed early for the next swipe: settle the snap now, so that one animates
+        void stage.offsetWidth;
+        stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+        return;
+      }
+      requestAnimationFrame(function () { requestAnimationFrame(function () {
+        if (pending) return; // the next slide has begun (and landed this one)
+        stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+        var q = keyQueue.shift();
+        if (q) {
+          lockUntil = 0;
+          // (pausing, the quit dialog, Undo or a swipe clear the queue; this is a backstop)
+          if (run && !run.finished && $('pausedVeil').hidden && $('quitDialog').hidden && $('coachSheet').hidden) commit(q.dir, q.act, true);
+          else keyQueue.length = 0;
+        }
+      }); });
     }
     /** One-time nudge that shows the next interval is just a swipe away. */
     function nudge() {
-      if (!run || g || locked() || reduced) return;
+      if (!run || g || pending || reduced) return;
       open(); prepare(1);
+      if (dest.edge) { dest = null; close(0); return; }
       stage.classList.remove('swiping'); stage.classList.add('settle');
-      set(0.35, 1);
+      var D = travel();
+      settleWith(D * 0.3, 0);
+      place(D * 0.3, 1, 0.3);
       nudgeT = setTimeout(function () { nudgeT = 0; springBack(1); }, 700);
-    }
-    /** A sideways swipe during exercise that we ignored: show where skipping lives instead. */
-    var hinted = false;
-    function hintControls(dir) {
-      if (hinted) return;
-      hinted = true;
-      pulseCtl(dir > 0 ? $('skip') : $('prev'));
-      if (!state.dragTip) {
-        state.dragTip = true; savePrefs();
-        // (mid-exercise the screen itself ignores swipes, so a sweaty arm can't skip)
-        showTip(dir > 0 ? 'Swipe from ' + ICON_NEXT + ' to skip' : 'Swipe from ' + ICON_PREV + ' to go back', 5000);
-      }
     }
     carousel = { commit: commit, nudge: nudge, clearKeys: function () { keyQueue.length = 0; } };
 
-    /** Which of back, pause or skip is (x, y) on: -1, 0 or 1 (null: none). Each is a disc;
-     *  count a finger's width of slack round it. */
-    var ctls = [$('prev'), $('pause'), $('skip')];
-    function onControl(x, y) {
-      for (var i = 0; i < ctls.length; i++) {
-        var r = ctls[i].getBoundingClientRect(), rad = r.width / 2 + 18;
-        var dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
-        if (dx * dx + dy * dy <= rad * rad) return i - 1;
-      }
-      return null;
-    }
-
-    area.addEventListener('pointerdown', function (e) {
-      if (g || (e.pointerType === 'mouse' && e.button !== 0) || blocked(e)) return;
-      if (e.pointerType === 'touch') {
-        if (e.width > 40 || e.height > 40) return; // a palm or a wipe, not a fingertip
-        if (e.clientX < 24 || e.clientX > window.innerWidth - 24) return; // leave the system back gesture alone
-      }
-      var restMode = run.mode === 'rest';
-      // a drag anywhere on the workout screen goes back or on. During an exercise one that starts
-      // on a button may be a quick flick (from ⏮ it can only go back, from ⏭ only on); anywhere
-      // else it must be dragged until ⏭ / ⏮ fills, so a sweaty wipe never skips (and Undo follows).
-      var on = restMode ? 0 : onControl(e.clientX, e.clientY), fromCtl = !restMode && on !== null;
-      if (on === null) on = 0;
-      var ignored = false;
-      hinted = false;
+    // ---- the gesture: one recogniser, fed by touch events, or pointer events for mouse and pen
+    /** When the input happened (the event's own time: on a busy frame, events arrive late and
+     *  bunched up, and the speed must come from when the finger was there, not when we heard). */
+    function stamp(e) { var t = e.timeStamp, n = performance.now(); return t > 0 && Math.abs(t - n) < 5000 ? t : n; }
+    function down(id, kind, x, y, target, t) {
+      eatClick = false; // (the click of the last swipe, if any, has been and gone)
+      if (g || multi || blocked(target)) return;
+      if (kind === 'touch' && (x < EDGE || x > window.innerWidth - EDGE)) return; // the system back gesture
+      if (pending) land(true); // a new swipe during the last one's slide: that one lands now
       if (nudgeT) { clearTimeout(nudgeT); nudgeT = 0; } // a real swipe replaces the hint
       keyQueue.length = 0; // and any arrow presses still waiting
-      g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), on: false, dx: 0, dir: 0, rest: restMode, ctl: fromCtl, ignored: ignored, only: on || 0 };
-    });
-    area.addEventListener('pointermove', function (e) {
-      if (!g || e.pointerId !== g.id) return;
-      var dx = e.clientX - g.x, dy = e.clientY - g.y;
-      if (g.ignored) {
-        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.5) { hintControls(dx < 0 ? 1 : -1); g = null; }
-        else if (Math.abs(dy) > 48) g = null;
-        return;
-      }
+      g = { id: id, kind: kind, x: x, y: y, t: t, on: false, dead: false, dx: 0, dir: 0, s: [[t, x]], buzzed: false, vArm: false };
+    }
+    /** The finger's speed along x (px/ms) over its last ~100 ms; 0 if it has come to rest. */
+    function velocity(s, now) {
+      var last = s.s[s.s.length - 1], i = s.s.length - 1;
+      if (now - last[0] > 90) return 0;
+      while (i > 0 && last[0] - s.s[i - 1][0] <= 100) i--;
+      var dt = last[0] - s.s[i][0];
+      return dt >= 8 ? (last[1] - s.s[i][1]) / dt : 0;
+    }
+    /** A move of the gesture; true when it's ours (the caller then keeps the browser out of it). */
+    function move(x, y, now) {
+      if (!g || g.dead) return false;
+      var dx = x - g.x, dy = y - g.y, adx = Math.abs(dx), ady = Math.abs(dy);
+      g.s.push([now, x]); if (g.s.length > 12) g.s.shift();
       if (!g.on) {
-        if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } // vertical: not ours
-        if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+        // steeper than ~56°: vertical, the browser's (an embedding page may scroll). Flatter than
+        // ~51° and 10 px: ours. In between, wait for a clearer direction, at most 32 px.
+        if ((ady >= SLOP && ady > adx * 1.5) || (adx + ady > 32 && adx < ady * 0.8)) { g.dead = true; return false; }
+        if (adx < SLOP || adx < ady * 0.8) return adx > 3 && adx > ady; // still deciding (sideways stays ours)
         g.on = true;
-        try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        eatClick = true; clearTimeout(eatT); // a swipe that started on a button must not also press it
         open();
       }
       var dir = dx < 0 ? 1 : -1;
-      if (g.only && dir !== g.only) {
-        // the wrong way for this button: nothing charges (letting go springs back), and the
-        // button that does go that way lights up
-        if (g.dx) { arm(false); set(0, g.dir); }
-        g.dx = 0;
-        if (Math.abs(dx) > 48) hintControls(dir);
-        return;
-      }
       if (dir !== g.dir) { if (g.dir) arm(false); g.dir = dir; prepare(dir); }
       g.dx = dx;
-      var th = threshold(), adx = Math.abs(dx);
-      set(adx / th, dir, Math.max(0, adx - th));
-    });
-    function end(e, cancelled) {
-      if (!g || e.pointerId !== g.id) return;
-      var s = g; g = null;
-      if (!s.on) return;
-      var dt = Math.max(1, performance.now() - s.t), adx = Math.abs(s.dx);
-      var full = adx >= threshold();
-      var flick = (s.rest || s.ctl) && adx > 56 && adx / dt > 0.45; // flicks while resting, or from the buttons
-      if (cancelled || !(full || flick)) { arm(false); springBack(s.dir || 1); return; }
-      eatClick = true; // a swipe that started on a button must not also press it
-      setTimeout(function () { eatClick = false; }, 350);
-      commit(s.dx < 0 ? 1 : -1, s.dx < 0 ? skip : prev);
+      var D = travel();
+      if (dest.edge) { place(rubber(adx, D * 0.18), dir, 0); return true; } // nothing there: resistance
+      var off = adx <= D ? adx : D + rubber(adx - D, D * 0.15), th = commitDist();
+      var v = velocity(g, now) * -dir; // + while moving further this way
+      if (v > FLICK_V && adx >= FLICK_MIN) g.vArm = true; else if (v < 0.15) g.vArm = false;
+      place(off, dir, Math.min(1, adx / th));
+      arm(adx >= th || g.vArm);
+      return true;
     }
-    area.addEventListener('pointerup', function (e) { end(e, false); });
-    area.addEventListener('pointercancel', function (e) { end(e, true); });
+    /** The gesture ends; true when it was a swipe. */
+    function up(cancelled, now) {
+      var s = g; g = null;
+      if (!s || !s.on) return false;
+      clearTimeout(eatT); eatT = setTimeout(function () { eatClick = false; }, 400);
+      var adx = Math.abs(s.dx), dir = s.dir || 1, D = travel();
+      var v = velocity(s, now) * -dir, off = adx <= D ? adx : D;
+      if (!dest || dest.edge) { springBack(dir, rubber(adx, D * 0.18), 0); return true; }
+      // a flick commits; a slow drag commits once far enough; flicking back the other way cancels
+      var flick = v > FLICK_V && adx >= FLICK_MIN;
+      var quick = now - s.t < 250 && adx >= 40 && adx / (now - s.t) > FLICK_V && v > -0.1; // short and fast
+      var far = adx >= commitDist() && v > -FLICK_V;
+      if (cancelled || !(flick || quick || far)) { springBack(dir, off, Math.max(0, -v)); return true; }
+      commit(dir, dir > 0 ? skip : prev, false, { off: off, v: Math.max(v, 0) });
+      return true;
+    }
+    function abort() {
+      var s = g; g = null;
+      if (s && s.on) springBack(s.dir || 1, Math.abs(s.dx), 0);
+    }
+
+    // touch: TouchEvents, so the sideways moves can be kept from the browser outright
+    function findTouch(list, id) { for (var i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i]; return null; }
+    area.addEventListener('touchstart', function (e) {
+      if (e.touches.length > 1) { multi = true; if (g && g.kind === 'touch') abort(); return; } // a second finger: not a swipe
+      var t = e.changedTouches[0];
+      down(t.identifier, 'touch', t.clientX, t.clientY, e.target, stamp(e));
+    }, { passive: true });
+    area.addEventListener('touchmove', function (e) {
+      if (!g || g.kind !== 'touch') return;
+      var t = findTouch(e.changedTouches, g.id);
+      if (t && move(t.clientX, t.clientY, stamp(e)) && e.cancelable) e.preventDefault();
+    }, { passive: false });
+    function touchEnd(e) {
+      if (e.touches.length === 0) multi = false;
+      if (!g || g.kind !== 'touch' || !findTouch(e.changedTouches, g.id)) return;
+      // (and a swipe never becomes a click on the button it started on)
+      if (up(e.type === 'touchcancel', stamp(e)) && e.cancelable && e.type === 'touchend') e.preventDefault();
+    }
+    area.addEventListener('touchend', touchEnd, { passive: false });
+    area.addEventListener('touchcancel', touchEnd, { passive: true });
+
+    // mouse and pen (and touch in a browser without TouchEvents)
+    area.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'touch' && TOUCH) return; // the touch events have it
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (g) { if (g.kind === 'pointer' && e.pointerId !== g.id) { multi = true; abort(); } return; } // a second contact
+      down(e.pointerId, e.pointerType === 'touch' ? 'touch' : 'pointer', e.clientX, e.clientY, e.target, stamp(e));
+      if (g) g.kind = 'pointer';
+    });
+    area.addEventListener('pointermove', function (e) {
+      if (!g || g.kind !== 'pointer' || e.pointerId !== g.id) return;
+      var was = g.on;
+      move(e.clientX, e.clientY, stamp(e));
+      if (!was && g.on) {
+        try { area.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        try { var sel = window.getSelection(); if (sel) sel.removeAllRanges(); } catch (err) { /* ignore */ }
+      }
+    });
+    function pointerEnd(e) {
+      if (e.pointerType === 'touch' && TOUCH) return;
+      if (!g || g.kind !== 'pointer' || e.pointerId !== g.id) { if (!g) multi = false; return; }
+      up(e.type === 'pointercancel', stamp(e));
+    }
+    area.addEventListener('pointerup', pointerEnd);
+    area.addEventListener('pointercancel', pointerEnd);
     area.addEventListener('click', function (e) { if (eatClick) { e.preventDefault(); e.stopPropagation(); eatClick = false; } }, true);
   }
 

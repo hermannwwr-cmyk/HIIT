@@ -1423,18 +1423,20 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 }
 
 /* ---- swipe carousel inside the ring; ⏭ / ⏮ charge as you swipe */
-.workout { touch-action: pan-y pinch-zoom; }
+/* the screen is a pager: the browser may pan vertically (an embedding page) or zoom, never sideways */
+.workout { touch-action: pan-y pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ring-in { position: absolute; inset: 0; pointer-events: none; }
 .w-stage.carousel .ring-in { clip-path: circle(var(--ri, 140px) at 50% var(--cy, 50%)); }
 /* what's on now: leaves with the finger, fading and shrinking a touch */
 .ri-cur {
   position: absolute; inset: 0; transform-origin: 50% var(--fy, 50%);
-  transform: translateX(var(--sx, 0px)) scale(var(--ss, 1)); opacity: var(--so, 1);
+  transform: translateX(var(--sx, 0px)) scale(var(--sk, 1)); opacity: var(--so, 1);
 }
 /* where you're going: an exact copy of its own layout, easing in from the side */
 .ri-peek { position: absolute; inset: 0; display: none; opacity: var(--po, 0); transform: translateX(var(--px, 0px)); }
 .w-stage.carousel .ri-peek { display: block; }
-.w-stage.settle .ri-cur, .w-stage.settle .ri-peek { transition: transform .22s cubic-bezier(.3,.9,.3,1), opacity .22s ease; }
+/* letting go: the pages settle at the finger's speed (the swipe code sets --st / --se) */
+.w-stage.settle .ri-cur, .w-stage.settle .ri-peek { transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)), opacity var(--st, .22s) ease; }
 .w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial { transition: none !important; }
 .pk-fig { position: absolute; left: 50%; top: var(--fy, 50%); transform: translate(-50%, -50%); width: var(--fig-size, 60%); height: var(--fig-size, 60%); display: none; }
 .ri-peek.is-fig .pk-fig { display: block; }
