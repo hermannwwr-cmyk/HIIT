@@ -10,7 +10,7 @@ No framework, no dependencies, no build step. Open `index.html` in a browser, or
 npm run serve        # python3 -m http.server 8080, then open http://localhost:8080
 ```
 
-**On your phone:** open the live site and add it to the home screen (iPhone: Share → *Add to Home Screen*; Android Chrome: ⋮ → *Add to Home screen* / *Install app*). It gets the Overdrive icon (the workout's timer ring with a pause in its opening) and opens full screen like an app.
+**On your phone:** open the live site and add it to the home screen (iPhone: Share → *Add to Home Screen*; Android Chrome: ⋮ → *Add to Home screen* / *Install app*). It gets the Overdrive icon (the workout's timer ring with a pause in its opening) and opens full screen like an app. On an iPhone or iPad, which never offer to install, the setup screen shows a small "Install" chip with those two steps until the app is on the home screen or the hint is dismissed.
 
 ## Looks
 

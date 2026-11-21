@@ -107,6 +107,7 @@
         level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
         swipeTip: state.swipeTip,
         tapTip: state.tapTip,
+        iosHint: state.iosHint,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -122,6 +123,7 @@
     warmup: prefs.warmup !== false,
     swipeTip: !!prefs.swipeTip, // the "swipe to skip" tip has been shown once
     tapTip: !!prefs.tapTip, // …and "tap the dial to pause"
+    iosHint: prefs.iosHint !== false, // false once "Don't show this again" was tapped on the install hint
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -3218,10 +3220,61 @@
     syncLookMenu();
   }
 
+  // ================================================================ INSTALL HINT (iPhone / iPad)
+  /**
+   * Should the setup screen offer the "Install" chip? iOS never shows an install prompt: the only way is
+   * Share -> "Add to Home Screen", so the chip explains it. All of these must hold:
+   *  - an iPhone, iPad or iPod: the user agent says so, or it is iPadOS presenting as a Mac
+   *    (platform "MacIntel" with a touch screen; real Macs report 0 touch points). Never Android or desktop;
+   *  - not installed already: navigator.standalone (iOS's own flag) is not true and the page is not
+   *    running in display-mode: standalone;
+   *  - the user has not tapped "Don't show this again" (state.iosHint, saved with the other preferences);
+   *  - the page is not framed (html.top-level): in a frame, Share would add the host page instead.
+   */
+  function iosHintWanted() {
+    var n = window.navigator, ua = n.userAgent || '';
+    var ios = /iPhone|iPad|iPod/.test(ua) || (n.platform === 'MacIntel' && n.maxTouchPoints > 1);
+    var installed = n.standalone === true ||
+      !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    return ios && !installed && state.iosHint && document.documentElement.classList.contains('top-level');
+  }
+  /** The chip is a disclosure button; its popover holds the two steps. */
+  function bindIosHint() {
+    var box = $('iosHint'), chip = $('iosChip'), pop = $('iosPop');
+    if (!box || !iosHintWanted()) return;
+    box.hidden = false;
+    function openPop(open, refocus) {
+      pop.hidden = !open;
+      chip.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) pop.focus(); else if (refocus) chip.focus();
+    }
+    chip.addEventListener('click', function () { openPop(pop.hidden, true); });
+    $('iosClose').addEventListener('click', function () { openPop(false, true); });
+    $('iosNever').addEventListener('click', function () {
+      openPop(false, false);
+      box.hidden = true;
+      state.iosHint = false;
+      savePrefs();
+      var h = $('heroTitle'); // the chip is gone: leave focus on the heading beside it
+      h.setAttribute('tabindex', '-1'); h.focus();
+    });
+    // a tap anywhere else closes it, as does tabbing out of it; Esc closes it and returns to the chip
+    document.addEventListener('pointerdown', function (e) {
+      if (!pop.hidden && !box.contains(e.target)) openPop(false, false);
+    });
+    box.addEventListener('focusout', function (e) {
+      if (!pop.hidden && e.relatedTarget && !box.contains(e.relatedTarget)) openPop(false, false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); openPop(false, true); }
+    });
+  }
+
   // ================================================================ BOOT
   buildGrid();
   bind();
   bindLookMenu();
+  bindIosHint();
   syncToggles();
   showScreen('setup');
   showHero(state.ids[0]);

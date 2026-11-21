@@ -120,6 +120,8 @@ A layout change on the workout screen must not make the figure, the countdown or
 - Only the "Studio" look exists. An inline script in `<head>` sets `html[data-look="studio"]` and `data-scheme="light|dark"` before first paint, following the system setting unless the user overrides it.
 - `css/style.css` holds the base layout. `css/studio.css` holds everything scoped to `[data-look="studio"]`, including the compact media queries (the countdown digits size via `--dg`).
 - Preferences and stats live in localStorage under `overdrive-hiit:v1`.
+- The iPhone install hint (`#iosHint` in the setup screen's eyebrow row): iOS has no install prompt, so `bindIosHint()` in `app.js` shows an "Install" chip whose popover names Share → "Add to Home Screen". `iosHintWanted()` lists when: an iPhone/iPad (or iPadOS presenting as a Mac), not installed, not framed, not dismissed (`state.iosHint`, saved with the other preferences).
+  - It is absolutely placed in `.hero-copy` and must never move the setup screen's layout. The `<button>` is the 44 px target; the 26 px pill is drawn inside it (`.ios-chip-in`). Its CSS is one block at the end of `style.css` (layout) and of `studio.css` (colours).
 - Phase colours live in two places that must agree:
   - `app.js`: `PHASE`, `LOOKS[…].phase` and `.group` for light and dark, and `DARK_VARIANTS.charcoal` (the default dark scheme);
   - the CSS custom properties, e.g. `--warm-a`/`--warm-b` in `style.css` and `studio.css`.

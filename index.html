@@ -110,6 +110,20 @@
   <section class="hero" aria-labelledby="heroTitle">
     <div class="hero-copy">
       <p class="eyebrow">Full-body interval training</p>
+      <!-- iPhone / iPad only (iosHintWanted() in app.js): iOS never offers to install, so a chip on the eyebrow's row
+           opens the two steps. Absolute: it takes no room in the layout. -->
+      <div class="ios-hint" id="iosHint" hidden>
+        <button id="iosChip" class="ios-chip" type="button" aria-expanded="false" aria-controls="iosPop"><span class="ios-chip-in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V3M8 6.8L12 3l4 3.8"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></svg>Install</span></button>
+        <div class="ios-pop" id="iosPop" role="group" aria-labelledby="iosPopT" tabindex="-1" hidden>
+          <p class="ios-pop-t" id="iosPopT">Install Overdrive</p>
+          <button id="iosClose" class="ios-x" type="button" aria-label="Close"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
+          <ol class="ios-steps">
+            <li><span class="ios-n" aria-hidden="true">1</span><span>Tap <svg class="ios-g" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V3M8 6.8L12 3l4 3.8"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></svg> <b>Share</b> in the browser</span></li>
+            <li><span class="ios-n" aria-hidden="true">2</span><span>Choose <svg class="ios-g" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/></svg> <b>Add to Home Screen</b></span></li>
+          </ol>
+          <button id="iosNever" class="ios-never" type="button">Don&rsquo;t show this again</button>
+        </div>
+      </div>
       <h1 id="heroTitle" class="mega" aria-label="Overdrive"><span class="mega-line" data-text="OVER" aria-hidden="true"><span class="mega-a">OVER</span></span><span class="mega-line" data-text="DRIVE" aria-hidden="true"><span class="mega-b">DRIVE</span></span></h1>
       <p class="lede">Upper body, abs and legs in every session. <span class="lede-strong"><b id="heroTime">23:40</b> today.</span></p>
       <dl class="me" id="me" aria-label="Your progress on this device">
