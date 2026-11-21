@@ -24,7 +24,7 @@ node tapdial.js                            # tap the dial to pause
 node sizes.js                              # ring, figure and countdown at 8 screen sizes; compare with sizes-baseline.txt
 node pages.js work-rest                    # mid-swipe screenshots into shots/ (git-ignored)
 node ../../scripts/render-icons.mjs        # regenerate icons/*.png after editing icons/*.svg
-node ../offline-test.js                    # the offline copy: install, update on the next open, never mid-workout, works with the server stopped
+node ../offline-test.js                    # the offline copy: install, update within one open, never mid-workout, works with the server stopped
 ```
 
 `dev/swipe-tests/README.md` lists the rest of the harness and why each script exists.
@@ -173,9 +173,9 @@ A layout change on the workout screen must not make the figure, the countdown or
   - The workflow replaces the `var VERSION = 'dev';` line with the commit SHA (`sed` after the `cp`); the repo's file keeps `'dev'`.
   - Install fetches the whole shell from the server (`?v=<version>`, `cache: 'no-store'`) into the new cache, all or nothing.
   - A stamped worker serves the page and every shell file from its own cache only, so one version's files never mix with another's. There is no network-first for the page: a fresh `index.html` with cached scripts would be exactly that mix.
-  - No `clients.claim()`, and no `skipWaiting()` at install: a new worker waits, so files are never swapped under a running workout. It takes over when every window has been closed, or (a phone can keep the app's one window alive for days) when the app next opens on the setup screen: the registration script in `index.html` finds `reg.waiting`, sends `activate-now`, and reloads once into the new version. So an update shows on the second open after a deploy. `dev/offline-test.js` drives one never-closed tab through three versions; keep it passing.
+  - No `clients.claim()`, and no `skipWaiting()` at install: a new worker never takes over by itself, so files are never swapped under a running workout. The page asks for it (`activate-now`, then one reload) wherever a reload costs nothing, i.e. on the setup screen with no sheet open (`idle()` in the `#swReg` script): as soon as the new version has finished downloading, when the app comes back to the foreground, when it returns to the setup screen after a workout, and as it opens. So an update shows a few seconds into the first open after a deploy, with one visible reload of the setup screen. `dev/offline-test.js` drives one never-closed tab through four versions; keep it passing.
   - Un-stamped (`'dev'`: localhost, or a branch deploy without the workflow) the worker is network-first with a 3 s timeout and refreshes its copy as it goes, so edits show on reload. A Playwright context that loads the page twice is served through it.
-  - Registered by the `#swReg` script at the end of `<body>`, only over https or on localhost/127.0.0.1 (never file://). It also asks for an update when the app returns to the foreground on the setup screen. `build.mjs` removes `#swReg` and `#fontPreload` and inlines the font as a data URI.
+  - Registered by the `#swReg` script at the end of `<body>`, only over https or on localhost/127.0.0.1 (never file://). `build.mjs` removes `#swReg` and `#fontPreload` and inlines the font as a data URI.
   - There is no "update ready" note in the UI.
 - `tests/site.test.js` checks the icons and manifest against the workflow. The root-level PNGs and `q2/` are screenshots and are not published.
 - `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated if the SVGs change: `node scripts/render-icons.mjs` (needs a globally installed Playwright; not part of the site or the tests). It re-encodes each screenshot losslessly through `scripts/png.mjs` (plain Node: best filter, zlib level 9, and it verifies the pixels are unchanged), under a third of Chromium's size. The "30" in the ring's opening is drawn as stroked paths, not text; the favicon's is coral, larger and snapped to the 32 px grid.
