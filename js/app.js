@@ -1426,6 +1426,20 @@
       prog.bySeg[sg.index] = c;
     });
   }
+  /** A cell's fill (--p, 0..1), written only when it changes. */
+  function setP(c, v) {
+    if (c._p === v) return;
+    c._p = v;
+    c.style.setProperty('--p', v);
+  }
+  /** How many steps the live cell's fill can show: its width in device pixels. */
+  function liveSteps() {
+    var w = prog.live.offsetWidth;
+    if (!w) return 1000; // not laid out (hidden): measured when it is
+    prog.steps = Math.max(1, Math.round(w * (window.devicePixelRatio || 1)));
+    return prog.steps;
+  }
+  window.addEventListener('resize', function () { prog.steps = 0; });
   function updateProgress(seg) {
     var tl = run.tl, idx = seg.index, sets = tl.level.sets, nEx = tl.exercises.length;
     var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
@@ -1435,13 +1449,13 @@
       c.classList.toggle('is-done', i < idx);
       c.classList.toggle('is-now', i === idx);
       c.classList.toggle('is-next', i === nextWork); // during rest: where you're headed
-      c.style.setProperty('--p', i < idx ? 1 : 0);
+      setP(c, i < idx ? 1 : 0);
     });
     if (prog.warm) {
       var wDone = seg.type !== 'warmup';
       prog.warm.classList.toggle('is-done', wDone);
       prog.warm.classList.toggle('is-now', !wDone);
-      prog.warm.style.setProperty('--p', wDone ? 1 : 0);
+      setP(prog.warm, wDone ? 1 : 0);
     }
     var curSet = seg.type === 'warmup' ? 0 : seg.set;
     Object.keys(prog.groups).forEach(function (k) {
@@ -1451,6 +1465,7 @@
       g.classList.toggle('is-cur', !done && n === curSet);
     });
     prog.live = seg.type === 'work' ? prog.bySeg[idx] : seg.type === 'warmup' ? prog.warm : null;
+    prog.steps = 0;
 
     var setTxt, leftTxt;
     function sets_(n) { return n + (n === 1 ? ' set' : ' sets'); }
@@ -2104,7 +2119,10 @@
     ring.total = t / tl.total;
     if (prog.live) {
       var pf = prog.live === prog.warm ? t / tl.warmupEnd : (t - seg.start) / seg.duration;
-      prog.live.style.setProperty('--p', Math.min(1, pf).toFixed(4));
+      // in whole device pixels of the cell: a write costs a style recalc and a paint, and most
+      // frames would not move the fill's edge (none do while paused)
+      var pn = prog.steps || liveSteps();
+      setP(prog.live, Math.round(Math.max(0, Math.min(1, pf)) * pn) / pn);
     }
 
     var sec = Math.floor(t);
