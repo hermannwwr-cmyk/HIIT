@@ -14,7 +14,23 @@ node scripts/build.mjs out.html --fragment # same, without <html>/<head>/<body> 
 npm run serve                              # python3 -m http.server 8080
 ```
 
+The workout screen's layout and swipe are checked in a headless browser (Playwright must be installed globally; it is not a dependency of the repo). The scripts expect the repo root served on port 8731; set `URL=` to point them elsewhere:
+
+```sh
+python3 -m http.server 8731 &              # from the repo root
+cd dev/swipe-tests
+node matrix.js 390 844                     # ~70 swipe, tap and key checks at one screen size; must end "fails: 0"
+node tapdial.js                            # tap the dial to pause
+node sizes.js                              # ring, figure and countdown at 8 screen sizes; compare with sizes-baseline.txt
+node pages.js work-rest                    # mid-swipe screenshots into shots/ (git-ignored)
+node ../../scripts/render-icons.mjs        # regenerate icons/*.png after editing icons/*.svg
+```
+
+`dev/swipe-tests/README.md` lists the rest of the harness and why each script exists.
+
 There is no linter or formatter. Opening `index.html` directly (file://) must keep working.
+
+A layout change on the workout screen must not make the figure, the countdown or the ring smaller at any screen size unless that was asked for: content comes first there. `sizes.js` is the check.
 
 ## Architecture
 
@@ -65,7 +81,7 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   - Tall phones (`min-height: 800px`, under 600 px wide): `.w-lower`'s `min-height` in `studio.css` takes the height the ring cannot use (the ring is limited by the width there), so the tip fits. It must never cost ring size: `dev/swipe-tests/sizes.js` against `sizes-baseline.txt`.
   - Short landscape (`max-height: 500px`): the right column (title, countdown, "Next:") sets the stage's height, so the ring follows `--dg`, which is capped by the height. Rest keeps the hidden title's row so the ring is the same size as in work.
 
-**Swipe and the ⏮ / ⏭ controls.** `initSwipe()` is a pager, the same in every phase and anywhere on the workout screen.
+**Swipe, back and next.** `initSwipe()` is a pager, the same in every phase and anywhere on the workout screen.
 - The whole row of dials follows the finger 1:1. Pages are one `ring.pitch` apart (`travel()`), each clipped to the inside of its own ring; the countdown in the opening goes with its dial.
 - Commit rule, `wouldCommit()`; otherwise the page springs back:
   - a flick of at least 0.25 px/ms, with hysteresis (it stays armed down to 0.18);
