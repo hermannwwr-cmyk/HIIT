@@ -90,9 +90,13 @@ test('each deploy gets its own cache: the workflow stamps the worker\'s version'
   const sed = workflow.match(/sed -i "s\|([^|]+)\|([^|]+)\|" _site\/sw\.js/);
   assert.ok(sed, 'the workflow rewrites _site/sw.js');
   assert.ok(workflow.indexOf('sed -i') > workflow.indexOf('cp -r'), 'after the copy');
-  const stamped = lines[0].replace(new RegExp(sed[1]), sed[2].replace('${GITHUB_SHA}', 'abc123'));
+  const stamped = lines[0].replace(new RegExp(sed[1]), sed[2].replace('${VERSION}', 'abc123'));
   assert.equal(stamped, "var VERSION = 'abc123';");
   assert.match(swCode, /CACHE = PREFIX \+ VERSION/);
+  // the version is a fingerprint of the published files (so a notes-only merge is no update), taken before the stamp
+  assert.match(workflow, /VERSION=\$\(cd _site && find \. -type f \| LC_ALL=C sort \| xargs sha256sum \| sha256sum \| cut -c1-16\)/);
+  assert.ok(workflow.indexOf('VERSION=$(') > workflow.indexOf('cp -r') && workflow.indexOf('VERSION=$(') < workflow.indexOf('sed -i'), 'between the copy and the stamp');
+  assert.doesNotMatch(workflow, /GITHUB_SHA/);
 });
 
 test('a new worker never takes over a running session', () => {

@@ -1,7 +1,8 @@
 // Offline support for Overdrive HIIT. Every URL here is relative, so it works from the GitHub Pages sub-path.
 //
-// One version = one cache. The Pages workflow replaces the VERSION line below with the commit SHA, so every
-// deploy is a new worker with a new cache; the file in the repo keeps 'dev'.
+// One version = one cache. The Pages workflow replaces the VERSION line below with a fingerprint of the
+// published files, so a deploy that changes any of them is a new worker with a new cache, and one that
+// changes none (notes, tests) is no update at all; the file in the repo keeps 'dev'.
 //
 // How a version stays whole (never a fresh index.html with older scripts, or the other way round):
 //   * install downloads the whole shell straight from the server (never from the HTTP cache) into this
