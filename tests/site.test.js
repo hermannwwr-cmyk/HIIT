@@ -96,7 +96,12 @@ test('each deploy gets its own cache: the workflow stamps the worker\'s version'
 });
 
 test('a new worker never takes over a running session', () => {
-  assert.doesNotMatch(swCode, /skipWaiting|clients\.claim/);
+  assert.doesNotMatch(swCode, /clients\.claim/);
+  // skipWaiting only when the page asks for it, and the page asks only on the setup screen, as it opens
+  assert.equal((swCode.match(/skipWaiting/g) || []).length, 1);
+  assert.match(swCode, /event\.data === 'activate-now'\) self\.skipWaiting\(\)/);
+  const reg = html.match(/<script id="swReg">([\s\S]*?)<\/script>/)[1];
+  assert.match(reg, /reg\.waiting && navigator\.serviceWorker\.controller && document\.body\.getAttribute\('data-screen'\) === 'setup'/);
   assert.match(swCode, /caches\.delete/); // older versions are removed on activate
 });
 

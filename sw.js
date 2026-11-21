@@ -8,9 +8,12 @@
 //     version's own cache, and fails as a whole if any file fails;
 //   * a stamped worker answers the page and everything the page loads from that one cache, without asking
 //     the network: what the server holds by then no longer matters;
-//   * there is no skipWaiting() and no clients.claim(): a new worker waits until every window of the app
-//     is closed, so a running workout keeps the worker and the cache it started with. The next launch gets
-//     the new worker, which then deletes the older caches.
+//   * a new worker never takes over on its own (no skipWaiting() at install, no clients.claim()): it waits
+//     until every window of the app is closed, so a running workout keeps the worker and the cache it
+//     started with. The next launch gets the new worker, which then deletes the older caches.
+//   * one exception, asked for by the page: on a phone the one window of an installed app may stay alive
+//     for days. When the app opens on the setup screen and finds a new worker waiting, it sends
+//     'activate-now' and reloads once into the new version, before any workout starts (see index.html).
 // The browser looks for a new sw.js on every launch; the page also asks when it comes back to the foreground.
 //
 // Un-stamped ('dev', i.e. served straight from the repo on localhost): the network comes first, so an edit
@@ -66,6 +69,10 @@ self.addEventListener('activate', function (event) {
       return name.indexOf(PREFIX) === 0 && name !== CACHE ? caches.delete(name) : null;
     }));
   }));
+});
+
+self.addEventListener('message', function (event) {
+  if (event.data === 'activate-now') self.skipWaiting();
 });
 
 function cached(key) {

@@ -481,6 +481,15 @@
           document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible' && document.body.getAttribute('data-screen') === 'setup') reg.update().catch(quiet);
           });
+          // A phone keeps one window of the app alive for days, so "once every window is closed" may never
+          // come. If a new version is already waiting as the app opens, hand over now, before any workout:
+          // the waiting worker takes over (see sw.js, 'activate-now') and the page reloads once into it.
+          if (reg.waiting && navigator.serviceWorker.controller && document.body.getAttribute('data-screen') === 'setup') {
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+              if (document.body.getAttribute('data-screen') === 'setup') location.reload(); // (a workout began meanwhile: next launch)
+            });
+            reg.waiting.postMessage('activate-now'); // (after the reload nothing is waiting: no loop)
+          }
         }).catch(quiet);
       } catch (e) { quiet(); }
     });

@@ -24,6 +24,7 @@ node tapdial.js                            # tap the dial to pause
 node sizes.js                              # ring, figure and countdown at 8 screen sizes; compare with sizes-baseline.txt
 node pages.js work-rest                    # mid-swipe screenshots into shots/ (git-ignored)
 node ../../scripts/render-icons.mjs        # regenerate icons/*.png after editing icons/*.svg
+node ../offline-test.js                    # the offline copy: install, update on the next open, never mid-workout, works with the server stopped
 ```
 
 `dev/swipe-tests/README.md` lists the rest of the harness and why each script exists.
@@ -166,7 +167,7 @@ A layout change on the workout screen must not make the figure, the countdown or
   - The workflow replaces the `var VERSION = 'dev';` line with the commit SHA (`sed` after the `cp`); the repo's file keeps `'dev'`.
   - Install fetches the whole shell from the server (`?v=<version>`, `cache: 'no-store'`) into the new cache, all or nothing.
   - A stamped worker serves the page and every shell file from its own cache only, so one version's files never mix with another's. There is no network-first for the page: a fresh `index.html` with cached scripts would be exactly that mix.
-  - No `skipWaiting()`, no `clients.claim()`: the new worker waits until every window is closed, then deletes the older caches on `activate`. So an update shows on the launch after the one that downloaded it, and a reload alone does not switch. Don't add either call: it would swap files under a running workout.
+  - No `clients.claim()`, and no `skipWaiting()` at install: a new worker waits, so files are never swapped under a running workout. It takes over when every window has been closed, or (a phone can keep the app's one window alive for days) when the app next opens on the setup screen: the registration script in `index.html` finds `reg.waiting`, sends `activate-now`, and reloads once into the new version. So an update shows on the second open after a deploy. `dev/offline-test.js` drives one never-closed tab through three versions; keep it passing.
   - Un-stamped (`'dev'`: localhost, or a branch deploy without the workflow) the worker is network-first with a 3 s timeout and refreshes its copy as it goes, so edits show on reload. A Playwright context that loads the page twice is served through it.
   - Registered by the `#swReg` script at the end of `<body>`, only over https or on localhost/127.0.0.1 (never file://). It also asks for an update when the app returns to the foreground on the setup screen. `build.mjs` removes `#swReg` and `#fontPreload` and inlines the font as a data URI.
   - There is no "update ready" note in the UI.
