@@ -61,6 +61,9 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   - The pause grows with the ring (`S*0.148`, 50–72 px). The beat-dot row stays reserved through the whole workout, so the ring keeps one size from the warm-up to the end.
 - `ring.progress` is set in `update()`. Warm-up steps get two sweeps: one for the lead-in, one for the move.
 - Rest, prep and the set break switch the screen to `#workout[data-mode="rest"]`: a dial inside the ring plus an "Up next" card.
+  - `sizeUpNext()` fits the card to the lower area less `ring.hang`: it tries `UN_STATES` from `roomy` (with the step tip) down to `compact … q4`, and shrinks the demo tile last. Start stays at least 48 px tall in every state. It reads the card's own width (720 px at most on a tablet in portrait, 520 px elsewhere).
+  - Tall phones (`min-height: 800px`, under 600 px wide): `.w-lower`'s `min-height` in `studio.css` takes the height the ring cannot use (the ring is limited by the width there), so the tip fits. It must never cost ring size: `dev/swipe-tests/sizes.js` against `sizes-baseline.txt`.
+  - Short landscape (`max-height: 500px`): the right column (title, countdown, "Next:") sets the stage's height, so the ring follows `--dg`, which is capped by the height. Rest keeps the hidden title's row so the ring is the same size as in work.
 
 **Swipe and the ⏮ / ⏭ controls.** `initSwipe()` is a pager, the same in every phase and anywhere on the workout screen.
 - The whole row of dials follows the finger 1:1. Pages are one `ring.pitch` apart (`travel()`), each clipped to the inside of its own ring; the countdown in the opening goes with its dial.

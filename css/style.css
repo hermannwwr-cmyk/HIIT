@@ -1085,6 +1085,8 @@ body[data-screen="brief"] { overflow: hidden; }
   .hud-cell { padding: 4px 9px; }
   .hud-v { font-size: 15px; }
   .icon-btn { width: 40px; height: 40px; }
+  /* the workout's close and sound stay 48 px targets; the margin keeps the row (and so the ring) as it was */
+  .w-top .icon-btn { width: 48px; height: 48px; margin: -4px; }
 }
 
 /* ---------- appearance menu (both looks) ---------- */
@@ -1307,6 +1309,7 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .un-tip b { color: var(--text); font-weight: 600; margin-right: 2px; }
 .un-tip.swap { animation: swapIn .45s cubic-bezier(.2,.9,.3,1); }
 .upnext:not(.roomy) .un-tip { display: none; }
+.upnext.roomy .un-tip { min-height: 4.2em; } /* three lines, long step or short: the card is sized once (sizeUpNext) */
 .un-act { grid-area: act; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .un-act .link-btn { height: 44px; padding: 0 14px; }
 .un-start {
@@ -1325,7 +1328,7 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .upnext.compact .un-act .link-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
 .upnext.compact .un-act .link-btn span { display: none; }
 .un-figwrap { cursor: pointer; }
-.upnext.compact .un-start { max-width: none; height: 46px; padding: 0 14px; }
+.upnext.compact .un-start { max-width: none; height: 48px; padding: 0 14px; }
 /* a narrow card (short landscape phones): a short label ("Start"), then the icon makes way */
 .un-act { container-type: inline-size; }
 .un-short { display: none; }
@@ -1368,7 +1371,9 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 /* confirm dialog: "Keep going" on top, where Resume was; End workout below it */
 #quitDialog .veil-actions { flex-direction: column; align-items: stretch; width: min(100%, 300px); margin-inline: auto; }
 @media (min-aspect-ratio: 5/4) and (max-height: 500px) {
-  .workout[data-mode="rest"] .w-name { display: none; } /* chip, page tint and ring already say rest */
+  /* chip, page tint and ring already say rest. The title keeps its row, above the chip, so the
+     column (and with it the stage and the ring) is as tall in rest as in work */
+  .workout[data-mode="rest"] .w-name { visibility: hidden; order: -1; }
 }
 .veil-paused .veil-card { position: absolute; left: 50%; bottom: calc(100% - var(--ry, 50vh) + 64px); transform: translateX(-50%); width: min(calc(100vw - 32px), 420px); }
 .veil-resume {
@@ -1429,7 +1434,9 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .upnext.q3 .un-pre { display: inline; font-size: .62em; font-weight: 700; color: var(--c1); letter-spacing: .02em; vertical-align: .12em; }
 .upnext.compact .un-name { font-size: clamp(20px, 6vw, 26px); }
 .upnext.q4 .un-name { font-size: 19px; }
-.upnext.q4 .un-start { height: 42px; font-size: 13px; }
+/* the tightest card gives up padding, never the Start button's 48 px */
+.upnext.q4 { padding: 8px 10px; gap: 5px 12px; }
+.upnext.q4 .un-start { font-size: 14px; }
 
 /* desktop: the top bar lines up with the strip and the content */
 @media (min-aspect-ratio: 5/4) and (min-width: 560px) {

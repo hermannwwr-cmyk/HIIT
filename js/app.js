@@ -938,11 +938,11 @@
    * extras one at a time (step, muscles, actions beside the demo, meta,
    * label) and finally shrink the demo.
    */
-  var UN_STATES = ['roomy', '', 'q1', 'compact q1', 'compact q1 q2', 'compact q1 q2 q3', 'compact q1 q2 q3 q4'];
+  var UN_STATES = ['roomy', 'roomy q2', '', 'q1', 'compact q1', 'compact q1 q2', 'compact q1 q2 q3', 'compact q1 q2 q3 q4'];
   function sizeUpNext() {
     var lower = document.querySelector('.w-lower'), card = $('upNext');
-    var H = lower.offsetHeight - (typeof ring !== 'undefined' && ring && ring.hang || 0), W = Math.min(lower.offsetWidth, 520);
-    if (!H || !W) return;
+    var H = lower.offsetHeight - (typeof ring !== 'undefined' && ring && ring.hang || 0);
+    if (!H || !lower.offsetWidth) return;
     if (window.innerWidth > window.innerHeight * 1.25) {
       // side-by-side layout: the card may also use the empty space under the readout
       H = Math.max(H, window.innerHeight - 12 - lower.getBoundingClientRect().top);
@@ -950,22 +950,28 @@
     var S = typeof ring !== 'undefined' && ring && ring.geo ? ring.geo.S : 300;
     var wasHidden = card.hidden;
     if (wasHidden) { card.style.visibility = 'hidden'; card.hidden = false; }
+    var W = card.offsetWidth || Math.min(lower.offsetWidth, 520); // (a tablet in portrait has a wider card: see the CSS)
     var cap = Math.min(W * 0.47, S * 0.62, 230);
     var fig, i, cls;
-    function apply(state, f) {
+    function over(state, f) {
       card.className = 'upnext' + (state ? ' ' + state : '');
       card.style.setProperty('--un-fig', Math.round(f) + 'px');
-      return card.offsetHeight <= H + 0.5;
+      return card.offsetHeight - H;
     }
     var fits = false;
-    for (i = H < 230 ? 3 : 0; i < UN_STATES.length && !fits; i++) {
+    for (i = H < 230 ? 4 : 0; i < UN_STATES.length && !fits; i++) {
       cls = UN_STATES[i];
-      var compact = cls.indexOf('compact') >= 0;
-      fig = Math.max(56, Math.min(cap, compact ? H - 20 : H - 28 - 50 - 12));
-      if (cls === 'roomy' && fig < 140) continue;
-      fits = apply(cls, fig);
+      var compact = cls.indexOf('compact') >= 0, roomy = cls.indexOf('roomy') >= 0;
+      // the tile is as tall as the space allows: less the card's padding and border, and the row of actions below it
+      fig = Math.max(56, Math.min(cap, compact ? H - 22 : H - 30 - 50 - 12));
+      // with the step tip, the text keeps a column it can be read in
+      if (roomy) { fig = Math.min(fig, Math.max(140, W - 216)); if (fig < 140) continue; }
+      var o = over(cls, fig);
+      // a few px over (this state's padding, a taller button): the tile gives them up
+      if (o > 0.5 && o <= 14 && fig - o >= (roomy ? 140 : 56)) { fig -= o; o = over(cls, fig); }
+      fits = o <= 0.5;
     }
-    while (!fits && fig > 56) { fig = Math.max(56, fig * 0.86); fits = apply(cls, fig); }
+    while (!fits && fig > 56) { fig = Math.max(56, fig * 0.86); fits = over(cls, fig) <= 0.5; }
     if (wasHidden) { card.hidden = true; card.style.visibility = ''; }
   }
   Ring.prototype.draw = function (dt) {

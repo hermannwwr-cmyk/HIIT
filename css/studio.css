@@ -693,7 +693,11 @@
   [data-look="studio"] .w-name { font-size: clamp(30px, 4.2vw, 64px); }
 }
 @media (min-aspect-ratio: 5/4) and (max-height: 500px) {
-  [data-look="studio"] .digits, [data-look="studio"] .wl-box { --dg: min(15vw, 30vh); }
+  /* The column of title, countdown and "Next:" sets the stage's height here, so a bigger countdown
+     is a bigger ring too (rest keeps the title's row for the same reason: see style.css). The
+     third term keeps that column on the screen: 254 px is everything in it but the digits, plus
+     the bars. Never under the old size (the first min). */
+  [data-look="studio"] .digits, [data-look="studio"] .wl-box { --dg: max(min(15vw, 30vh), min(18vw, 38vh, calc((100vh - 254px) / .92))); }
   [data-look="studio"] .w-name { font-size: clamp(20px, 4vw, 30px); white-space: nowrap; }
   [data-look="studio"] .chip { height: 24px; font-size: 10.5px; }
   [data-look="studio"] .hud-v { font-size: 15px; }
@@ -902,6 +906,28 @@
 @media (min-height: 800px) and (max-aspect-ratio: 5/4) {
   [data-look="studio"] .workout.tuck .w-lower { min-height: 232px; align-content: space-between; }
   [data-look="studio"] .workout.tuck .coach { margin-top: 0; }
+}
+/* a tablet in portrait: the up-next card is wider and its text, demo and Start button larger, in the
+   same height (the ring keeps every pixel). sizeUpNext() reads the card's width. */
+@media (min-width: 700px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .workout.tuck .upnext { width: min(100%, 720px); padding: 12px; gap: 10px 26px; border-radius: 26px; }
+  [data-look="studio"] .workout.tuck .upnext .un-figwrap { border-radius: 16px; }
+  [data-look="studio"] .workout.tuck .upnext .un-text { gap: 8px; }
+  [data-look="studio"] .workout.tuck .upnext .un-k { font-size: 18px; }
+  [data-look="studio"] .workout.tuck .upnext .un-name { font-size: 46px; }
+  [data-look="studio"] .workout.tuck .upnext .un-meta { font-size: 18px; }
+  [data-look="studio"] .workout.tuck .upnext .un-tip { font-size: 17px; }
+  [data-look="studio"] .workout.tuck .upnext .un-start { height: 60px; font-size: 20px; }
+  [data-look="studio"] .workout.tuck .upnext .un-start svg { font-size: 22px; }
+}
+/* tall phones: the height that would sit unused above the title goes to the lower area, so rest's
+   up-next card has room for the step tip. Never the ring's height: the ring is as wide as the
+   screen allows there (about 102.5vw of height with the title and the strip), and 14 px stay over
+   so the title keeps clear of the progress strip. (Without dvh, the 232 px above stands.) */
+@media (min-height: 800px) and (max-aspect-ratio: 5/4) and (max-width: 599px) {
+  [data-look="studio"] .workout.tuck .w-lower {
+    min-height: clamp(232px, calc(100dvh - 102.5vw - 147px - max(0px, env(safe-area-inset-top, 0px) - 10px) - max(0px, env(safe-area-inset-bottom, 0px) - 12px)), 324px);
+  }
 }
 /* swipe carousel + first-run tip (Studio) */
 [data-look="studio"] .wp-tip { font-weight: 500; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }
