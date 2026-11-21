@@ -97,12 +97,14 @@ Every session opens with a 10 s get-ready countdown (after the warm-up, the coac
 
 | Action | Button | Key |
 | --- | --- | --- |
-| Pause / resume | centre button in the ring | Space |
-| Next interval | ⏭, or swipe left | → |
-| Back (restart the interval, or redo the last exercise during a rest) | ⏮, or swipe right | ← |
+| Pause / resume | the pause disc beside the countdown, or tap the dial | Space |
+| Next interval | the arrow on the right edge, or swipe left | → |
+| Back (restart the interval, or redo the last exercise during a rest) | the arrow on the left edge, or swipe right | ← |
 | End workout | ✕ | Esc |
 
-Pause sits in the ring's opening; ⏮ and ⏭ sit at the far left and right on the same line, at the base of the ring. During rest, get ready and the set break, a sliver of the next interval's colour waits at the ring's right edge (it slides in once as the phase begins). As you swipe, the one you're heading for turns into a tab that says what letting go will do ("Next ›", "‹ Restart", "‹ Redo", "Finish ›") in the destination's colour, and goes solid once letting go will do it; the ring shows where you're going, and the title changes when you let go. The workout screen swipes like a pager, anywhere below the progress strip (from a button too) and the same in every phase: what's on now follows your finger out of the ring while the destination slides in right behind it, led by an edge in its colour with its name on it. A normal flick is enough, and so is a slow drag of about a quarter of a phone's width (on a tablet's bigger ring, a little further); anything shorter springs back. Vertical moves, a second finger and the outer 16 px (the phone's own back gesture) are left alone, and a tap on a button stays a tap. On the last interval the screen only gives a little: finishing is a tap on ⏭. Every skip or back can be undone for 8 s. Browser Back during a workout asks before ending it.
+The workout is a row of dials. A see-through slice of the next interval's dial shows at the right edge of the screen, in that interval's colour, with an arrow on it; the previous one shows at the left. Tap a slice, or swipe anywhere below the progress strip, and the whole row follows your finger: the dial you saw at the edge is the one that arrives, firming up as it comes in. The title changes when you let go. A normal flick is enough, and so is a slow drag of about a quarter of a phone's width (on a tablet's bigger ring, a little further); anything shorter springs back. Vertical moves, a second finger and the outer 16 px (the phone's own back gesture) are left alone, and a tap on a button stays a tap. After the last interval the right edge shows a tick: finishing is a tap on it, and a swipe only gives a little.
+
+In portrait the countdown sits in the ring's opening, with pause to its right and How to (ⓘ) to its left. A tap anywhere inside the ring pauses too. In landscape the countdown has its own column and pause sits in the ring's opening. Every skip or back can be undone for 8 s. Browser Back during a workout asks before ending it.
 
 The screen is kept awake during a workout where the browser supports the Wake Lock API, and phones vibrate on each phase change.
 

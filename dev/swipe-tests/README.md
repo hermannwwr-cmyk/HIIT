@@ -2,6 +2,19 @@
 
 This covers the swipe and the ⏮ / ⏭ controls on the workout screen, as shipped in PR #8 (merged 2026-11-19). The design contract (the commit rule, `armed`, the hooks and the display hand-over) lives in `CLAUDE.md` under "Swipe and the ⏮ / ⏭ controls". This file covers what CLAUDE.md doesn't: how we got here, what was rejected, what's still open, and how to test.
 
+## Since then: the row of dials (2026-11-21)
+
+The user found that the ⏮ / ⏭ discs did not say "swipe", and wanted the controls to give room back to the figure and the countdown. What shipped, and what was tried on the way:
+
+- **Shipped.** Back and next are slices of the neighbouring dials at the screen edges; the whole row slides. The countdown sits in the ring's opening, pause and How to in the corners beside it. A tap inside the ring also pauses. See `CLAUDE.md`.
+- **Arc strength.** Solid arcs competed with the content. The user chose see-through arcs that fade out above and below the chevron.
+- **Rejected: a bottom dock** (⏮ ⏸ ⏭ as pills). Easy to hit, but it took the space back: the ring grew only about 8–12%.
+- **Rejected: a wide Pause bar** along the bottom, for the same reason.
+- **Rejected: pause shown on the dial only** (a small mark under the countdown, the countdown on a raised plate, or a "Tap to pause" caption). The mark was too faint, the plate and caption cost ring size. The user kept the corner disc and the tap as an extra.
+- Sizes measured against the old layout: figure 194 → 245 px and countdown 72 → 101 px at 360×640; figure 236 → 270 px and countdown 117 → 128 px at 390×844.
+
+The sections below describe the pager as first shipped in PR #8. The gesture rules still hold; the curtain, the rim sliver and the button tabs are gone.
+
 ## What the user asked for
 
 - "Swiping does not go previous or next" → "I want to have swipe throughout the app". They chose: the whole workout screen.
@@ -73,6 +86,7 @@ node r2/vscroll.js && node r2/vscroll2.js                # vertical drags in the
 node r3/agree.js                                         # what armed showed vs what the release did
 node r3/clip.js                                          # incoming-page clip during drag and settle (frame sheets)
 node misc.js; node audio.js; node iframe-scroll.js
+node tapdial.js                                          # a tap in the ring pauses; controls, arcs and swipes don't
 ```
 
 - Set `URL=` to point at another build.
