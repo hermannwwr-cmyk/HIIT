@@ -994,3 +994,11 @@
 [data-look="studio"] .ios-never { color: var(--mute); border-top-color: var(--line); }
 [data-look="studio"] .ios-x:focus-visible, [data-look="studio"] .ios-never:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ---------- end of the install hint ---------- */
+
+/* Behind the paused veil, the quit dialog or the How-to sheet the endless pulses rest (the app
+   sets `inert` on what is underneath: setInert()). Each frame of them made the blurred veil be
+   composited again. They carry on from where they stopped. */
+[data-look="studio"] [inert] .chip::before,
+[data-look="studio"] [inert] .wp-cell.is-next,
+[data-look="studio"] [inert] .wl-box.listen .wl-sub::before,
+[data-look="studio"] #setup[inert] #start:not(:disabled) { animation-play-state: paused; }
