@@ -119,12 +119,15 @@ js/app.js           UI controller, timer engine, ring timer with the controls in
 js/figure.js        Canvas 2D athlete that demonstrates each exercise (studio mannequin)
 js/bg.js            WebGL backdrop shader (studio lighting)
 js/audio.js         Web Audio sound effects and speechSynthesis voice coach
+fonts/              Geist (one variable woff2, Latin, weights 200 to 700) and its licence, OFL.txt
+sw.js               service worker: keeps a copy of the app so it opens without a connection
 icons/              app icon: favicon.svg / favicon-32.png (browser tab), apple-touch-icon.png (iPhone),
                     icon-192/512 + maskable-512 (Android); icon.svg and maskable.svg are the sources
 manifest.webmanifest  name, colours and icons for "Add to Home Screen" (opens full screen)
 tests/              node:test unit tests for workout.js, the mannequin (figure.js) and the icon/manifest files
 dev/figure-test.html  gallery of every exercise animation for checking the figures
-scripts/build.mjs   bundles everything into one HTML file in dist/
+scripts/build.mjs   bundles everything into one HTML file in dist/ (font inlined, no service worker)
+scripts/render-icons.mjs  renders icons/*.png from the SVGs (needs Playwright); png.mjs re-encodes them losslessly
 ```
 
 ```sh
@@ -136,7 +139,11 @@ npm run build        # dist/overdrive-hiit.html, a single self-contained file
 
 The site is static, so Pages serves it as-is (over HTTPS, which also enables the screen wake lock).
 
-- **Automatic (recommended):** `.github/workflows/pages.yml` runs the unit tests and publishes `index.html`, `manifest.webmanifest`, `css/`, `js/` and `icons/` on every push to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-- **Without Actions:** **Settings → Pages → Source: Deploy from a branch**, pick the branch and `/ (root)`. `.nojekyll` makes Pages serve the files untouched.
+- **Automatic (recommended):** `.github/workflows/pages.yml` runs the unit tests and publishes `index.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/`, `icons/` and `fonts/` on every push to `main`, and stamps the commit into `sw.js` as its version. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+- **Without Actions:** **Settings → Pages → Source: Deploy from a branch**, pick the branch and `/ (root)`. `.nojekyll` makes Pages serve the files untouched. The service worker is then not stamped with a version: it asks the network first and uses its copy only when there is no connection.
+
+### Offline and updates
+
+Nothing is loaded from other sites: the font (Geist) is in `fonts/`. After the first visit the app opens and runs without a connection, in the browser or from the home screen. A new version downloads in the background while the old one keeps running, and is used the next time the app is opened after every window of it has been closed; a reload alone keeps the old one. A workout in progress is never switched to a new version.
 
 Settings (look, intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.

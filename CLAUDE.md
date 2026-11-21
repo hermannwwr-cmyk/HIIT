@@ -126,7 +126,7 @@ A layout change on the workout screen must not make the figure, the countdown or
   - `app.js`: `PHASE`, `LOOKS[…].phase` and `.group` for light and dark, and `DARK_VARIANTS.charcoal` (the default dark scheme);
   - the CSS custom properties, e.g. `--warm-a`/`--warm-b` in `style.css` and `studio.css`.
 - Current phase colours: warm-up leaf green, work coral, rest blue, jacks amber, set break mint-teal. The WARM UP and BEGIN wipes use their own deep green, passed through the `flash()` kind argument, so white text stays readable.
-- The only font is Geist, loaded from Google Fonts in `index.html`.
+- The only font is Geist, self-hosted: `fonts/geist-latin.woff2` is the one variable file (weights 200–700, Latin block) that Google Fonts serves, with its licence in `fonts/OFL.txt`. The `@font-face` is a `<style>` in `index.html`'s `<head>`; the preload link is added by the `#fontPreload` script, not written as markup, because from file:// a font preload is refused with a console error (the font itself loads there). Nothing is loaded from another origin; `tests/site.test.js` checks that.
 
 **Audio and voice (`js/audio.js`).**
 - All sounds are synthesised with Web Audio; there are no audio files.
@@ -161,7 +161,15 @@ A layout change on the workout screen must not make the figure, the countdown or
 
 ## Deploy
 
-- `.github/workflows/pages.yml` runs `npm test` on every push to `main`, then publishes only `index.html`, `manifest.webmanifest`, `css/`, `js/` and `icons/`. Any new file the site needs must be added to that `cp` line.
+- `.github/workflows/pages.yml` runs `npm test` on every push to `main`, then publishes only `index.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/`, `icons/` and `fonts/`. Any new file the site needs must be added to that `cp` line, and to `SHELL` in `sw.js` if `index.html` loads it (`tests/site.test.js` compares the three).
+- **Offline (`sw.js`).** One version = one cache, `overdrive-hiit-<version>`.
+  - The workflow replaces the `var VERSION = 'dev';` line with the commit SHA (`sed` after the `cp`); the repo's file keeps `'dev'`.
+  - Install fetches the whole shell from the server (`?v=<version>`, `cache: 'no-store'`) into the new cache, all or nothing.
+  - A stamped worker serves the page and every shell file from its own cache only, so one version's files never mix with another's. There is no network-first for the page: a fresh `index.html` with cached scripts would be exactly that mix.
+  - No `skipWaiting()`, no `clients.claim()`: the new worker waits until every window is closed, then deletes the older caches on `activate`. So an update shows on the launch after the one that downloaded it, and a reload alone does not switch. Don't add either call: it would swap files under a running workout.
+  - Un-stamped (`'dev'`: localhost, or a branch deploy without the workflow) the worker is network-first with a 3 s timeout and refreshes its copy as it goes, so edits show on reload. A Playwright context that loads the page twice is served through it.
+  - Registered by the `#swReg` script at the end of `<body>`, only over https or on localhost/127.0.0.1 (never file://). It also asks for an update when the app returns to the foreground on the setup screen. `build.mjs` removes `#swReg` and `#fontPreload` and inlines the font as a data URI.
+  - There is no "update ready" note in the UI.
 - `tests/site.test.js` checks the icons and manifest against the workflow. The root-level PNGs and `q2/` are screenshots and are not published.
-- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated if the SVGs change: `node scripts/render-icons.mjs` (needs a globally installed Playwright; not part of the site or the tests). The "30" in the ring's opening is drawn as stroked paths, not text; the favicon's is coral, larger and snapped to the 32 px grid.
-- `scripts/build.mjs` inlines the CSS, the JS and the SVG favicon, and drops the other icon and manifest links.
+- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated if the SVGs change: `node scripts/render-icons.mjs` (needs a globally installed Playwright; not part of the site or the tests). It re-encodes each screenshot losslessly through `scripts/png.mjs` (plain Node: best filter, zlib level 9, and it verifies the pixels are unchanged), under a third of Chromium's size. The "30" in the ring's opening is drawn as stroked paths, not text; the favicon's is coral, larger and snapped to the 32 px grid.
+- `scripts/build.mjs` inlines the CSS, the JS, the font and the SVG favicon, and drops the other icon and manifest links and the service worker registration.

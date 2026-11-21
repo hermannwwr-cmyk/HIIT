@@ -23,6 +23,14 @@ html = html.replace(/<link rel="icon" href="(icons\/[^"]+\.svg)" type="image\/sv
   `<link rel="icon" href="data:image/svg+xml;base64,${readFileSync(join(root, href)).toString('base64')}" type="image/svg+xml">`);
 html = html.replace(/<link rel="(?:icon|apple-touch-icon|manifest)" href="(?!data:)[^"]*"[^>]*>\s*/g, '');
 
+// font: inlined, so the one file needs no network and no second file
+html = html.replace(/<script id="fontPreload">[\s\S]*?<\/script>\s*/, '');
+html = html.replace(/url\((fonts\/[^)]+\.woff2)\)/g, (_, href) =>
+  `url(data:font/woff2;base64,${readFileSync(join(root, href)).toString('base64')})`);
+
+// no service worker: there is no sw.js next to a single file
+html = html.replace(/<script id="swReg">[\s\S]*?<\/script>\s*/, '');
+
 if (fragment) {
   html = html
     .replace(/<!doctype html>\s*/i, '')

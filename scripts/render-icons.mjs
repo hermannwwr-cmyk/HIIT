@@ -1,9 +1,12 @@
 // Renders the pre-rendered PNG icons from icons/*.svg:  node scripts/render-icons.mjs [outDir]
 // Needs a globally installed Playwright (found through NODE_PATH); nothing in the site or the tests uses this file.
+// Chromium writes its screenshots with fast, loose compression, so each one is re-encoded losslessly
+// (scripts/png.mjs: best filter, zlib level 9; plain Node, and it checks the pixels are unchanged).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { optimise } from './png.mjs';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const icons = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'icons');
@@ -26,8 +29,10 @@ for (const [png, svg, size, opaque] of JOBS) {
   await page.setContent('<style>html,body{margin:0;background:transparent}img{display:block}</style>' +
     '<img width="' + size + '" height="' + size + '" src="' + src + '">');
   await page.waitForFunction(() => document.images[0].complete && document.images[0].naturalWidth > 0);
-  await page.screenshot({ path: path.join(out, png), omitBackground: !opaque, clip: { x: 0, y: 0, width: size, height: size } });
+  const shot = await page.screenshot({ omitBackground: !opaque, clip: { x: 0, y: 0, width: size, height: size } });
   await page.close();
-  console.log(png, size + ' px', opaque ? 'opaque' : 'transparent');
+  const slim = optimise(shot);
+  fs.writeFileSync(path.join(out, png), slim);
+  console.log(png, size + ' px', opaque ? 'opaque' : 'transparent', shot.length + ' → ' + slim.length + ' bytes');
 }
 await browser.close();
