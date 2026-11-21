@@ -978,3 +978,27 @@
   background: radial-gradient(circle at var(--fx, 50%) var(--fy, 50%), color-mix(in srgb, var(--c1) 44%, #0b2a12), color-mix(in srgb, var(--c1) 36%, #0b2a12) 38%, color-mix(in srgb, var(--c2) 40%, #0b2a12));
 }
 [data-look="studio"] .notice { background: var(--surface-solid, var(--surface)); border-color: var(--line-hi); box-shadow: var(--shadow-1), 0 20px 40px -20px rgba(0,0,0,.45); font: 500 15px/1.35 var(--ui); }
+
+/* ---------- iPhone / iPad install hint: Studio colours (layout is in style.css) ---------- */
+[data-look="studio"] .ios-chip-in { border-color: var(--line-hi); color: var(--dim); background: transparent; }
+[data-look="studio"] .ios-chip:active .ios-chip-in,
+[data-look="studio"] .ios-chip[aria-expanded="true"] .ios-chip-in { background: var(--surface-solid); color: var(--text); }
+[data-look="studio"] .ios-chip:focus-visible { outline: none; }
+[data-look="studio"] .ios-chip:focus-visible .ios-chip-in { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-look="studio"] .ios-pop { background: var(--surface-solid); border-color: var(--line-hi); box-shadow: var(--shadow-2); color: var(--dim); }
+[data-look="studio"] .ios-pop:focus-visible { outline: none; }
+[data-look="studio"] .ios-pop-t, [data-look="studio"] .ios-steps b, [data-look="studio"] .ios-g, [data-look="studio"] .ios-n { color: var(--text); }
+[data-look="studio"] .ios-n { background: var(--tile); }
+[data-look="studio"] .ios-x { color: var(--mute); }
+[data-look="studio"] .ios-x:active, [data-look="studio"] .ios-never:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+[data-look="studio"] .ios-never { color: var(--mute); border-top-color: var(--line); }
+[data-look="studio"] .ios-x:focus-visible, [data-look="studio"] .ios-never:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* ---------- end of the install hint ---------- */
+
+/* Behind the paused veil, the quit dialog or the How-to sheet the endless pulses rest (the app
+   sets `inert` on what is underneath: setInert()). Each frame of them made the blurred veil be
+   composited again. They carry on from where they stopped. */
+[data-look="studio"] [inert] .chip::before,
+[data-look="studio"] [inert] .wp-cell.is-next,
+[data-look="studio"] [inert] .wl-box.listen .wl-sub::before,
+[data-look="studio"] #setup[inert] #start:not(:disabled) { animation-play-state: paused; }

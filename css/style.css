@@ -1617,3 +1617,43 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 @keyframes noticeIn { from { opacity: 0; transform: translate(-50%, -8px); } }
 .notice span { flex: 1 1 auto; min-width: 0; }
 .notice-x { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--dim); font-size: 18px; cursor: pointer; }
+
+/* ---------- iPhone / iPad install hint (setup screen): a chip on the eyebrow's row and its popover ----------
+   Absolutely placed in .hero-copy, so it takes no room and nothing on the setup screen moves.
+   The button is the 44 px target; the pill drawn inside it is 26 px. Colours are in studio.css. */
+.ios-hint { position: absolute; right: 0; top: -15px; z-index: 6; }
+.ios-hint[hidden], .ios-pop[hidden] { display: none; }
+.ios-chip {
+  display: grid; place-items: center; min-width: 44px; height: 44px; margin: 0; padding: 0;
+  border: 0; background: transparent; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.ios-chip:focus-visible { outline: none; }
+.ios-chip-in {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 8px;
+  border-radius: 999px; border: 1px solid var(--line-hi); font: 500 12px/1 var(--ui); white-space: nowrap;
+}
+.ios-chip-in svg { font-size: 14px; }
+.ios-chip:focus-visible .ios-chip-in { outline: 2px solid var(--c2); outline-offset: 2px; }
+.ios-pop {
+  position: absolute; right: 0; top: calc(100% - 1px); box-sizing: border-box;
+  width: min(300px, calc(100vw - 32px)); padding: 14px 16px 6px; border-radius: 16px;
+  border: 1px solid var(--line-hi); text-align: left;
+  animation: menuIn .18s ease-out;
+}
+.ios-pop:focus { outline: none; }
+.ios-pop-t { margin: 0 40px 12px 0; font: 600 15px/1.2 var(--ui); }
+.ios-x {
+  position: absolute; top: 2px; right: 2px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 16px; cursor: pointer;
+}
+.ios-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font: 400 14px/1.3 var(--ui); }
+.ios-steps li { display: flex; align-items: center; gap: 10px; }
+.ios-steps b { font-weight: 500; }
+.ios-n { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font: 600 12px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.ios-g { font-size: 1.25em; vertical-align: -.24em; margin-inline: 1px; stroke-width: 1.8; }
+.ios-never {
+  display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 0; border: 0; border-top: 1px solid var(--line);
+  background: transparent; color: inherit; font: 500 13px/1 var(--ui); text-align: left; cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) { .ios-pop { animation: none; } }
+/* ---------- end of the install hint ---------- */

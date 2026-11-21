@@ -24,6 +24,7 @@ node tapdial.js                            # tap the dial to pause
 node sizes.js                              # ring, figure and countdown at 8 screen sizes; compare with sizes-baseline.txt
 node pages.js work-rest                    # mid-swipe screenshots into shots/ (git-ignored)
 node ../../scripts/render-icons.mjs        # regenerate icons/*.png after editing icons/*.svg
+node ../offline-test.js                    # the offline copy: install, update on the next open, never mid-workout, works with the server stopped
 ```
 
 `dev/swipe-tests/README.md` lists the rest of the harness and why each script exists.
@@ -68,6 +69,8 @@ A layout change on the workout screen must not make the figure, the countdown or
   2. on entering a new one, calls `enterSegment()`, which then calls `cueSegment()` for sounds and voice;
   3. calls `onSecond()` once per whole second (the last-10-second countdown and trainer calls);
   4. calls `onBeat()` for counted warm-up moves.
+- Per-frame work is kept off the style system: `update()` writes a style or a text only when its value changes. The live progress cell's `--p` goes through `setP()`, quantised to the cell's width in device pixels (`liveSteps()`), so it is written a few times a second and never while paused. Don't add an unguarded per-frame `style` / `textContent` write.
+- `frame()` calls `ring.tick(dt)`, not `draw()`: while only the timer's sweep moves, the ring is drawn every other frame. A frame is skipped only if the head has moved less than 0.75 px since the last one drawn (`HEAD_STEP`) and nothing in `Ring.quick()` is on (a swipe, a ripple, `hot`, a colour change, `needs`), so fast sweeps (warm-up lead-ins, the jog, the 10 s get-ready), the last ten seconds and swipes keep every frame. Skipped time is added to the next draw's `dt`. The mannequin is not throttled this way: it is content and stays on the beat.
 - `warmLead()` runs a warm-up step's lead-in: "Get ready", a spoken 5-4-3-2-1, then "Begin!". It can hold the clock by rewriting `run.base` while the coach is still speaking.
 - Jumps go through `seek(t)`. Cues only fire on "natural" progress (see the `natural` and `prev` checks), so seeking never replays a whole round of sounds.
 - The timer ring is the `Ring` canvas class. `Ring.layout()` writes the stage geometry as CSS custom properties (`--cy`, `--rr`, `--fy`, `--fh`, `--pm`, …) and sets `tuck` on `#workout` in portrait.
@@ -98,6 +101,7 @@ A layout change on the workout screen must not make the figure, the countdown or
   - there is no palm or contact-size filter (real fingertips report 40–60 px).
 - **Don't replace elements on the workout screen every tick.** Touch moves and ends go to the element the touch began on, and are lost if it leaves the DOM. The listeners are also bound to that element and a lone new touch clears a stale gesture, but use `setRich()` (in-place text, as `#wNext` does) rather than rewriting `innerHTML`.
 - `overscroll-behavior: none` applies only with `html.top-level` (not framed). In the Claude app's preview iframe, vertical drags must scroll the host page.
+- The preview figure (`peekFig`) is made ahead of the first swipe: `startWorkout()` asks for `carousel.warm()` when the main thread is idle; `prepare()` still makes it if a swipe comes first.
 - What moves:
   - A swipe moves whole pages: each dial with its title above and its countdown and lower area below. `place()` sets `--sx` (the leaving page), `--px` (the incoming one) and `--sp` (0..1 of the way, which fades the leaving page's text) on `.w-body`. `Ring.draw()` reads `#riCur`'s computed transform each frame while `.carousel` is on, so the bands on the canvas keep exactly to the finger and to the settle's curve.
   - The swipe's state classes (`carousel`, `swiping`, `settle`, `snap`, `away`, `armed`) are set on `.w-body` as well as on the stage (`mark()`), and `--st` / `--se` (the settle's timing) on `.w-body`. The CSS for the swipe uses no `:has()`; keep it that way.
@@ -119,12 +123,16 @@ A layout change on the workout screen must not make the figure, the countdown or
 **Looks.**
 - Only the "Studio" look exists. An inline script in `<head>` sets `html[data-look="studio"]` and `data-scheme="light|dark"` before first paint, following the system setting unless the user overrides it.
 - `css/style.css` holds the base layout. `css/studio.css` holds everything scoped to `[data-look="studio"]`, including the compact media queries (the countdown digits size via `--dg`).
+- The backdrop (`js/bg.js`) draws only while something is in transition (colours, energy, focus, a flash, a beat of 0.6 or more, a resize, a scheme change: `_dirty` / `_settled()`); otherwise once a second for the washes' drift (`DRIFT_STEP`), and not at all when paused. The weak beats the app sends each second never changed a pixel by more than 1/255, so `beatNow()` ignores them.
+- While the paused veil, the quit dialog or the How-to sheet is up, the endless CSS pulses underneath (`studioPulse`, `wpNext`, `bReady`) are paused through the `inert` attribute that `setInert()` sets (end of `studio.css`); otherwise the blurred veil is composited again every frame. A new endless animation on those screens needs adding there.
 - Preferences and stats live in localStorage under `overdrive-hiit:v1`.
+- The iPhone install hint (`#iosHint` in the setup screen's eyebrow row): iOS has no install prompt, so `bindIosHint()` in `app.js` shows an "Install" chip whose popover names Share → "Add to Home Screen". `iosHintWanted()` lists when: an iPhone/iPad (or iPadOS presenting as a Mac), not installed, not framed, not dismissed (`state.iosHint`, saved with the other preferences).
+  - It is absolutely placed in `.hero-copy` and must never move the setup screen's layout. The `<button>` is the 44 px target; the 26 px pill is drawn inside it (`.ios-chip-in`). Its CSS is one block at the end of `style.css` (layout) and of `studio.css` (colours).
 - Phase colours live in two places that must agree:
   - `app.js`: `PHASE`, `LOOKS[…].phase` and `.group` for light and dark, and `DARK_VARIANTS.charcoal` (the default dark scheme);
   - the CSS custom properties, e.g. `--warm-a`/`--warm-b` in `style.css` and `studio.css`.
 - Current phase colours: warm-up leaf green, work coral, rest blue, jacks amber, set break mint-teal. The WARM UP and BEGIN wipes use their own deep green, passed through the `flash()` kind argument, so white text stays readable.
-- The only font is Geist, loaded from Google Fonts in `index.html`.
+- The only font is Geist, self-hosted: `fonts/geist-latin.woff2` is the one variable file (weights 200–700, Latin block) that Google Fonts serves, with its licence in `fonts/OFL.txt`. The `@font-face` is a `<style>` in `index.html`'s `<head>`; the preload link is added by the `#fontPreload` script, not written as markup, because from file:// a font preload is refused with a console error (the font itself loads there). Nothing is loaded from another origin; `tests/site.test.js` checks that.
 
 **Audio and voice (`js/audio.js`).**
 - All sounds are synthesised with Web Audio; there are no audio files.
@@ -159,7 +167,15 @@ A layout change on the workout screen must not make the figure, the countdown or
 
 ## Deploy
 
-- `.github/workflows/pages.yml` runs `npm test` on every push to `main`, then publishes only `index.html`, `manifest.webmanifest`, `css/`, `js/` and `icons/`. Any new file the site needs must be added to that `cp` line.
+- `.github/workflows/pages.yml` runs `npm test` on every push to `main`, then publishes only `index.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/`, `icons/` and `fonts/`. Any new file the site needs must be added to that `cp` line, and to `SHELL` in `sw.js` if `index.html` loads it (`tests/site.test.js` compares the three).
+- **Offline (`sw.js`).** One version = one cache, `overdrive-hiit-<version>`.
+  - The workflow replaces the `var VERSION = 'dev';` line with the commit SHA (`sed` after the `cp`); the repo's file keeps `'dev'`.
+  - Install fetches the whole shell from the server (`?v=<version>`, `cache: 'no-store'`) into the new cache, all or nothing.
+  - A stamped worker serves the page and every shell file from its own cache only, so one version's files never mix with another's. There is no network-first for the page: a fresh `index.html` with cached scripts would be exactly that mix.
+  - No `clients.claim()`, and no `skipWaiting()` at install: a new worker waits, so files are never swapped under a running workout. It takes over when every window has been closed, or (a phone can keep the app's one window alive for days) when the app next opens on the setup screen: the registration script in `index.html` finds `reg.waiting`, sends `activate-now`, and reloads once into the new version. So an update shows on the second open after a deploy. `dev/offline-test.js` drives one never-closed tab through three versions; keep it passing.
+  - Un-stamped (`'dev'`: localhost, or a branch deploy without the workflow) the worker is network-first with a 3 s timeout and refreshes its copy as it goes, so edits show on reload. A Playwright context that loads the page twice is served through it.
+  - Registered by the `#swReg` script at the end of `<body>`, only over https or on localhost/127.0.0.1 (never file://). It also asks for an update when the app returns to the foreground on the setup screen. `build.mjs` removes `#swReg` and `#fontPreload` and inlines the font as a data URI.
+  - There is no "update ready" note in the UI.
 - `tests/site.test.js` checks the icons and manifest against the workflow. The root-level PNGs and `q2/` are screenshots and are not published.
-- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated if the SVGs change: `node scripts/render-icons.mjs` (needs a globally installed Playwright; not part of the site or the tests). The "30" in the ring's opening is drawn as stroked paths, not text; the favicon's is coral, larger and snapped to the 32 px grid.
-- `scripts/build.mjs` inlines the CSS, the JS and the SVG favicon, and drops the other icon and manifest links.
+- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated if the SVGs change: `node scripts/render-icons.mjs` (needs a globally installed Playwright; not part of the site or the tests). It re-encodes each screenshot losslessly through `scripts/png.mjs` (plain Node: best filter, zlib level 9, and it verifies the pixels are unchanged), under a third of Chromium's size. The "30" in the ring's opening is drawn as stroked paths, not text; the favicon's is coral, larger and snapped to the 32 px grid.
+- `scripts/build.mjs` inlines the CSS, the JS, the font and the SVG favicon, and drops the other icon and manifest links and the service worker registration.

@@ -107,6 +107,7 @@
         level: state.level, sfx: A.get('sfx'), voice: A.get('voice'), lookPref: savedLookPref, warmup: state.warmup,
         swipeTip: state.swipeTip,
         tapTip: state.tapTip,
+        iosHint: state.iosHint,
         completed: state.hist.completed, seconds: state.hist.seconds,
         streak: state.hist.streak, lastDay: state.hist.lastDay
       }));
@@ -122,6 +123,7 @@
     warmup: prefs.warmup !== false,
     swipeTip: !!prefs.swipeTip, // the "swipe to skip" tip has been shown once
     tapTip: !!prefs.tapTip, // …and "tap the dial to pause"
+    iosHint: prefs.iosHint !== false, // false once "Don't show this again" was tapped on the install hint
     hist: {
       completed: Number(prefs.completed) || 0,
       seconds: Number(prefs.seconds) || 0,
@@ -813,6 +815,40 @@
   Ring.prototype.busy = function () {
     return this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01 || !!this.slide;
   };
+  /**
+   * Something on the ring needs every frame: a swipe (the row follows the finger), a ripple,
+   * the glow of a cue or of the last ten seconds (hot), a colour change, a redraw that is owed.
+   * (beat is not among them: it only decays, nothing is drawn from it.)
+   */
+  Ring.prototype.quick = function () {
+    if (this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.slide) return true;
+    if (this.c.parentNode.classList.contains('carousel')) return true;
+    for (var i = 0; i < 3; i++) if (Math.abs(this.ta[i] - this.a[i]) >= 1 || Math.abs(this.tb[i] - this.b[i]) >= 1) return true;
+    return false;
+  };
+  /** How far the band's head has gone along the ring since the last frame drawn, in CSS px. */
+  Ring.prototype.headMove = function () {
+    var g = this.geo;
+    if (!g || this.shown == null) return Infinity;
+    return Math.abs(Math.max(0, Math.min(1, this.progress)) - this.shown) * g.SW * g.R;
+  };
+  /**
+   * One animation frame. While only the timer's sweep moves, the ring is drawn every other
+   * frame (about 30 a second): a 30 s interval's head goes about 0.5 px per frame at 60 Hz. A
+   * frame is skipped only when the head has moved less than HEAD_STEP (0.75 px) since the last
+   * one drawn, so a sweep that would step more than 1.5 px per drawn frame at 30 (a short
+   * warm-up lead-in or move, an interval under about 17 s on a phone) keeps every frame, as
+   * does anything quick(). The time of a skipped frame goes to the next one drawn, so easing
+   * and ripples keep their speed.
+   */
+  var HEAD_STEP = 0.75;
+  Ring.prototype.tick = function (dt) {
+    this.owed = (this.owed || 0) + dt;
+    if (!this.held && !this.quick() && this.headMove() < HEAD_STEP) { this.held = true; return; }
+    this.held = false;
+    dt = this.owed; this.owed = 0;
+    this.draw(dt);
+  };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
   /** Switch colours at once (no blend through the middle). */
   Ring.prototype.snapColors = function (a, b) {
@@ -976,6 +1012,7 @@
     this.hot *= Math.exp(-dt * 2.5);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    this.shown = Math.max(0, Math.min(1, this.progress));
     this.drawStudio(ctx, w, h, dt);
   };
 
@@ -1216,6 +1253,11 @@
   }
   function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* ignore */ } }
 
+  /** Run fn when the main thread has nothing to do (within 3 s at the latest). */
+  function whenIdle(fn) {
+    if (window.requestIdleCallback) window.requestIdleCallback(function () { fn(); }, { timeout: 3000 });
+    else setTimeout(fn, 1200);
+  }
   function startWorkout(ids) {
     var v = H.validate(ids);
     if (!v.ok) { $('startError').textContent = v.reason; return; }
@@ -1237,6 +1279,7 @@
     setPauseUi(false);
     lockScreen();
     requestAnimationFrame(function () { focusOn($('stage')); });
+    whenIdle(function () { if (carousel) carousel.warm(); }); // the swipe's preview figure, ahead of the first swipe
     update();
     $('pause').focus({ preventScroll: true });
   }
@@ -1389,6 +1432,20 @@
       prog.bySeg[sg.index] = c;
     });
   }
+  /** A cell's fill (--p, 0..1), written only when it changes. */
+  function setP(c, v) {
+    if (c._p === v) return;
+    c._p = v;
+    c.style.setProperty('--p', v);
+  }
+  /** How many steps the live cell's fill can show: its width in device pixels. */
+  function liveSteps() {
+    var w = prog.live.offsetWidth;
+    if (!w) return 1000; // not laid out (hidden): measured when it is
+    prog.steps = Math.max(1, Math.round(w * (window.devicePixelRatio || 1)));
+    return prog.steps;
+  }
+  window.addEventListener('resize', function () { prog.steps = 0; });
   function updateProgress(seg) {
     var tl = run.tl, idx = seg.index, sets = tl.level.sets, nEx = tl.exercises.length;
     var restMode = seg.type === 'prep' || seg.type === 'rest' || seg.type === 'setrest';
@@ -1398,13 +1455,13 @@
       c.classList.toggle('is-done', i < idx);
       c.classList.toggle('is-now', i === idx);
       c.classList.toggle('is-next', i === nextWork); // during rest: where you're headed
-      c.style.setProperty('--p', i < idx ? 1 : 0);
+      setP(c, i < idx ? 1 : 0);
     });
     if (prog.warm) {
       var wDone = seg.type !== 'warmup';
       prog.warm.classList.toggle('is-done', wDone);
       prog.warm.classList.toggle('is-now', !wDone);
-      prog.warm.style.setProperty('--p', wDone ? 1 : 0);
+      setP(prog.warm, wDone ? 1 : 0);
     }
     var curSet = seg.type === 'warmup' ? 0 : seg.set;
     Object.keys(prog.groups).forEach(function (k) {
@@ -1414,6 +1471,7 @@
       g.classList.toggle('is-cur', !done && n === curSet);
     });
     prog.live = seg.type === 'work' ? prog.bySeg[idx] : seg.type === 'warmup' ? prog.warm : null;
+    prog.steps = 0;
 
     var setTxt, leftTxt;
     function sets_(n) { return n + (n === 1 ? ' set' : ' sets'); }
@@ -2067,7 +2125,10 @@
     ring.total = t / tl.total;
     if (prog.live) {
       var pf = prog.live === prog.warm ? t / tl.warmupEnd : (t - seg.start) / seg.duration;
-      prog.live.style.setProperty('--p', Math.min(1, pf).toFixed(4));
+      // in whole device pixels of the cell: a write costs a style recalc and a paint, and most
+      // frames would not move the fill's edge (none do while paused)
+      var pn = prog.steps || liveSteps();
+      setP(prog.live, Math.round(Math.max(0, Math.min(1, pf)) * pn) / pn);
     }
 
     var sec = Math.floor(t);
@@ -2326,6 +2387,17 @@
     /** Rubber band: the further you pull, the less it gives (never more than c). */
     function rubber(x, c) { return c * (1 - 1 / (x * 0.55 / c + 1)); }
 
+    /**
+     * Make the preview figure ahead of the first swipe (from startWorkout, when the main thread
+     * is idle), so the drag's first frame does not pay for it. It is not playing and its canvas
+     * is not displayed, so nothing is drawn until prepare() sets it up for a swipe.
+     */
+    function warm() {
+      if (peekFig || !run || run.finished) return;
+      var c = PHASE.work.colors;
+      peekFig = makeFig($('peekFig'), { exercise: run.tl.exercises[0], primary: c[0], secondary: c[1], quality: 'high', fps: 30, energy: PHASE.work.energy });
+      peekFig.setPlaying(false);
+    }
     /** Where a move in direction dir (+1 next, -1 back) lands, and the preview of it. */
     function prepare(dir) {
       var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, edge = false;
@@ -2556,7 +2628,7 @@
       place(D * 0.2, 1, 0.3);
       nudgeT = setTimeout(function () { nudgeT = 0; springBack(1); }, 700);
     }
-    carousel = { commit: commit, nudge: nudge, clearKeys: function () { keyQueue.length = 0; } };
+    carousel = { commit: commit, nudge: nudge, warm: warm, clearKeys: function () { keyQueue.length = 0; } };
 
     // ---- the gesture: one recogniser, fed by touch events, or pointer events for mouse and pen
     /** When the input happened (the event's own time: on a busy frame, events arrive late and
@@ -2907,7 +2979,9 @@
     lastFrame = now;
     if (run && !run.finished) {
       update();
-      if (currentScreen === 'workout' && (run.playing || ring.busy())) ring.draw(dt);
+      // (the ring decides how often it needs drawing: Ring.tick)
+      if (currentScreen === 'workout' && (run.playing || ring.busy())) ring.tick(dt);
+      else ring.owed = 0;
     }
     fx.draw(dt);
   }
@@ -3218,10 +3292,61 @@
     syncLookMenu();
   }
 
+  // ================================================================ INSTALL HINT (iPhone / iPad)
+  /**
+   * Should the setup screen offer the "Install" chip? iOS never shows an install prompt: the only way is
+   * Share -> "Add to Home Screen", so the chip explains it. All of these must hold:
+   *  - an iPhone, iPad or iPod: the user agent says so, or it is iPadOS presenting as a Mac
+   *    (platform "MacIntel" with a touch screen; real Macs report 0 touch points). Never Android or desktop;
+   *  - not installed already: navigator.standalone (iOS's own flag) is not true and the page is not
+   *    running in display-mode: standalone;
+   *  - the user has not tapped "Don't show this again" (state.iosHint, saved with the other preferences);
+   *  - the page is not framed (html.top-level): in a frame, Share would add the host page instead.
+   */
+  function iosHintWanted() {
+    var n = window.navigator, ua = n.userAgent || '';
+    var ios = /iPhone|iPad|iPod/.test(ua) || (n.platform === 'MacIntel' && n.maxTouchPoints > 1);
+    var installed = n.standalone === true ||
+      !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    return ios && !installed && state.iosHint && document.documentElement.classList.contains('top-level');
+  }
+  /** The chip is a disclosure button; its popover holds the two steps. */
+  function bindIosHint() {
+    var box = $('iosHint'), chip = $('iosChip'), pop = $('iosPop');
+    if (!box || !iosHintWanted()) return;
+    box.hidden = false;
+    function openPop(open, refocus) {
+      pop.hidden = !open;
+      chip.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) pop.focus(); else if (refocus) chip.focus();
+    }
+    chip.addEventListener('click', function () { openPop(pop.hidden, true); });
+    $('iosClose').addEventListener('click', function () { openPop(false, true); });
+    $('iosNever').addEventListener('click', function () {
+      openPop(false, false);
+      box.hidden = true;
+      state.iosHint = false;
+      savePrefs();
+      var h = $('heroTitle'); // the chip is gone: leave focus on the heading beside it
+      h.setAttribute('tabindex', '-1'); h.focus();
+    });
+    // a tap anywhere else closes it, as does tabbing out of it; Esc closes it and returns to the chip
+    document.addEventListener('pointerdown', function (e) {
+      if (!pop.hidden && !box.contains(e.target)) openPop(false, false);
+    });
+    box.addEventListener('focusout', function (e) {
+      if (!pop.hidden && e.relatedTarget && !box.contains(e.relatedTarget)) openPop(false, false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); openPop(false, true); }
+    });
+  }
+
   // ================================================================ BOOT
   buildGrid();
   bind();
   bindLookMenu();
+  bindIosHint();
   syncToggles();
   showScreen('setup');
   showHero(state.ids[0]);

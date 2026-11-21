@@ -13,9 +13,21 @@
 <meta name="apple-mobile-web-app-title" content="Overdrive">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700&display=swap">
+<script id="fontPreload">
+  // Fetch the font alongside the CSS. Added by script because from file:// a preload is refused with a console error (the font itself loads there).
+  if (location.protocol !== 'file:') document.head.insertAdjacentHTML('beforeend', '<link rel="preload" href="fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>');
+</script>
+<style>
+  /* Geist, self-hosted: one variable file (weights 200 to 700) for the Latin block, as Google Fonts serves it. Licence: fonts/OFL.txt */
+  @font-face {
+    font-family: 'Geist';
+    font-style: normal;
+    font-weight: 200 700;
+    font-display: swap;
+    src: url(fonts/geist-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+</style>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/studio.css">
 <script>
@@ -110,6 +122,20 @@
   <section class="hero" aria-labelledby="heroTitle">
     <div class="hero-copy">
       <p class="eyebrow">Full-body interval training</p>
+      <!-- iPhone / iPad only (iosHintWanted() in app.js): iOS never offers to install, so a chip on the eyebrow's row
+           opens the two steps. Absolute: it takes no room in the layout. -->
+      <div class="ios-hint" id="iosHint" hidden>
+        <button id="iosChip" class="ios-chip" type="button" aria-expanded="false" aria-controls="iosPop"><span class="ios-chip-in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V3M8 6.8L12 3l4 3.8"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></svg>Install</span></button>
+        <div class="ios-pop" id="iosPop" role="group" aria-labelledby="iosPopT" tabindex="-1" hidden>
+          <p class="ios-pop-t" id="iosPopT">Install Overdrive</p>
+          <button id="iosClose" class="ios-x" type="button" aria-label="Close"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
+          <ol class="ios-steps">
+            <li><span class="ios-n" aria-hidden="true">1</span><span>Tap <svg class="ios-g" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V3M8 6.8L12 3l4 3.8"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></svg> <b>Share</b> in the browser</span></li>
+            <li><span class="ios-n" aria-hidden="true">2</span><span>Choose <svg class="ios-g" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/></svg> <b>Add to Home Screen</b></span></li>
+          </ol>
+          <button id="iosNever" class="ios-never" type="button">Don&rsquo;t show this again</button>
+        </div>
+      </div>
       <h1 id="heroTitle" class="mega" aria-label="Overdrive"><span class="mega-line" data-text="OVER" aria-hidden="true"><span class="mega-a">OVER</span></span><span class="mega-line" data-text="DRIVE" aria-hidden="true"><span class="mega-b">DRIVE</span></span></h1>
       <p class="lede">Upper body, abs and legs in every session. <span class="lede-strong"><b id="heroTime">23:40</b> today.</span></p>
       <dl class="me" id="me" aria-label="Your progress on this device">
@@ -440,5 +466,34 @@
 <script src="js/audio.js"></script>
 <script src="js/figure.js"></script>
 <script src="js/app.js"></script>
+<script id="swReg">
+  // Offline: sw.js keeps a copy of the app. A new version installs in the background and is used from the
+  // next launch (see sw.js). Not from file://, and scripts/build.mjs leaves this block out of the one-file build.
+  (function () {
+    var host = location.hostname;
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol !== 'https:' && host !== 'localhost' && host !== '127.0.0.1') return;
+    function quiet() { /* private mode, a sandboxed frame, offline: the app works without it */ }
+    window.addEventListener('load', function () {
+      try {
+        navigator.serviceWorker.register('sw.js').then(function (reg) {
+          // a home-screen app can stay open for days: look for a new version when it comes back, on the setup screen only
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible' && document.body.getAttribute('data-screen') === 'setup') reg.update().catch(quiet);
+          });
+          // A phone keeps one window of the app alive for days, so "once every window is closed" may never
+          // come. If a new version is already waiting as the app opens, hand over now, before any workout:
+          // the waiting worker takes over (see sw.js, 'activate-now') and the page reloads once into it.
+          if (reg.waiting && navigator.serviceWorker.controller && document.body.getAttribute('data-screen') === 'setup') {
+            navigator.serviceWorker.addEventListener('controllerchange', function () {
+              if (document.body.getAttribute('data-screen') === 'setup') location.reload(); // (a workout began meanwhile: next launch)
+            });
+            reg.waiting.postMessage('activate-now'); // (after the reload nothing is waiting: no loop)
+          }
+        }).catch(quiet);
+      } catch (e) { quiet(); }
+    });
+  })();
+</script>
 </body>
 </html>

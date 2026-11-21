@@ -29,7 +29,10 @@ jobs:
       - name: Assemble the site (only what the app needs)
         run: |
           mkdir -p _site
-          cp -r index.html manifest.webmanifest css js icons _site/
+          cp -r index.html manifest.webmanifest sw.js css js icons fonts _site/
+          # a new cache name per deploy: the service worker's version is this commit
+          sed -i "s|^var VERSION = 'dev';.*|var VERSION = '${GITHUB_SHA}';|" _site/sw.js
+          grep -q "^var VERSION = '${GITHUB_SHA}';$" _site/sw.js
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

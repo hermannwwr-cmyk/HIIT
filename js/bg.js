@@ -60,6 +60,9 @@
     '}'
   ].join('\n');
 
+  var DRIFT_STEP = 1;   // s between frames while nothing but the slow drift moves
+  var BEAT_SEEN = 0.6;  // a beat pulse weaker than this is not drawn (see beatNow)
+
   function hexToRgb(hex) {
     var h = hex.replace('#', '');
     if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
@@ -74,7 +77,8 @@
     this.ta = this.a.slice(); this.tb = this.b.slice();
     this.energy = 0.25; this.targetEnergy = 0.25;
     this.beat = 0; this.flash = 0;
-    this.travel = 0; this.time = 0;
+    this.time = 0;
+    this._dirty = true; // a frame is owed: the first one, a resize, a scheme change
     this.focus = [0, 0.05]; this.targetFocus = [0, 0.05];
     this.scale = Math.min(window.devicePixelRatio || 1, 1.5) * 0.6;
     this.frameTimes = [];
@@ -89,7 +93,7 @@
     this._last = performance.now();
     requestAnimationFrame(this._loop);
     var self = this;
-    window.addEventListener('resize', function () { self._sizeDirty = true; self._drewStill = false; });
+    window.addEventListener('resize', function () { self._sizeDirty = true; self._dirty = true; });
   }
 
   Backdrop.prototype._init = function () {
@@ -108,7 +112,7 @@
       gl.linkProgram(prog);
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
       var u = {};
-      ['uRes', 'uTime', 'uTravel', 'uA', 'uB', 'uEnergy', 'uBeat', 'uFocus', 'uFlash', 'uLight', 'uD0', 'uD1', 'uDPool', 'uDWash', 'uDVig', 'uDTint'].forEach(function (n) { u[n] = gl.getUniformLocation(prog, n); });
+      ['uRes', 'uTime', 'uA', 'uB', 'uEnergy', 'uBeat', 'uFocus', 'uFlash', 'uLight', 'uD0', 'uD1', 'uDPool', 'uDWash', 'uDVig', 'uDTint'].forEach(function (n) { u[n] = gl.getUniformLocation(prog, n); });
       return { prog: prog, u: u };
     }
     var buf = gl.createBuffer();
@@ -123,6 +127,7 @@
     this.canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); self.ok = false; }, false);
     this.canvas.addEventListener('webglcontextrestored', function () { try { self._init(); } catch (err) { /* stay on CSS fallback */ } }, false);
     this.ok = true;
+    this._dirty = true;
     this._resize();
   };
 
@@ -150,14 +155,14 @@
   };
   Backdrop.prototype.setDark = function (name) {
     this.dark = DARK_STAGES[name] || DARK_STAGES.graphite;
-    this._drewStill = false;
+    this._dirty = true;
   };
 
   /** Follow the light / dark scheme. */
   Backdrop.prototype.setStyle = function (style, scheme) {
     this.light = scheme === 'light' ? 1 : 0;
     this._useStyle();
-    this._drewStill = false;
+    this._dirty = true;
   };
 
   /** Smoothly retarget colours / energy. */
@@ -166,7 +171,17 @@
     if (energy != null) this.targetEnergy = energy;
   };
   Backdrop.prototype.setFocus = function (x, y) { this.targetFocus = [x, y]; };
-  Backdrop.prototype.beatNow = function (amt) { this.beat = Math.max(this.beat, amt == null ? 1 : amt); };
+  /**
+   * A beat's pulse lifts the washes by 0.008 * amt. Read back in both schemes and every phase,
+   * the ones the app sends each second or each count (0.2 to 0.5) never move a pixel by more
+   * than 1/255 where they are used, so they cost no frames; only the strong ones (the last
+   * 3-2-1 and a phase change, amt 1: up to 3/255 over about a tenth of the screen) are drawn.
+   */
+  Backdrop.prototype.beatNow = function (amt) {
+    amt = amt == null ? 1 : amt;
+    if (amt < BEAT_SEEN) return;
+    this.beat = Math.max(this.beat, amt);
+  };
   Backdrop.prototype.flashNow = function () { this.flash = 1; this.beat = 1; };
   Backdrop.prototype.setRunning = function (on) { this.running = on; };
   /** Cap the frame rate (e.g. 30 on menus); 0 = every frame. */
@@ -180,6 +195,12 @@
       Math.abs(this.targetFocus[0] - this.focus[0]) + Math.abs(this.targetFocus[1] - this.focus[1]) < 0.002;
   };
 
+  /**
+   * Frames are drawn only while something is in transition: a colour, energy or focus change, a
+   * flash or a strong beat, a resize, a scheme change (_dirty). Otherwise the picture only
+   * drifts (the washes wander with uTime, under 1/255 per channel in a second), so it is
+   * redrawn about once a second (DRIFT_STEP), and not at all when paused or with reduced motion.
+   */
   Backdrop.prototype._loop = function (now) {
     requestAnimationFrame(this._loop);
     var dt = Math.min(0.1, (now - this._last) / 1000);
@@ -187,12 +208,18 @@
     if (!this.ok || document.hidden) return;
     // Battery: paused or reduced motion shows a still frame once things settle.
     var still = !this.running || this.reduced;
-    if (still && this._drewStill && this._settled()) return;
+    if (this.reduced) { this.beat = 0; this.flash = 0; }
+    if (!still) this._drift = (this._drift || 0) + dt; // time the washes have moved on, not yet shown
+    if (!this._dirty && this._settled()) {
+      this._acc = 0;
+      if (still || this._drift < DRIFT_STEP) return;
+      this._draw();
+      return;
+    }
     this._acc = (this._acc || 0) + dt;
     if (!still && this.minStep && this._acc < this.minStep) return;
     dt = Math.min(0.1, this._acc);
     this._acc = 0;
-    if (this.reduced) { this.beat = 0; this.flash = 0; }
 
     var k = 1 - Math.exp(-dt * 6);
     for (var i = 0; i < 3; i++) {
@@ -204,18 +231,19 @@
     this.focus[1] += (this.targetFocus[1] - this.focus[1]) * k;
     this.beat *= Math.exp(-dt * 3.2);
     this.flash *= Math.exp(-dt * 2.6);
-    var motion = still ? 0 : 1;
-    var speed = (0.06 + 0.9 * this.energy * this.energy + 0.5 * this.beat) * motion;
-    this.travel += dt * speed;
-    this.time += dt * motion;
-    this._drewStill = still;
-
     if (!still && !this.minStep) this._adapt(dt);
+    this._draw();
+  };
+
+  /** One frame of the state as it stands (the washes catch up on the time since the last one). */
+  Backdrop.prototype._draw = function () {
+    this.time += this._drift || 0;
+    this._drift = 0;
+    this._dirty = false;
     if (this._sizeDirty) { this._sizeDirty = false; this._resize(); }
     var gl = this.gl, u = this.u;
     gl.uniform2f(u.uRes, this.canvas.width, this.canvas.height);
     gl.uniform1f(u.uTime, this.time);
-    gl.uniform1f(u.uTravel, this.travel);
     gl.uniform3fv(u.uA, this.a);
     gl.uniform3fv(u.uB, this.b);
     gl.uniform1f(u.uEnergy, this.energy);
