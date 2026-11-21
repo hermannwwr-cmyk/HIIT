@@ -484,6 +484,8 @@
     }
     // The update says what it is doing, in the app's own notice (top of the screen): "Updating…" while the
     // new version downloads, and "Updated" after the reload, so the reload is not a surprise.
+    // (Both come from the version that is running when the update starts: it shows the first and leaves the
+    // marker for the second. So the update that first brought these notes was itself silent.)
     var KEY = 'overdrive-hiit:updated', mine = false, noteT = 0;
     function note(text, ms) {
       var box = document.getElementById('notice'), t = document.getElementById('noticeText');
