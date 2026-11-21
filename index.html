@@ -467,29 +467,50 @@
 <script src="js/figure.js"></script>
 <script src="js/app.js"></script>
 <script id="swReg">
-  // Offline: sw.js keeps a copy of the app. A new version installs in the background and is used from the
-  // next launch (see sw.js). Not from file://, and scripts/build.mjs leaves this block out of the one-file build.
+  // Offline: sw.js keeps a copy of the app, and the app opens from that copy. So a new version can only be
+  // found after the old one has opened: it downloads in the background, and the page switches to it as soon
+  // as it is ready, with one reload, provided the app is still on the setup screen. Never during a workout:
+  // then it waits for the next time the app opens or comes back on the setup screen (see sw.js).
+  // Not from file://, and scripts/build.mjs leaves this block out of the one-file build.
   (function () {
     var host = location.hostname;
     if (!('serviceWorker' in navigator)) return;
     if (location.protocol !== 'https:' && host !== 'localhost' && host !== '127.0.0.1') return;
     function quiet() { /* private mode, a sandboxed frame, offline: the app works without it */ }
+    // only where a reload costs nothing: the setup screen, with no sheet over it
+    function idle() {
+      var sheet = document.getElementById('coachSheet');
+      return document.body.getAttribute('data-screen') === 'setup' && (!sheet || sheet.hidden);
+    }
     window.addEventListener('load', function () {
       try {
+        var asked = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (asked && idle()) location.reload(); // (a workout began meanwhile: the new files are used from the next open)
+        });
         navigator.serviceWorker.register('sw.js').then(function (reg) {
-          // a home-screen app can stay open for days: look for a new version when it comes back, on the setup screen only
-          document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible' && document.body.getAttribute('data-screen') === 'setup') reg.update().catch(quiet);
-          });
-          // A phone keeps one window of the app alive for days, so "once every window is closed" may never
-          // come. If a new version is already waiting as the app opens, hand over now, before any workout:
-          // the waiting worker takes over (see sw.js, 'activate-now') and the page reloads once into it.
-          if (reg.waiting && navigator.serviceWorker.controller && document.body.getAttribute('data-screen') === 'setup') {
-            navigator.serviceWorker.addEventListener('controllerchange', function () {
-              if (document.body.getAttribute('data-screen') === 'setup') location.reload(); // (a workout began meanwhile: next launch)
-            });
+          // A new version is downloaded and waiting: let it take over (sw.js, 'activate-now'), then reload once
+          // into it. Not on the very first install (nothing controls the page yet: there is no older version).
+          function handOver() {
+            if (!reg.waiting || !navigator.serviceWorker.controller || !idle()) return;
+            asked = true;
             reg.waiting.postMessage('activate-now'); // (after the reload nothing is waiting: no loop)
           }
+          // …as soon as its download finishes,
+          reg.addEventListener('updatefound', function () {
+            var w = reg.installing;
+            if (w) w.addEventListener('statechange', function () { if (w.state === 'installed') handOver(); });
+          });
+          // …when the app comes back to the foreground (a phone keeps its one window alive for days, so this,
+          // not a launch, is how it is usually "opened"): switch to one that is waiting, else look for one,
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'visible' || !idle()) return;
+            if (reg.waiting) handOver(); else reg.update().catch(quiet);
+          });
+          // …when the app returns to the setup screen (one arrived during the workout just ended),
+          if (window.MutationObserver) new MutationObserver(handOver).observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
+          // …and as the app opens, if one was left waiting.
+          handOver();
         }).catch(quiet);
       } catch (e) { quiet(); }
     });

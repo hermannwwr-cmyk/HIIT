@@ -144,6 +144,6 @@ The site is static, so Pages serves it as-is (over HTTPS, which also enables the
 
 ### Offline and updates
 
-Nothing is loaded from other sites: the font (Geist) is in `fonts/`. After the first visit the app opens and runs without a connection, in the browser or from the home screen. A new version downloads in the background while the old one keeps running, and is used the next time the app is opened or reloaded. A workout in progress is never switched to a new version.
+Nothing is loaded from other sites: the font (Geist) is in `fonts/`. After the first visit the app opens and runs without a connection, in the browser or from the home screen. A new version downloads in the background while the old one is on screen; if you are still on the setup screen when it is ready, the app reloads once into it, and it does the same when you come back to the app or finish a workout. A workout in progress is never switched to a new version.
 
 Settings (look, intensity, sound, voice), completed workouts, total minutes and the day streak are kept in `localStorage` on the device.
