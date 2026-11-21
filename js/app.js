@@ -912,10 +912,10 @@
     // on the stage, so the swipe preview's figure gets exactly the same size and place
     st.style.setProperty('--fig-size', px(Math.min(S * 0.72, regionH * 1.22, 2 * (r.R - r.th))));
     body.style.setProperty('--tuck', wide ? '0px' : px(rise + 6)); // (constant: the stage's height never depends on it)
-    // Pause and How to: discs under the ring's sides, 10 px clear of its band and 12 px inside
+    // Pause and How to: discs under the ring's sides, 14 px clear of its band and 12 px inside
     // the canvas. On the opening's line when there is room; else as far out, and as high, as fits.
     // Side by side, the pause sits in the opening itself.
-    var clear = r.R + r.th / 2 + 10 + pm / 2, xMax = w / 2 - 12 - pm / 2;
+    var clear = r.R + r.th / 2 + 14 + pm / 2, xMax = w / 2 - 12 - pm / 2;
     var xOn = Math.sqrt(Math.max(0, clear * clear - f.capY * f.capY));
     var dx = Math.min(xOn, xMax), dy = xOn <= xMax ? f.capY : Math.sqrt(Math.max(0, clear * clear - xMax * xMax));
     st.style.setProperty('--pm', pm + 'px');
@@ -923,6 +923,9 @@
     st.style.setProperty('--dy', px(dy));
     st.style.setProperty('--pax', wide ? '0px' : px(dx));
     st.style.setProperty('--pay', wide ? px(f.capY) : px(dy));
+    // how far the discs hang below the stage: rest's up-next card starts under them (see sizeUpNext)
+    this.hang = wide ? 0 : Math.max(0, Math.ceil(cy + dy + pm / 2 + 6 - h));
+    body.style.setProperty('--hang', this.hang + 'px');
     // back / next's hit areas stop short of those discs (and of their 9 px of extra target)
     st.style.setProperty('--sh', px(wide ? 84 : Math.max(36, Math.min(84, dy - pm / 2 - 12))));
     this.needs = 2;
@@ -938,7 +941,7 @@
   var UN_STATES = ['roomy', '', 'q1', 'compact q1', 'compact q1 q2', 'compact q1 q2 q3', 'compact q1 q2 q3 q4'];
   function sizeUpNext() {
     var lower = document.querySelector('.w-lower'), card = $('upNext');
-    var H = lower.offsetHeight, W = Math.min(lower.offsetWidth, 520);
+    var H = lower.offsetHeight - (typeof ring !== 'undefined' && ring && ring.hang || 0), W = Math.min(lower.offsetWidth, 520);
     if (!H || !W) return;
     if (window.innerWidth > window.innerHeight * 1.25) {
       // side-by-side layout: the card may also use the empty space under the readout
@@ -1330,7 +1333,8 @@
       // Resume lands exactly under the finger that pressed pause
       var pr = $('pause').getBoundingClientRect();
       if (pr.width) {
-        // Resume: in the middle, level with the pause (side by side, the pause is in the middle already)
+        // Resume: level with the pause; in the middle of the screen in portrait (the pause is in a
+        // corner there), exactly where the pause was side by side (End workout sits beside it)
         veil.style.setProperty('--rx', Math.round($('workout').classList.contains('tuck') ? window.innerWidth / 2 : pr.left + pr.width / 2) + 'px');
         veil.style.setProperty('--ry', Math.round(pr.top + pr.height / 2) + 'px');
       }
@@ -1339,6 +1343,7 @@
       veilGuard = setTimeout(function () { veil.classList.remove('guard'); }, 500);
     }
     $('pausedVeil').hidden = !paused || !$('quitDialog').hidden || !$('coachSheet').hidden;
+    $('transport').classList.toggle('held', !!paused); // the discs step out from under the veil
     setInert(!$('pausedVeil').hidden || !$('quitDialog').hidden || !$('coachSheet').hidden);
     ring.needs = 2;
     if (paused && run) {

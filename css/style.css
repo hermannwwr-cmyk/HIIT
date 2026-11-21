@@ -907,7 +907,7 @@ body[data-screen="brief"] { overflow: hidden; }
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: "stage head" "stage readout" "stage .";
-    column-gap: 3vw;
+    column-gap: max(3vw, 28px); /* the next dial's slice sits at the stage's edge: air before the text */
     justify-items: stretch;
     align-content: center;
   }
@@ -1467,6 +1467,7 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 /* pause and How to step back while the row moves */
 .ctl-main, .ctl-info { transition: transform .15s, background .2s, box-shadow .2s, opacity .15s; }
 .w-stage.carousel .ctl-main, .w-stage.carousel .ctl-info { opacity: .35; }
+.transport.held .ctl-main, .transport.held .ctl-info { opacity: 0; } /* paused: nothing ghosts through the veil */
 /* the incoming dial's name (a figure's page: a rest dial names itself): in the corner it comes
    from, then riding on top of its dial. Solid once letting go will go there. */
 .ri-edge-n {
@@ -1499,7 +1500,7 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 .workout.tuck .digits { cursor: pointer; }
 .workout.tuck .wl-box:not(.runway) .wl-title { font-size: min(27px, 7.4vw); }
 .workout.tuck .dial { top: calc(var(--cy, 50%) + var(--rr, 120px) * .04); }
-.workout.tuck .upnext { top: calc(50% + 8px); } /* clear of the pause and How to discs */
+.workout.tuck .upnext { top: calc(50% + var(--hang, 0px) / 2); } /* under the pause and How to discs */
 /* How to has its own disc beside the countdown */
 .coach .link-btn, #unHow { display: none; }
 .wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
