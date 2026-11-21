@@ -1253,6 +1253,11 @@
   }
   function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* ignore */ } }
 
+  /** Run fn when the main thread has nothing to do (within 3 s at the latest). */
+  function whenIdle(fn) {
+    if (window.requestIdleCallback) window.requestIdleCallback(function () { fn(); }, { timeout: 3000 });
+    else setTimeout(fn, 1200);
+  }
   function startWorkout(ids) {
     var v = H.validate(ids);
     if (!v.ok) { $('startError').textContent = v.reason; return; }
@@ -1274,6 +1279,7 @@
     setPauseUi(false);
     lockScreen();
     requestAnimationFrame(function () { focusOn($('stage')); });
+    whenIdle(function () { if (carousel) carousel.warm(); }); // the swipe's preview figure, ahead of the first swipe
     update();
     $('pause').focus({ preventScroll: true });
   }
@@ -2381,6 +2387,17 @@
     /** Rubber band: the further you pull, the less it gives (never more than c). */
     function rubber(x, c) { return c * (1 - 1 / (x * 0.55 / c + 1)); }
 
+    /**
+     * Make the preview figure ahead of the first swipe (from startWorkout, when the main thread
+     * is idle), so the drag's first frame does not pay for it. It is not playing and its canvas
+     * is not displayed, so nothing is drawn until prepare() sets it up for a swipe.
+     */
+    function warm() {
+      if (peekFig || !run || run.finished) return;
+      var c = PHASE.work.colors;
+      peekFig = makeFig($('peekFig'), { exercise: run.tl.exercises[0], primary: c[0], secondary: c[1], quality: 'high', fps: 30, energy: PHASE.work.energy });
+      peekFig.setPlaying(false);
+    }
     /** Where a move in direction dir (+1 next, -1 back) lands, and the preview of it. */
     function prepare(dir) {
       var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, edge = false;
@@ -2611,7 +2628,7 @@
       place(D * 0.2, 1, 0.3);
       nudgeT = setTimeout(function () { nudgeT = 0; springBack(1); }, 700);
     }
-    carousel = { commit: commit, nudge: nudge, clearKeys: function () { keyQueue.length = 0; } };
+    carousel = { commit: commit, nudge: nudge, warm: warm, clearKeys: function () { keyQueue.length = 0; } };
 
     // ---- the gesture: one recogniser, fed by touch events, or pointer events for mouse and pen
     /** When the input happened (the event's own time: on a busy frame, events arrive late and
