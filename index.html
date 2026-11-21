@@ -62,7 +62,6 @@
   <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></symbol>
   <symbol id="i-voice" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
   <symbol id="i-voice-off" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M4 3l16 18"/></symbol>
-  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M19 5.5L9.5 12l9.5 6.5z"/></symbol>
   <symbol id="i-next" viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M5 5.5l9.5 6.5L5 18.5z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 4.8v14.4L19.5 12z"/></symbol>
@@ -283,6 +282,11 @@
       <div class="w-tag"><span class="chip" id="phaseChip">Get ready</span><span class="w-ex" id="wEx">Exercise 1 of 5</span></div>
       <h2 class="w-name" id="wName">Push Ups</h2>
     </div>
+    <!-- while swiping: the incoming page's title, which comes in with its dial (built once; its text is set in place) -->
+    <div class="w-head w-head-in" id="headIn" aria-hidden="true" hidden>
+      <div class="w-tag"><span class="chip" id="inChip"></span><span class="w-ex" id="inEx"></span></div>
+      <p class="w-name" id="inName"></p>
+    </div>
     <div class="w-stage" id="stage">
       <canvas id="ring" class="ring" aria-hidden="true"></canvas>
       <!-- inside the ring, clipped to it: what's on now, and (while swiping) where you're going -->
@@ -305,8 +309,6 @@
           </div>
         </div>
       </div>
-      <!-- the incoming dial's name while swiping: in the corner it comes from, then riding on top of it -->
-      <p class="ri-edge-n" id="riEdgeN" aria-hidden="true"></p>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">
         <!-- back / next are the slices of the neighbouring dials at the edges (drawn on the ring's canvas): these are their hit areas -->
         <button id="prev" class="ctl ctl-side" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"></button>
@@ -322,6 +324,7 @@
           <div class="digits" id="digits" role="timer" aria-label="10 seconds left"></div>
           <!-- while swiping to an exercise: its countdown, in its dial's opening -->
           <div class="digits pk-mouth" id="pkMouth" aria-hidden="true" hidden></div>
+          <div class="wl-box pk-lead" id="pkLead" aria-hidden="true" hidden><p class="wl-title">Get ready</p><p class="wl-sub" id="pkLeadSub"></p></div>
           <div class="beats" id="beats" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
           <!-- warm-up lead-in: "Get ready · Starts in N", then the 5-4-3-2-1 countdown -->
           <div class="wl-box" id="wlBox" aria-hidden="true"><p class="wl-title" id="wlTitle">Get ready</p><p class="wl-sub" id="wlSub"></p></div>
@@ -331,7 +334,6 @@
       <div class="coach" id="coach">
         <div class="coach-top">
           <span class="coach-k"><svg aria-hidden="true"><use href="#i-whistle"/></svg><span id="coachK">Trainer</span></span>
-          <button id="howTo" class="link-btn" type="button"><svg aria-hidden="true"><use href="#i-info"/></svg><span id="howToLabel">How to</span></button>
         </div>
         <p class="coach-v" id="coachV"></p>
       </div>

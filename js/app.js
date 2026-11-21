@@ -791,24 +791,6 @@
     var n = parseInt(hex.slice(1), 16);
     return [n >> 16 & 255, n >> 8 & 255, n & 255];
   }
-  /** Relative luminance (WCAG) of a hex colour. */
-  function lumOf(hex) {
-    var c = hexRgb(hex).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  }
-  /** The icon colour on a solid hex fill: white while it keeps 3:1 (WCAG, graphics), else near-black. */
-  function inkOn(hex) { return 1.05 / (lumOf(hex) + 0.05) >= 3 ? '#fff' : '#111318'; }
-  /** A phase colour as a solid control on the light page: darkened a step at a time until it
-   *  stands out from the page by 3.3:1 (#0a84ff, for one, is only 3.0:1). Dark pages: as is. */
-  function solidOnPage(hex) {
-    if (LOOKS[look].scheme !== 'light') return hex;
-    var c = hexRgb(hex);
-    for (var i = 0; i < 8 && 0.89 / (lumOf(hex) + 0.05) < 3.3; i++) {
-      c = c.map(function (v) { return Math.round(v * 0.9); });
-      hex = '#' + ((1 << 24) | (c[0] << 16) | (c[1] << 8) | c[2]).toString(16).slice(1);
-    }
-    return hex;
-  }
   function rgba(c, a) { return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')'; }
 
   function Ring(canvas) {
@@ -1644,18 +1626,6 @@
     ring.nb = { next: nx ? hexRgb(PHASE[nx.type].colors[0]) : null, end: !nx, prev: b.seg && !atStart ? hexRgb(PHASE[b.seg.type].colors[0]) : null };
     ring.needs = 2;
   }
-  /** Contrast ratio (WCAG) of two hex colours. */
-  function contrastOf(a, b) { var x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
-  /** a mixed toward b by w (0..1), as hex. */
-  function mixHex(a, b, w) {
-    var p = hexRgb(a), q = hexRgb(b);
-    return '#' + ((1 << 24) | p.map(function (v, i) { return Math.round(v + (q[i] - v) * w); }).reduce(function (n, v) { return (n << 8) | v; }, 0)).toString(16).slice(-6);
-  }
-  /** Step a toward b until it keeps 4.6:1 against bg (WCAG AA for text, with a margin). */
-  function aaOn(a, b, bg) {
-    for (var i = 0; i < 24 && contrastOf(a, bg) < 4.6; i++) a = mixHex(a, b, 0.12);
-    return a;
-  }
   /** ⏮ says what it will do: "Restart Push Ups", "Back to rest", "Redo Push Ups". */
   function syncPrevLabel() {
     if (!run || run.finished) return;
@@ -1701,6 +1671,8 @@
     // the page tint keeps its colour while it fades out after a rest
     if (restMode) $('workout').style.setProperty('--tint', c[0]);
     $('upNext').hidden = !restMode;
+    // (a swipe's landing switches the rise-in of the readout and the tip off: back on from here)
+    if (restMode) { $('readout').style.animation = ''; $('coach').style.animation = ''; }
     $('dial').setAttribute('aria-hidden', 'true');
     syncFigs();
     ring.breathe = seg.type === 'setrest' || seg.type === 'rest' ? 0 : null;
@@ -1755,8 +1727,6 @@
       : seg.type === 'setrest' ? 'Set ' + seg.set + ' complete. Break, ' + mins + '.'
       : seg.type === 'warmup' ? 'Warm-up: ' + name + (seg.counts ? ', ' + seg.counts + ' counts of ' + seg.beats + '.' : ', ' + mins + '.')
       : 'Get ready. First up: ' + ex.name + '.';
-    $('howToLabel').textContent = 'How to';
-    $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
     $('info').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
     syncSkipLabel(seg);
@@ -1811,8 +1781,8 @@
   }
 
   /** Exercise names are never cut off: shrink to fit one line, wrap only below a floor. */
-  function fitName() {
-    var el = $('wName');
+  function fitName(el) {
+    el = el && el.nodeType ? el : $('wName');
     el.style.fontSize = '';
     el.classList.remove('wrap');
     var w = el.clientWidth;
@@ -2282,14 +2252,14 @@
 
   // ---------------------------------------------------------------- swipe carousel: left = next, right = back
   /**
-   * The workout screen is a pager. Swiping anywhere on it (not the top bar or the
-   * progress strip) slides what's on now out of the ring with the finger, 1:1, and
-   * slides the destination in from the other side, clipped to the ring: the next
-   * exercise's live demo, "Rest 0:30", "Restart Push Ups"... Letting go commits
-   * when the swipe was a flick (fast enough) or went far enough; otherwise it
-   * springs back. Either way the content settles at the finger's speed.
-   * Past the ends of the plan (next on the last interval) it only gives a little,
-   * with resistance. Undo (8 s) is the safety net, not friction: the same
+   * The workout screen is a pager: a row of pages, one per interval, each a dial with its
+   * title above and its countdown and lower area below. Swiping anywhere on it (not the top
+   * bar or the progress strip) moves the row with the finger, 1:1: what's on now leaves, and
+   * the destination's page comes in one pitch behind it (the next exercise's live demo with
+   * its name and countdown, a rest's dial...). Letting go commits when the swipe was a flick
+   * (fast enough) or went far enough; otherwise the row springs back. Either way it settles
+   * at the finger's speed. Past the ends of the plan (next on the last interval) it only
+   * gives a little, with resistance. Undo (8 s) is the safety net, not friction: the same
    * gesture works in exercise, rest, get ready and the set break.
    *
    * Recognition: a touch is ours once it has moved 10 px mostly sideways; a
@@ -2299,18 +2269,20 @@
    * events. A second finger cancels; the outer 16 px (system back gesture) are
    * left alone. A tap on a button stays a tap; a swipe that starts on one swipes.
    *
-   * Hooks for the controls (on #transport): --ck (0..1 toward a commit by
-   * distance), --dc / --dfg (the destination's colour and the ink on it),
-   * charge-next / charge-prev (dragging that way) and armed (letting go now
-   * would commit: far enough, or moving fast enough).
+   * Hooks: on #transport, --ck (0..1 toward a commit by distance), charge-next /
+   * charge-prev (dragging that way) and armed (letting go now would commit: far enough,
+   * or moving fast enough). On the page (.w-body): --sx / --px (where the leaving and the
+   * incoming page are), --pd (one pitch, signed), --sp (0..1 of the way), and the state
+   * classes carousel / swiping / settle / snap / away / armed (the first four also on the
+   * stage), so the CSS needs no :has().
    */
   var carousel = null;
   function initSwipe() {
-    var area = $('workout'), tp = $('transport'), stage = $('stage');
+    var area = $('workout'), tp = $('transport'), stage = $('stage'), readout = $('readout'), coach = $('coach');
     var peek = $('riPeek'), pkDial = $('pkDial'), pkK = $('pkK'), pkDigits = $('pkDigits'), pkSub = $('pkSub');
-    var chip = $('phaseChip'), wName = $('wName'), wEx = $('wEx'), head = document.querySelector('.w-head');
-    var edgeN = $('riEdgeN'), page = document.querySelector('.w-body'), pkMouth = $('pkMouth');
-    var peekFig = null, saved = null, dest = null;
+    var page = document.querySelector('.w-body'), pkMouth = $('pkMouth'), pkLead = $('pkLead'), pkLeadSub = $('pkLeadSub');
+    var headIn = $('headIn'), inChip = $('inChip'), inEx = $('inEx'), inName = $('inName'), inExHtml = '';
+    var peekFig = null, dest = null;
     var g = null, eatClick = false, eatT = 0, lockUntil = 0, settleT = 0, nudgeT = 0, pending = null, multi = false;
     var TOUCH = 'ontouchstart' in window;
     var SLOP = 10, EDGE = 16, FLICK_V = 0.25, FLICK_MIN = 24; // px, px, px/ms, px
@@ -2329,46 +2301,58 @@
     }
     /** The pager's page width: the dials' pitch (see Ring.layout). */
     function travel() { return ring.pitch || 300; }
-    /** The incoming dial's name tag, in its colours. */
-    function edgeLook(dir, sg) {
-      edgeN.classList.toggle('to-next', dir > 0); edgeN.classList.toggle('to-prev', dir < 0);
-      var col = (sg ? PHASE[sg.type] : PHASE.done).colors[0], light = LOOKS[look].scheme === 'light';
-      var surf = (getComputedStyle(document.documentElement).getPropertyValue('--surface-solid') || '').trim();
-      if (!/^#[0-9a-f]{6}$/i.test(surf)) surf = light ? '#ffffff' : '#2e2e31';
-      var pill = mixHex(surf, solidOnPage(col), light ? 0.16 : 0.24);
-      stage.style.setProperty('--ec', solidOnPage(col));
-      stage.style.setProperty('--eo', inkOn(solidOnPage(col)));
-      stage.style.setProperty('--eb', pill);
-      stage.style.setProperty('--en', aaOn(solidOnPage(col), light ? '#000000' : '#ffffff', pill));
-      var name = sg ? headFor(sg).name : '';
-      if (edgeN.textContent !== name) edgeN.textContent = name;
+    /** The swipe's state (carousel, swiping, settle, snap, away) goes on the stage and on the
+     *  page (.w-body), so the title and the lower area follow it in plain CSS (no :has()). */
+    function mark(name, on) { stage.classList.toggle(name, on); page.classList.toggle(name, on); }
+    /**
+     * The incoming page's title (#headIn: chip, line and name, exactly as the head will show
+     * them on landing, in the destination's colours). It comes in with its dial; the head itself
+     * keeps naming what's on now and leaves with it. Built once: only its text changes.
+     */
+    function headInLook(sg) {
+      headIn.hidden = !sg;
+      if (!sg) return;
+      var h = headFor(sg), inDial = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
+      if (inChip.textContent !== h.chip) inChip.textContent = h.chip;
+      if (inExHtml !== h.ex) { inExHtml = h.ex; inEx.innerHTML = h.ex; }
+      if (inName.textContent !== h.name) inName.textContent = h.name;
+      headIn.style.setProperty('--c1', dest.colors[0]); headIn.style.setProperty('--c2', dest.colors[1]);
+      // (the name's colour: a rest's and a break's is tinted, Get ready's is not)
+      headIn.classList.toggle('pv-rest', inDial && sg.type !== 'prep');
+      headIn.classList.toggle('pv-active', !inDial || sg.type === 'prep');
+      headIn.classList.toggle('in-dial', inDial);
+      fitName(inName);
     }
     /** Rubber band: the further you pull, the less it gives (never more than c). */
     function rubber(x, c) { return c * (1 - 1 / (x * 0.55 / c + 1)); }
 
     /** Where a move in direction dir (+1 next, -1 back) lands, and the preview of it. */
     function prepare(dir) {
-      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, prefix = '', edge = false;
+      var tl = run.tl, t = elapsedNow(), idx = H.segmentAt(tl, t), sg, edge = false;
       if (dir > 0) { sg = tl.segments[idx + 1]; edge = !sg; } // past the last interval: nothing to swipe to
       else {
-        var bt = backTarget(); sg = bt.seg; prefix = bt.kind === 'restart' ? '↺ Restart' : bt.kind === 'redo' ? '↺ Redo' : '';
+        var bt = backTarget(); sg = bt.seg;
         edge = bt.kind === 'restart' && sg.index === 0 && t - sg.start < 1; // the very start of the plan
       }
-      dest = { dir: dir, seg: edge ? null : sg, edge: edge, prefix: prefix, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
-      edgeLook(dir, dest.seg);
+      dest = { dir: dir, seg: edge ? null : sg, edge: edge, colors: sg ? PHASE[sg.type].colors : PHASE.done.colors };
+      headInLook(dest.seg);
       page.style.setProperty('--pd', (dir * travel()).toFixed(1) + 'px');
-      pkMouth.hidden = true;
+      pkMouth.hidden = true; pkLead.hidden = true;
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
       peek.classList.toggle('to-next', dir > 0); peek.classList.toggle('to-prev', dir < 0);
-      edgeN.hidden = true;
       if (!dest.seg) { peek.classList.add('is-end'); return; }
       var restLike = sg.type === 'prep' || sg.type === 'rest' || sg.type === 'setrest';
-      // a dial names itself ("Push Ups in"); a figure's page gets the name tag
-      edgeN.hidden = restLike;
-      // an exercise brings its countdown with it, in its dial's opening (from a rest the card
-      // below covers that spot, and a warm-up move opens with its lead-in instead)
-      if ((sg.type === 'work' || sg.type === 'jacks') && run.mode !== 'rest' && $('workout').classList.contains('tuck')) {
-        var mt = sg.duration >= 60 ? H.formatTime(sg.duration) : String(sg.duration);
+      // an exercise brings its countdown with it, in its dial's opening (from a rest too: the
+      // Up next card leaves with its own page); a warm-up move its lead-in, as it will open
+      var tuck = $('workout').classList.contains('tuck');
+      if (sg.type === 'warmup' && sg.lead >= 1 && tuck) {
+        var ls = 'Starts in ' + Math.floor(sg.lead);
+        if (pkLeadSub.textContent !== ls) pkLeadSub.textContent = ls;
+        pkLead.hidden = false;
+      }
+      var timed = sg.type === 'warmup' && !sg.lead && !sg.counts; // (a jog's change of pace: straight to its seconds)
+      if ((sg.type === 'work' || sg.type === 'jacks' || timed) && tuck) {
+        var mt = sg.duration >= 60 && !timed ? H.formatTime(sg.duration) : String(Math.ceil(sg.duration));
         pkMouth.textContent = '';
         for (var mi = 0; mi < mt.length; mi++) { var ms = document.createElement('span'); ms.className = mt[mi] === ':' ? 'd colon' : 'd'; ms.textContent = mt[mi]; pkMouth.appendChild(ms); }
         pkMouth.classList.toggle('long', mt.length > 2);
@@ -2400,53 +2384,35 @@
         peekFig.setPlaying(true);
       }
     }
-    /** Armed: letting go now would go there (⏭ / ⏮'s tab turns solid, with a tick). */
+    /** Armed: letting go now would go there (the incoming title's chip turns solid). */
     function arm(on) {
       if (on === tp.classList.contains('armed')) return;
-      tp.classList.toggle('armed', on);
+      tp.classList.toggle('armed', on); page.classList.toggle('armed', on);
       if (on) { if (!g || !g.buzzed) { if (g) g.buzzed = true; buzz(12); } }
     }
-    /** Committed: the title and the ring switch to the destination as it slides in, so landing
-     *  changes nothing more. (Not while dragging: until you let go, the head and the timer both
-     *  stay on what's on now, and the preview in the ring is the only thing that names where to.) */
+    /** Committed: the ring switches to the destination's colours outright, under the slide (a
+     *  blend of, say, blue and coral is mud). The titles need nothing: the head leaves with its
+     *  dial, the incoming one arrives with its own, and landing swaps them unseen. */
     function showDest() {
-      if (!dest || !dest.seg) return;
-      saved = saved || { chip: chip.textContent, name: wName.textContent, ex: wEx.innerHTML };
-      var h = headFor(dest.seg);
-      chip.textContent = dest.prefix || h.chip; wName.textContent = h.name; fitName();
-      wEx.innerHTML = h.ex;
-      // the head wears the destination's colours too
-      var dr = dest.seg.type === 'prep' || dest.seg.type === 'rest' || dest.seg.type === 'setrest';
-      head.style.setProperty('--c1', dest.colors[0]); head.style.setProperty('--c2', dest.colors[1]);
-      head.classList.toggle('pv-active', !dr); head.classList.toggle('pv-rest', dr);
-      head.classList.remove('swap'); void head.offsetWidth; head.classList.add('swap');
-      // the ring switches outright, under the slide (a blend of, say, blue and coral is mud)
-      ring.snapColors(dest.colors[0], dest.colors[1]);
-    }
-    function clearHeadColours() {
-      head.style.removeProperty('--c1'); head.style.removeProperty('--c2');
-      head.classList.remove('pv-active', 'pv-rest');
+      if (dest && dest.seg) ring.snapColors(dest.colors[0], dest.colors[1]);
     }
     function restoreHead() {
-      clearHeadColours();
-      if (run) ring.fastUntil = performance.now() + 300;
-      if (saved) {
-        chip.textContent = saved.chip; wName.textContent = saved.name; wEx.innerHTML = saved.ex; fitName();
-        saved = null;
-      }
-      if (run) { var cur = run.tl.segments[run.segIdx]; if (cur) { var c = PHASE[cur.type].colors; ring.setColors(c[0], c[1]); } }
+      if (!run) return;
+      ring.fastUntil = performance.now() + 300;
+      var cur = run.tl.segments[run.segIdx];
+      if (cur) { var c = PHASE[cur.type].colors; ring.setColors(c[0], c[1]); }
     }
     /**
      * Place the row: what's on now sits off px toward -dir (it follows the finger), the
-     * destination's dial comes in from the dir side, one pitch behind it. The countdown in the
-     * opening goes with its dial (--sx is on the page, for the readout too). ck: 0..1 toward a commit.
+     * destination's dial comes in from the dir side, one pitch behind it. --sx and --px are on
+     * the page, so each dial's title, countdown and lower area go with it; --sp (0..1 of the way
+     * there) fades the leaving page's text out. ck: 0..1 toward a commit.
      */
     function place(off, dir, ck) {
       var D = travel(), real = dest && dest.seg;
       page.style.setProperty('--sx', (-dir * off).toFixed(1) + 'px');
       page.style.setProperty('--px', (dir * Math.max(0, D - off)).toFixed(1) + 'px');
-      // the name tag shows from the first 20 px, at full strength while the finger is down
-      stage.style.setProperty('--pn', real ? Math.min(1, off / 20).toFixed(3) : '0');
+      page.style.setProperty('--sp', real ? Math.max(0, Math.min(1, off / D)).toFixed(3) : '0'); // (past the end: nothing fades)
       tp.style.setProperty('--ck', ck.toFixed(3));
       tp.classList.toggle('charge-next', dir > 0 && ck > 0);
       tp.classList.toggle('charge-prev', dir < 0 && ck > 0);
@@ -2462,31 +2428,31 @@
      */
     function settleWith(dist, v) {
       var sp = Math.abs(v || 0);
-      if (reduced) { stage.style.setProperty('--st', '0ms'); return 0; }
+      if (reduced) { page.style.setProperty('--st', '0ms'); return 0; }
       var T = sp > 0.02 ? 2 * dist / sp : 260;
       T = Math.round(Math.max(140, Math.min(360, T)));
       var m0 = dist > 1 ? Math.max(1.5, Math.min(3, sp * T / dist)) : 2;
-      stage.style.setProperty('--st', T + 'ms');
-      stage.style.setProperty('--se', 'cubic-bezier(.3333,' + (m0 / 3).toFixed(4) + ',.6667,1)');
+      page.style.setProperty('--st', T + 'ms');
+      page.style.setProperty('--se', 'cubic-bezier(.3333,' + (m0 / 3).toFixed(4) + ',.6667,1)');
       return T;
     }
-    function open() { clearTimeout(settleT); stage.classList.add('carousel', 'swiping'); stage.classList.remove('settle'); ring.needs = 2; }
+    function open() { clearTimeout(settleT); mark('carousel', true); mark('swiping', true); mark('settle', false); mark('away', false); ring.needs = 2; }
     function close(ms) {
-      stage.classList.remove('swiping');
+      mark('swiping', false);
       clearTimeout(settleT);
       settleT = setTimeout(function () {
         if (g && g.on) return; // a new swipe took over: keep the carousel
-        stage.classList.remove('settle', 'carousel');
+        mark('settle', false); mark('carousel', false);
         tp.classList.remove('charge-next', 'charge-prev');
         if (peekFig) peekFig.setPlaying(false);
-        pkMouth.hidden = true;
+        pkMouth.hidden = true; pkLead.hidden = true; headIn.hidden = true;
       }, (ms || 0) + 40);
     }
     function springBack(dir, off, v) {
       arm(false);
       restoreHead();
       var ms = settleWith(off || travel() * 0.3, v);
-      stage.classList.add('settle');
+      mark('settle', true);
       place(0, dir, 0);
       close(ms);
     }
@@ -2502,13 +2468,15 @@
       }
       if (pending) land(true); // (a swipe during the slide before: that one lands first)
       lockUntil = performance.now() + (key ? (reduced ? 120 : 260) : reduced ? 300 : 600);
-      if (!dest || dest.dir !== dir || !stage.classList.contains('carousel')) { open(); prepare(dir); }
+      if (!dest || dest.dir !== dir || !stage.classList.contains('carousel')) {
+        // a tap or a key: the row starts from rest (laid out there first, so the slide has a start)
+        open(); prepare(dir); place(0, dir, 0); void stage.offsetWidth;
+      }
       var D = travel(), off = swipe ? swipe.off : 0;
       var ms = settleWith(Math.max(1, D - off), swipe ? swipe.v : 0);
-      stage.classList.remove('swiping');
-      stage.classList.add('settle');
+      mark('swiping', false);
+      mark('settle', true);
       place(D, dir, 1);
-      stage.style.setProperty('--pn', 0); // the title has its name now (showDest): the tag fades as it lands
       arm(true);
       showDest();
       pending = { t: setTimeout(land, ms), act: act };
@@ -2518,15 +2486,19 @@
       var p = pending; pending = null;
       if (!p) return;
       clearTimeout(p.t);
-      saved = null;
-      clearHeadColours();
-      stage.classList.remove('settle');
-      stage.classList.add('snap');
-      document.body.classList.add('instant-phase'); // colours jump to the new phase: the head already shows them
+      mark('settle', false);
+      mark('snap', true);
+      // the lower area's own text (next line, trainer tip, Up next card) left with the old page:
+      // the new one's fades in once the snap is over (see unsnap())
+      mark('away', true);
+      document.body.classList.add('instant-phase'); // colours jump to the new phase: the incoming title already shows them
       var hand = dest && dest.seg && peek.classList.contains('is-fig') && peekFig ? peekFig.getTime() : null;
       run.quiet = true;
       p.act();
-      run.quiet = false;
+      if (run) run.quiet = false;
+      // the countdown came in with its dial and the tip fades in: no rise-in on top of that
+      // (enterSegment() gives it back at the next rest)
+      if (run && run.mode === 'active') { readout.style.animation = 'none'; coach.style.animation = 'none'; }
       if (hand != null && workFig && dest.seg) {
         // the real figure continues exactly where the preview was: same move, pose and colours
         var nowSeg = run.tl.segments[run.segIdx];
@@ -2541,23 +2513,23 @@
           workFig.setEnergy(PHASE[dest.seg.type].energy, true);
         }
       }
-      page.style.setProperty('--sx', '0px');
-      pkMouth.hidden = true;
-      tp.classList.remove('armed');
+      page.style.setProperty('--sx', '0px'); page.style.setProperty('--sp', '0');
+      pkMouth.hidden = true; pkLead.hidden = true; headIn.hidden = true;
+      tp.classList.remove('armed'); page.classList.remove('armed');
       tp.style.setProperty('--ck', 0);
-      stage.classList.remove('carousel', 'swiping');
+      mark('carousel', false); mark('swiping', false);
       tp.classList.remove('charge-next', 'charge-prev');
       if (peekFig) peekFig.setPlaying(false);
       dest = null;
       if (early === true) {
         // landed early for the next swipe: settle the snap now, so that one animates
         void stage.offsetWidth;
-        stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+        unsnap();
         return;
       }
       requestAnimationFrame(function () { requestAnimationFrame(function () {
         if (pending) return; // the next slide has begun (and landed this one)
-        stage.classList.remove('snap'); document.body.classList.remove('instant-phase');
+        unsnap();
         var q = keyQueue.shift();
         if (q) {
           lockUntil = 0;
@@ -2567,12 +2539,18 @@
         }
       }); });
     }
+    function unsnap() {
+      mark('snap', false); document.body.classList.remove('instant-phase');
+      void page.offsetWidth; // (the new text is laid out unseen, then fades in)
+      mark('away', false);
+    }
     /** One-time nudge that shows the next interval is just a swipe away. */
     function nudge() {
       if (!run || g || pending || reduced) return;
       open(); prepare(1);
       if (dest.edge) { dest = null; close(0); return; }
-      stage.classList.remove('swiping'); stage.classList.add('settle');
+      place(0, 1, 0); void stage.offsetWidth;
+      mark('swiping', false); mark('settle', true);
       var D = travel();
       settleWith(D * 0.2, 0);
       place(D * 0.2, 1, 0.3);
@@ -3057,7 +3035,6 @@
       var seg = run.tl.segments[run.segIdx];
       if (seg) openGuide(guideTarget(seg), 'workout', e.currentTarget);
     }
-    $('howTo').addEventListener('click', howTo);
     $('info').addEventListener('click', howTo);
     $('unHow').addEventListener('click', howTo);
     document.querySelector('.un-figwrap').addEventListener('click', function () { $('unHow').click(); });

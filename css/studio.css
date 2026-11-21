@@ -938,8 +938,9 @@
   [data-look="studio"] .w-stage { margin-top: 8px; }
 }
 /* last 10 seconds: phase-coloured digits that pulse every second; 3-2-1 bigger, with an edge glow */
-[data-look="studio"] .workout.final10 .digits .d { color: color-mix(in srgb, var(--c1) 88%, var(--text)); }
-[data-look="studio"][data-scheme="light"] .workout.final10 .digits .d { color: color-mix(in srgb, var(--c1) 82%, #000); }
+/* (not the incoming page's countdown, .pk-mouth: that interval has all its time left) */
+[data-look="studio"] .workout.final10 .digits:not(.pk-mouth) .d { color: color-mix(in srgb, var(--c1) 88%, var(--text)); }
+[data-look="studio"][data-scheme="light"] .workout.final10 .digits:not(.pk-mouth) .d { color: color-mix(in srgb, var(--c1) 82%, #000); }
 [data-look="studio"] .workout.final10 .digits.tick { animation: fTick .45s cubic-bezier(.2,.9,.3,1); }
 [data-look="studio"] .workout.final3 .digits.final { animation: fFinal .6s cubic-bezier(.2,.9,.3,1); }
 @media (prefers-reduced-motion: reduce) {
@@ -948,7 +949,7 @@
 [data-look="studio"] .wl-title { font: 600 clamp(28px, 10.5vw, 44px)/1.05 var(--ui); letter-spacing: -.035em; color: color-mix(in srgb, var(--c1) 85%, var(--text)); }
 [data-look="studio"] .wl-sub { font: 500 17px/1.2 var(--ui); color: var(--mute); }
 /* last 10 s: the digits gain weight with the colour, so they read from across the room */
-[data-look="studio"] .workout.final10 .digits { font-weight: 500; }
+[data-look="studio"] .workout.final10 .digits:not(.pk-mouth) { font-weight: 500; }
 /* light scheme: a stronger edge pulse, so 3-2-1 is caught from across the room */
 [data-look="studio"][data-scheme="light"] .workout::after {
   box-shadow: inset 0 0 0 12px color-mix(in srgb, var(--c1) 90%, transparent), inset 0 0 90px color-mix(in srgb, var(--c1) 50%, transparent);
