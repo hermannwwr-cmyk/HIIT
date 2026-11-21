@@ -928,6 +928,10 @@
   [data-look="studio"] .workout.tuck .w-lower {
     min-height: clamp(232px, calc(100dvh - 102.5vw - 147px - max(0px, env(safe-area-inset-top, 0px) - 10px) - max(0px, env(safe-area-inset-bottom, 0px) - 12px)), 324px);
   }
+  /* during an exercise that height holds the trainer's tip: in the middle of it, in larger type */
+  [data-look="studio"] .workout.tuck .w-lower { grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
+  [data-look="studio"] .workout.tuck .coach { align-self: center; padding: 14px 16px 16px; }
+  [data-look="studio"] .workout.tuck .coach-v { font-size: 17px; }
 }
 /* swipe carousel + first-run tip (Studio) */
 [data-look="studio"] .wp-tip { font-weight: 500; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }
