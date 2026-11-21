@@ -815,6 +815,40 @@
   Ring.prototype.busy = function () {
     return this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.beat > 0.01 || !!this.slide;
   };
+  /**
+   * Something on the ring needs every frame: a swipe (the row follows the finger), a ripple,
+   * the glow of a cue or of the last ten seconds (hot), a colour change, a redraw that is owed.
+   * (beat is not among them: it only decays, nothing is drawn from it.)
+   */
+  Ring.prototype.quick = function () {
+    if (this.needs > 0 || this.shocks.length > 0 || this.hot > 0.01 || this.slide) return true;
+    if (this.c.parentNode.classList.contains('carousel')) return true;
+    for (var i = 0; i < 3; i++) if (Math.abs(this.ta[i] - this.a[i]) >= 1 || Math.abs(this.tb[i] - this.b[i]) >= 1) return true;
+    return false;
+  };
+  /** How far the band's head has gone along the ring since the last frame drawn, in CSS px. */
+  Ring.prototype.headMove = function () {
+    var g = this.geo;
+    if (!g || this.shown == null) return Infinity;
+    return Math.abs(Math.max(0, Math.min(1, this.progress)) - this.shown) * g.SW * g.R;
+  };
+  /**
+   * One animation frame. While only the timer's sweep moves, the ring is drawn every other
+   * frame (about 30 a second): a 30 s interval's head goes about 0.5 px per frame at 60 Hz. A
+   * frame is skipped only when the head has moved less than HEAD_STEP (0.75 px) since the last
+   * one drawn, so a sweep that would step more than 1.5 px per drawn frame at 30 (a short
+   * warm-up lead-in or move, an interval under about 17 s on a phone) keeps every frame, as
+   * does anything quick(). The time of a skipped frame goes to the next one drawn, so easing
+   * and ripples keep their speed.
+   */
+  var HEAD_STEP = 0.75;
+  Ring.prototype.tick = function (dt) {
+    this.owed = (this.owed || 0) + dt;
+    if (!this.held && !this.quick() && this.headMove() < HEAD_STEP) { this.held = true; return; }
+    this.held = false;
+    dt = this.owed; this.owed = 0;
+    this.draw(dt);
+  };
   Ring.prototype.setColors = function (a, b) { this.ta = hexRgb(a); this.tb = hexRgb(b); };
   /** Switch colours at once (no blend through the middle). */
   Ring.prototype.snapColors = function (a, b) {
@@ -978,6 +1012,7 @@
     this.hot *= Math.exp(-dt * 2.5);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    this.shown = Math.max(0, Math.min(1, this.progress));
     this.drawStudio(ctx, w, h, dt);
   };
 
@@ -2909,7 +2944,9 @@
     lastFrame = now;
     if (run && !run.finished) {
       update();
-      if (currentScreen === 'workout' && (run.playing || ring.busy())) ring.draw(dt);
+      // (the ring decides how often it needs drawing: Ring.tick)
+      if (currentScreen === 'workout' && (run.playing || ring.busy())) ring.tick(dt);
+      else ring.owed = 0;
     }
     fx.draw(dt);
   }
