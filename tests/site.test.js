@@ -106,9 +106,10 @@ test('a new worker never takes over a running session', () => {
   assert.match(swCode, /event\.data === 'activate-now'\) self\.skipWaiting\(\)/);
   const reg = html.match(/<script id="swReg">([\s\S]*?)<\/script>/)[1];
   // the page asks only where a reload costs nothing (the setup screen), and never on a first install
-  assert.match(reg, /if \(!reg\.waiting \|\| !navigator\.serviceWorker\.controller \|\| !idle\(\)\) return;/);
+  assert.match(reg, /if \(!reg\.waiting \|\| !navigator\.serviceWorker\.controller\) return;\s+if \(!idle\(\)\) \{ unnote\(\); return; \}/);
   assert.match(reg, /return document\.body\.getAttribute\('data-screen'\) === 'setup'/);
-  assert.match(reg, /if \(asked && idle\(\)\) location\.reload\(\)/);
+  assert.match(reg, /if \(!asked \|\| !idle\(\)\) \{ unnote\(\); return; \}/);
+  assert.match(reg, /location\.reload\(\)/);
   assert.equal((reg.match(/postMessage\('activate-now'\)/g) || []).length, 1);
   assert.match(swCode, /caches\.delete/); // older versions are removed on activate
 });

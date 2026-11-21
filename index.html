@@ -482,24 +482,47 @@
       var sheet = document.getElementById('coachSheet');
       return document.body.getAttribute('data-screen') === 'setup' && (!sheet || sheet.hidden);
     }
+    // The update says what it is doing, in the app's own notice (top of the screen): "Updating…" while the
+    // new version downloads, and "Updated" after the reload, so the reload is not a surprise.
+    var KEY = 'overdrive-hiit:updated', mine = false, noteT = 0;
+    function note(text, ms) {
+      var box = document.getElementById('notice'), t = document.getElementById('noticeText');
+      if (!box || !t) return;
+      t.textContent = text; box.hidden = false; mine = true;
+      clearTimeout(noteT); noteT = setTimeout(unnote, ms);
+    }
+    function unnote() {
+      var box = document.getElementById('notice');
+      if (mine && box) box.hidden = true;
+      mine = false; clearTimeout(noteT);
+    }
     window.addEventListener('load', function () {
       try {
         var asked = false;
+        try { if (sessionStorage.getItem(KEY)) { sessionStorage.removeItem(KEY); note('Updated to the latest version.', 4000); } } catch (e) { /* ignore */ }
         navigator.serviceWorker.addEventListener('controllerchange', function () {
-          if (asked && idle()) location.reload(); // (a workout began meanwhile: the new files are used from the next open)
+          if (!asked || !idle()) { unnote(); return; } // (a workout began meanwhile: the new files are used from the next open)
+          try { sessionStorage.setItem(KEY, '1'); } catch (e) { /* ignore */ }
+          location.reload();
         });
         navigator.serviceWorker.register('sw.js').then(function (reg) {
           // A new version is downloaded and waiting: let it take over (sw.js, 'activate-now'), then reload once
           // into it. Not on the very first install (nothing controls the page yet: there is no older version).
           function handOver() {
-            if (!reg.waiting || !navigator.serviceWorker.controller || !idle()) return;
+            if (!reg.waiting || !navigator.serviceWorker.controller) return;
+            if (!idle()) { unnote(); return; } // not now: no note over a workout
             asked = true;
+            note('Updating to the latest version\u2026', 8000);
             reg.waiting.postMessage('activate-now'); // (after the reload nothing is waiting: no loop)
           }
           // …as soon as its download finishes,
           reg.addEventListener('updatefound', function () {
             var w = reg.installing;
-            if (w) w.addEventListener('statechange', function () { if (w.state === 'installed') handOver(); });
+            if (!w) return;
+            if (navigator.serviceWorker.controller && idle()) note('Updating to the latest version\u2026', 30000); // (not the first install)
+            w.addEventListener('statechange', function () {
+              if (w.state === 'installed') handOver(); else if (w.state === 'redundant') unnote(); // (the download failed: next time)
+            });
           });
           // …when the app comes back to the foreground (a phone keeps its one window alive for days, so this,
           // not a launch, is how it is usually "opened"): switch to one that is waiting, else look for one,
