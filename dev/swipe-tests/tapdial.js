@@ -1,7 +1,8 @@
-// Tap the dial: a tap inside the ring pauses; a tap on How to, on the side arcs or below the ring does not; a swipe never does.
+// Tap the dial: a tap inside the ring or on the countdown in its opening pauses; a tap on How to, on the side arcs
+// or on the "Next:" line does not; a swipe never does. node tapdial.js [W H]
 const { open } = require('./lib');
 (async () => {
-  const h = await open({ url: (process.env.URL || 'http://127.0.0.1:8731/index.html') });
+  const h = await open({ url: (process.env.URL || 'http://127.0.0.1:8731/index.html'), width: +process.argv[2] || 390, height: +process.argv[3] || 844 });
   await h.toWorkout();
   const { f, page, touch, stroke, st, go, box } = h; let fails = 0;
   const ok = (name, cond, got) => { console.log((cond ? 'PASS ' : 'FAIL ') + name + '  [' + JSON.stringify(got) + ']'); if (!cond) fails++; };
@@ -24,8 +25,14 @@ const { open } = require('./lib');
   await f.evaluate(() => { const b = document.querySelector('#coachSheet [data-close], #coachSheet .sheet-close, #sheetClose'); if (b) b.click(); else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
   await page.waitForTimeout(600); await resume(); await go('work', 6);
   const [dx, dy] = await box('#digits');
-  await touch([[dx, dy + 30, 0], [dx + 1, dy + 30, 40]], { after: 500 });
-  ok('tap on the countdown below the ring does not pause', (await st()).playing, (await st()).playing);
+  await touch([[dx, dy, 0], [dx + 1, dy, 40]], { after: 500 });
+  ok('tap on the countdown in the opening pauses', !(await st()).playing, (await st()).playing); await resume(); await go('work', 6);
+  const [nx, ny] = await box('#wNext');
+  await touch([[nx, ny, 0], [nx + 1, ny, 40]], { after: 500 });
+  ok('tap on the "Next:" line does not pause', (await st()).playing, (await st()).playing);
+  const [px, py, pw, ph] = await box('#pause');
+  await touch([[px, py - ph / 2 + 4, 0], [px + 1, py - ph / 2 + 4, 40]], { after: 600 });
+  ok('tap on the top edge of the pause disc pauses (does not skip)', !(await st()).playing && (await st()).type === 'work', [(await st()).playing, (await st()).type]); await resume(); await go('work', 6);
   const [sx, sy] = await box('#skip');
   await touch([[sx, sy, 0], [sx + 1, sy, 40]], { after: 900 });
   s = await st(); ok('tap on the next arc goes on, not paused', s.playing && s.type === 'rest', [s.playing, s.type]);

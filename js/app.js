@@ -865,7 +865,7 @@
     var w = this.w, st = this.c.parentNode, wk = $('workout'), body = st.parentNode;
     var wide = !!(window.matchMedia && window.matchMedia('(min-aspect-ratio: 5/4) and (min-width: 560px)').matches);
     wk.classList.toggle('tuck', !wide);
-    var extra = wide ? 0 : (this.extra || 0), h0 = this.h + extra; // the stage before the air we add above the title
+    var h0 = this.h;
     var PEEK = w < 600 ? 24 : 44, GAP = 6;
     // the countdown's size (its box is .92 of its font size) and how far it rises above the caps' lower edge
     var dg = ($('digits').offsetHeight || 100) / 0.92, dw = dg * 1.2, rise = Math.round(dg * 0.36 + 8);
@@ -888,11 +888,12 @@
       f = fit(S);
     }
     var r = f.r, pm = f.pm;
-    // a stage taller than the ring: most of the spare height goes above the title (portrait), and
-    // the ring sits on the stage's bottom edge, where the countdown meets it
-    var slack = Math.max(0, h0 - (r.top + f.below)), ex = wide ? 0 : Math.round(slack * 0.7);
-    if (ex !== (this.extra || 0) || wide) { this.extra = ex; body.style.paddingTop = ex ? (6 + ex) + 'px' : ''; }
-    var h = h0 - ex;
+    // a stage taller than the ring (portrait): the ring sits on the stage's bottom edge, where the
+    // countdown meets it, and the title comes most of the way down with it (--head-dy moves it
+    // without changing the layout, so the stage's height never depends on this)
+    var slack = Math.max(0, h0 - (r.top + f.below));
+    body.style.setProperty('--head-dy', wide ? '0px' : Math.round(slack * 0.7) + 'px');
+    var h = h0;
     var cy = wide ? Math.max(0, (h - (r.top + f.below)) / 2) + r.top : h - f.below;
     var innerTop = cy - r.R + r.th * 0.5 + 4;
     var innerBot = wide ? cy + f.capY - pm / 2 - 9 : cy + f.capY + r.ext - rise + dg * 0.08 - 6;
@@ -922,6 +923,8 @@
     st.style.setProperty('--dy', px(dy));
     st.style.setProperty('--pax', wide ? '0px' : px(dx));
     st.style.setProperty('--pay', wide ? px(f.capY) : px(dy));
+    // back / next's hit areas stop short of those discs (and of their 9 px of extra target)
+    st.style.setProperty('--sh', px(wide ? 84 : Math.max(36, Math.min(84, dy - pm / 2 - 12))));
     this.needs = 2;
     sizeUpNext();
   };
@@ -1743,6 +1746,7 @@
       : 'Get ready. First up: ' + ex.name + '.';
     $('howToLabel').textContent = 'How to';
     $('howTo').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
+    $('info').setAttribute('aria-label', 'How to do ' + exName(guideTarget(seg)));
 
     syncSkipLabel(seg);
     syncPrevLabel();
@@ -2343,9 +2347,6 @@
       edgeLook(dir, dest.seg);
       page.style.setProperty('--pd', (dir * travel()).toFixed(1) + 'px');
       pkMouth.hidden = true;
-      var dc = solidOnPage(dest.colors[0]);
-      tp.style.setProperty('--dc', dc);
-      tp.style.setProperty('--dfg', inkOn(dc)); // the armed button's icon
       peek.classList.remove('is-fig', 'is-dial', 'is-end');
       peek.classList.toggle('to-next', dir > 0); peek.classList.toggle('to-prev', dir < 0);
       edgeN.hidden = true;
@@ -3003,16 +3004,24 @@
     });
 
     $('pause').addEventListener('click', function () { if (run) setPlaying(!run.playing); });
-    // A tap anywhere inside the ring pauses too (the disc is the visible button; this is the big
-    // target). Not on a control, and never the tail of a swipe (the swipe code eats that click).
-    $('stage').addEventListener('click', function (e) {
+    // A tap anywhere inside the ring pauses too, and so does one on the countdown in its opening
+    // (the disc is the visible button; this is the big target). Not on a control, not a press that
+    // moved (a drag), and never the tail of a swipe (the swipe code eats that click).
+    var tapAt = null;
+    $('workout').addEventListener('pointerdown', function (e) { tapAt = [e.clientX, e.clientY]; }, true);
+    function dialTap(e) {
       if (!run || run.finished || !run.playing || !ring.geo || (e.target.closest && e.target.closest('button'))) return;
-      var b = $('ring').getBoundingClientRect(), g = ring.geo;
-      var dx = e.clientX - (b.left + g.cx), dy = e.clientY - (b.top + g.cy);
-      if (dx * dx + dy * dy > Math.pow(g.R - g.th / 2, 2)) return;
+      if (tapAt && Math.abs(e.clientX - tapAt[0]) + Math.abs(e.clientY - tapAt[1]) > 12) return;
+      if (e.currentTarget === $('stage')) {
+        var b = $('ring').getBoundingClientRect(), g = ring.geo;
+        var dx = e.clientX - (b.left + g.cx), dy = e.clientY - (b.top + g.cy);
+        if (dx * dx + dy * dy > Math.pow(g.R - g.th / 2, 2)) return;
+      } else if (!$('workout').classList.contains('tuck')) return; // side by side, the countdown is not in the dial
       ring.shock(1.4);
       setPlaying(false);
-    });
+    }
+    $('stage').addEventListener('click', dialTap);
+    $('digits').addEventListener('click', dialTap);
     $('resume').addEventListener('click', function () { setPlaying(true); });
     $('endFromPause').addEventListener('click', openQuit); // always confirm
     $('skip').addEventListener('click', function () { if (carousel && run) carousel.commit(1, skip); else skip(); });

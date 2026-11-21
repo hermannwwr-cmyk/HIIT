@@ -1247,10 +1247,11 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
   left: calc(50% + var(--pax, 0px)); top: calc(var(--cy, 50%) + var(--pay, 120px));
   margin: calc(var(--pm, 54px) / -2) 0 0 calc(var(--pm, 54px) / -2);
 }
+.ctl-main, .ctl-info { z-index: 1; }
 .ctl-info { left: calc(50% - var(--dx, 150px)); top: calc(var(--cy, 50%) + var(--dy, 120px)); }
 .transport .ctl-info svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
 .ctl-main::after, .ctl-info::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; } /* a bigger target */
-.transport .ctl-side { top: calc(var(--cy, 50%) - 84px); width: 64px; height: 168px; border-radius: 12px; background: none; border: 0; box-shadow: none; }
+.transport .ctl-side { top: calc(var(--cy, 50%) - var(--sh, 84px)); width: 64px; height: calc(2 * var(--sh, 84px)); border-radius: 12px; background: none; border: 0; box-shadow: none; }
 .transport .ctl-side:active { transform: none; }
 #prev { left: 0; }
 #skip { right: 0; }
@@ -1494,6 +1495,8 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 /* ---- portrait: the countdown rises into the ring's opening; a rest dial sits in the middle of the ring */
 .workout.tuck .w-readout { margin-top: calc(-1 * var(--tuck, 0px)); position: relative; z-index: 1; }
 .workout.tuck .d-label { display: none; }
+.workout.tuck .w-head { translate: 0 var(--head-dy, 0px); }
+.workout.tuck .digits { cursor: pointer; }
 .workout.tuck .wl-box:not(.runway) .wl-title { font-size: min(27px, 7.4vw); }
 .workout.tuck .dial { top: calc(var(--cy, 50%) + var(--rr, 120px) * .04); }
 .workout.tuck .upnext { top: calc(50% + 8px); } /* clear of the pause and How to discs */
