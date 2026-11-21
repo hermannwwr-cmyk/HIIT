@@ -1085,6 +1085,8 @@ body[data-screen="brief"] { overflow: hidden; }
   .hud-cell { padding: 4px 9px; }
   .hud-v { font-size: 15px; }
   .icon-btn { width: 40px; height: 40px; }
+  /* the workout's close and sound stay 48 px targets; the margin keeps the row (and so the ring) as it was */
+  .w-top .icon-btn { width: 48px; height: 48px; margin: -4px; }
 }
 
 /* ---------- appearance menu (both looks) ---------- */
@@ -1307,6 +1309,7 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .un-tip b { color: var(--text); font-weight: 600; margin-right: 2px; }
 .un-tip.swap { animation: swapIn .45s cubic-bezier(.2,.9,.3,1); }
 .upnext:not(.roomy) .un-tip { display: none; }
+.upnext.roomy .un-tip { min-height: 4.2em; } /* three lines, long step or short: the card is sized once (sizeUpNext) */
 .un-act { grid-area: act; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .un-act .link-btn { height: 44px; padding: 0 14px; }
 .un-start {
@@ -1325,7 +1328,7 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .upnext.compact .un-act .link-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
 .upnext.compact .un-act .link-btn span { display: none; }
 .un-figwrap { cursor: pointer; }
-.upnext.compact .un-start { max-width: none; height: 46px; padding: 0 14px; }
+.upnext.compact .un-start { max-width: none; height: 48px; padding: 0 14px; }
 /* a narrow card (short landscape phones): a short label ("Start"), then the icon makes way */
 .un-act { container-type: inline-size; }
 .un-short { display: none; }
@@ -1368,7 +1371,9 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 /* confirm dialog: "Keep going" on top, where Resume was; End workout below it */
 #quitDialog .veil-actions { flex-direction: column; align-items: stretch; width: min(100%, 300px); margin-inline: auto; }
 @media (min-aspect-ratio: 5/4) and (max-height: 500px) {
-  .workout[data-mode="rest"] .w-name { display: none; } /* chip, page tint and ring already say rest */
+  /* chip, page tint and ring already say rest. The title keeps its row, above the chip, so the
+     column (and with it the stage and the ring) is as tall in rest as in work */
+  .workout[data-mode="rest"] .w-name { visibility: hidden; order: -1; }
 }
 .veil-paused .veil-card { position: absolute; left: 50%; bottom: calc(100% - var(--ry, 50vh) + 64px); transform: translateX(-50%); width: min(calc(100vw - 32px), 420px); }
 .veil-resume {
@@ -1429,7 +1434,9 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .upnext.q3 .un-pre { display: inline; font-size: .62em; font-weight: 700; color: var(--c1); letter-spacing: .02em; vertical-align: .12em; }
 .upnext.compact .un-name { font-size: clamp(20px, 6vw, 26px); }
 .upnext.q4 .un-name { font-size: 19px; }
-.upnext.q4 .un-start { height: 42px; font-size: 13px; }
+/* the tightest card gives up padding, never the Start button's 48 px */
+.upnext.q4 { padding: 8px 10px; gap: 5px 12px; }
+.upnext.q4 .un-start { font-size: 14px; }
 
 /* desktop: the top bar lines up with the strip and the content */
 @media (min-aspect-ratio: 5/4) and (min-width: 560px) {
@@ -1444,9 +1451,11 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 html.top-level body[data-screen="workout"], html.top-level:has(> body[data-screen="workout"]) { overscroll-behavior: none; }
 .workout { touch-action: pan-y pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ring-in { position: absolute; inset: 0; pointer-events: none; }
-/* The row of dials. What's on now follows the finger (--sx, set on .w-body so the countdown in the
-   ring's opening goes with it); where you're going comes in one pitch behind (--px). Each page is
-   clipped to the inside of its own ring; the bands themselves are drawn on the canvas, in step. */
+/* The row of dials. What's on now follows the finger (--sx, set on .w-body so its title, the
+   countdown in the ring's opening and the lower area go with it); where you're going comes in one
+   pitch behind (--px), with its own title. Each dial is clipped to the inside of its own ring; the
+   bands themselves are drawn on the canvas, in step. The swipe code puts its state classes
+   (carousel, swiping, settle, snap, away, armed) on .w-body as well as the stage. */
 .ri-cur { position: absolute; inset: 0; transform: translateX(var(--sx, 0px)); }
 .ri-peek { position: absolute; inset: 0; display: none; transform: translateX(var(--px, 0px)); clip-path: circle(var(--ric, 120px) at 50% var(--cy, 50%)); }
 .w-stage.carousel .ri-cur { clip-path: circle(var(--ric, 120px) at 50% var(--cy, 50%)); }
@@ -1454,43 +1463,71 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 /* side by side: the row stays inside the stage's own column */
 .workout:not(.tuck) .ring-in { clip-path: inset(0); }
 .workout.tuck .w-readout { transform: translateX(var(--sx, 0px)); }
-/* an exercise's countdown comes in with its dial (--pd: one pitch from the one leaving) */
+/* an exercise's countdown comes in with its dial (--pd: one pitch from the one leaving); from a
+   rest too, where the readout it sits in is hidden and the Up next card leaves with the rest */
 .pk-mouth { position: absolute; left: 0; right: 0; top: 0; transform: translateX(var(--pd, 0px)); pointer-events: none; }
 .pk-mouth[hidden] { display: none; }
+.workout[data-mode="rest"] .pk-mouth, .workout[data-mode="rest"] .pk-lead, .workout.wu-lead .rd-main > #pkMouth { visibility: visible; }
+/* a warm-up move comes in with its lead-in ("Get ready · Starts in 8") there instead */
+.workout .wl-box.pk-lead { display: grid; transform: translateX(var(--pd, 0px)); pointer-events: none; }
+.workout .wl-box.pk-lead[hidden] { display: none; }
+/* the countdowns pass over the dimmed pause and How to discs, not under them */
+.workout.tuck .w-body.carousel .w-readout { z-index: 3; }
+
+/* The titles. The head names what's on now and leaves with its dial, fading; the incoming page's
+   title (#headIn, in the head's own grid cell, out of the flow) comes in with its dial. */
+.w-body { position: relative; }
+.w-head-in { position: absolute; grid-row: 1; grid-column: 1; top: 0; left: 0; right: 0; max-width: none; pointer-events: none; }
+.w-head-in[hidden], .w-body:not(.carousel) > .w-head-in { display: none; }
+.workout.tuck .w-body.carousel > .w-head { transform: translateX(var(--sx, 0px)); opacity: calc(1 - var(--sp, 0) * 1.3); }
+.workout.tuck .w-body.carousel > .w-head-in { transform: translateX(var(--px, 0px)); opacity: 1; }
+/* side by side the title has its own column: there it changes in place, the old one out over the
+   first half of the way and the new one in over the second, each with a short step sideways */
+.workout:not(.tuck) .w-body.carousel > .w-head { transform: translateX(calc(var(--sx, 0px) * .12)); opacity: calc(1 - var(--sp, 0) * 2); }
+.workout:not(.tuck) .w-body.carousel > .w-head-in { transform: translateX(calc(var(--px, 0px) * .12)); opacity: calc(var(--sp, 0) * 2 - 1); }
+@media (min-aspect-ratio: 5/4) and (min-width: 560px) {
+  .w-head-in { grid-area: head; }
+}
+@media (min-aspect-ratio: 5/4) and (max-height: 500px) {
+  /* (as the head does: a rest has no name line here, an exercise does) */
+  .workout .w-head-in.in-dial .w-name { display: none; }
+  .workout[data-mode="rest"] .w-head-in:not(.in-dial) .w-name { display: block; }
+}
+/* letting go now would go there: the incoming chip fills in (while the finger is down) */
+.w-head-in .chip { transition: background .15s, border-color .15s; }
+.w-body.armed.swiping > .w-head-in .chip { background: color-mix(in srgb, var(--c1) 34%, transparent); border-color: var(--c1); }
+
+/* The lower area's text (the next line, the trainer's tip, rest's Up next card) leaves with its
+   page, fading; the new page's fades in after landing (away: held unseen until the snap is over) */
+.w-next, .coach, .upnext { transition: opacity .2s ease-out; }
+.workout.tuck .w-body.carousel .coach, .workout.tuck .w-body.carousel .upnext { translate: var(--sx, 0px) 0; }
+.w-body.carousel .w-next, .w-body.carousel .coach, .w-body.carousel .upnext { opacity: calc(1 - var(--sp, 0) * 1.6); }
+.w-body.swiping .w-next, .w-body.swiping .coach, .w-body.swiping .upnext,
+.w-body.away .w-next, .w-body.away .coach, .w-body.away .upnext { transition: none; }
+.w-body.away .w-next, .w-body.away .coach, .w-body.away .upnext { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .w-next, .coach, .upnext { transition: none; } }
 /* letting go: the row settles at the finger's speed (the swipe code sets --st / --se) */
 /* (begun a frame early: a transition starts a frame after it is set, and the finger didn't stop) */
-.w-stage.settle .ri-cur, .w-stage.settle .ri-peek, .w-body:has(.w-stage.settle) .w-readout {
+.w-stage.settle .ri-cur, .w-stage.settle .ri-peek, .w-body.settle .w-readout {
   transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms;
 }
-.w-stage.settle .ri-edge-n { transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity calc(var(--st, .22s) * .45) ease; }
-.w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial, .w-body:has(.w-stage.snap) .w-readout { transition: none !important; }
+.w-body.settle > .w-head {
+  transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity var(--st, .22s) var(--se, ease-out) -16ms;
+}
+.w-body.settle .w-next, .w-body.settle .coach, .w-body.settle .upnext {
+  transition: translate var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity var(--st, .22s) var(--se, ease-out) -16ms;
+}
+.w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial, .w-body.snap .w-readout, .w-body.snap > .w-head { transition: none !important; }
 /* pause and How to step back while the row moves */
 .ctl-main, .ctl-info { transition: transform .15s, background .2s, box-shadow .2s, opacity .15s; }
-.w-stage.carousel .ctl-main, .w-stage.carousel .ctl-info { opacity: .35; }
+.w-stage.carousel .ctl-main, .w-stage.carousel .ctl-info { opacity: .25; }
 .transport.held .ctl-main, .transport.held .ctl-info { opacity: 0; } /* paused: nothing ghosts through the veil */
-/* the incoming dial's name (a figure's page: a rest dial names itself): in the corner it comes
-   from, then riding on top of its dial. Solid once letting go will go there. */
-.ri-edge-n {
-  position: absolute; z-index: 1; display: none; pointer-events: none;
-  left: 50%; top: calc(var(--cy, 50%) - var(--rr, 120px) - 2px); margin: 0; translate: 0 -50%;
-  max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding: .35em .75em; border-radius: 999px; background: var(--eb, var(--surface)); color: var(--en, var(--text));
-  font: 650 clamp(14px, 4.4vw, 20px)/1.1 var(--ui); letter-spacing: -.01em;
-  opacity: var(--pn, 0); box-shadow: 0 4px 14px -8px rgba(0, 0, 0, .35);
-}
-.w-stage.carousel .ri-edge-n { display: block; }
-.w-stage .ri-edge-n[hidden] { display: none; }
-.ri-edge-n.to-next { transform: translateX(min(calc(var(--px, 0px) - 50%), calc(var(--hw, 50vw) - 12px - 100%))); }
-.ri-edge-n.to-prev { transform: translateX(max(calc(var(--px, 0px) - 50%), calc(12px - var(--hw, 50vw)))); }
-.w-stage:has(.transport.armed) .ri-edge-n { background: var(--ec, var(--c1)); color: var(--eo, #fff); }
 .pk-fig { position: absolute; left: 50%; top: var(--fy, 50%); transform: translate(-50%, -50%); width: var(--fig-size, 60%); height: var(--fig-size, 60%); display: none; }
 .ri-peek.is-fig .pk-fig { display: block; }
 .ri-peek .pk-dial { display: none; }
 .ri-peek.is-dial .pk-dial { display: grid; opacity: 1; }
-.w-head.swap .w-tag, .w-head.swap .w-name { animation: headSwap .18s ease; }
 .workout .w-head.pv-active .w-name { color: var(--text); }
 .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
-@keyframes headSwap { from { opacity: .25; } }
 /* back / next: keyboard focus shows on the hit area */
 [data-look] .ctl-side:focus-visible { outline: 2px solid var(--accent, var(--c2)); outline-offset: -4px; }
 /* ---- portrait: the countdown rises into the ring's opening; a rest dial sits in the middle of the ring */
@@ -1502,7 +1539,7 @@ html.top-level body[data-screen="workout"], html.top-level:has(> body[data-scree
 .workout.tuck .dial { top: calc(var(--cy, 50%) + var(--rr, 120px) * .04); }
 .workout.tuck .upnext { top: calc(50% + var(--hang, 0px) / 2); } /* under the pause and How to discs */
 /* How to has its own disc beside the countdown */
-.coach .link-btn, #unHow { display: none; }
+#unHow { display: none; }
 .wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
 .wp-tip svg { fill: currentColor; vertical-align: -.12em; margin: 0 .08em; }
 .wp-tip svg.tip-chev { width: .5em; height: .875em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; margin: 0 .2em; } /* the arrow on the next dial's edge */
@@ -1521,7 +1558,7 @@ body.instant-phase, body.instant-phase * { transition-property: none !important;
 @media (prefers-reduced-motion: reduce) { .workout[data-mode="active"] .w-readout, .workout[data-mode="active"] .coach { animation: none; } }
 
 /* ---- last 10 seconds: an unmistakable countdown */
-.workout.final10 .digits .d { color: var(--c1); }
+.workout.final10 .digits:not(.pk-mouth) .d { color: var(--c1); }
 @keyframes fTick { from { transform: scale(1.08); } }
 @keyframes fFinal { from { transform: scale(1.22); } }
 .workout::after {

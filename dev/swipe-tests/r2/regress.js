@@ -20,8 +20,8 @@ const fs = require('fs'); const SH = __dirname + (process.env.SH || '/shots/'); 
     const seq = await f.evaluate(() => window.__arm.map(a => a[1] ? 'ON' : 'off'));
     console.log('armed during drag', label, Math.round(cx + 80 - x) + 'px:', seq.join(','), '-> toggles', seq.length - 1);
   }
-  // 2) double-bound listeners: a swipe that starts on the ⏭ icon (svg <use>) / tab text => one skip, one Undo line
-  for (const sel of ['#skip svg', '#skip .ctl-tab', '#wNext b', '#digits span']) {
+  // 2) double-bound listeners: a swipe that starts on the next slice's hit area or on redrawn text => one skip, one Undo line
+  for (const sel of ['#skip', '#wNext b', '#digits span']) {
     const a = await go('work', 6);
     const [x, y] = await box(sel);
     await touch(stroke(Math.min(x, 330), y, -80, 4, 120, 7, 'in'));
@@ -47,7 +47,9 @@ const fs = require('fs'); const SH = __dirname + (process.env.SH || '/shots/'); 
   for (const [type, off] of [['rest', 8], ['prep', 3], ['setrest', 20]]) {
     await go(type, off); await page.waitForTimeout(1800);
     const info = await f.evaluate(() => {
-      const st = document.getElementById('stage'), e = document.getElementById('riEdge'), c = e.querySelector('.ri-edge-c'), r = c.getBoundingClientRect(), ring = document.getElementById('ring').getBoundingClientRect();
+      const st = document.getElementById('stage'), e = document.getElementById('riEdge');
+      if (!e) return { cls: st.className, sliver: 'gone (the neighbouring dials are drawn on the canvas now)' };
+      const c = e.querySelector('.ri-edge-c'), r = c.getBoundingClientRect(), ring = document.getElementById('ring').getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + 4, r.top + r.height / 2);
       const pe = getComputedStyle(e).pointerEvents;
       return { cls: st.className, display: getComputedStyle(e).display, edgeBox: [r.left, r.top, r.width, r.height].map(Math.round), pe, hitAtSliver: hit && (hit.id || hit.className), ri: getComputedStyle(st).getPropertyValue('--ri') };

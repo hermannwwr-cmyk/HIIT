@@ -1,0 +1,8 @@
+320x568   {"ring":275,"fig":194,"digits":90,"pause":50,"restDigits":125,"card":"288x92","start":48} 
+360x640   {"ring":341,"fig":245,"digits":101,"pause":50,"restDigits":118,"card":"328x111","start":48} 
+375x667   {"ring":358,"fig":258,"digits":105,"pause":53,"restDigits":125,"card":"343x111","start":48} 
+390x844   {"ring":375,"fig":270,"digits":129,"pause":56,"restDigits":125,"card":"358x245","start":50} 
+430x932   {"ring":420,"fig":303,"digits":142,"pause":62,"restDigits":142,"card":"398x274","start":50} 
+844x390   {"ring":281,"fig":203,"digits":148,"pause":50,"restDigits":129,"card":"374x177","start":48} 
+820x1180  {"ring":816,"fig":587,"digits":190,"pause":72,"restDigits":321,"card":"720x212","start":60} 
+1180x820  {"ring":593,"fig":427,"digits":201,"pause":72,"restDigits":235,"card":"520x322","start":50} 

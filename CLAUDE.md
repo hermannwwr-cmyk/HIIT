@@ -61,6 +61,9 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   - The pause grows with the ring (`S*0.148`, 50–72 px). The beat-dot row stays reserved through the whole workout, so the ring keeps one size from the warm-up to the end.
 - `ring.progress` is set in `update()`. Warm-up steps get two sweeps: one for the lead-in, one for the move.
 - Rest, prep and the set break switch the screen to `#workout[data-mode="rest"]`: a dial inside the ring plus an "Up next" card.
+  - `sizeUpNext()` fits the card to the lower area less `ring.hang`: it tries `UN_STATES` from `roomy` (with the step tip) down to `compact … q4`, and shrinks the demo tile last. Start stays at least 48 px tall in every state. It reads the card's own width (720 px at most on a tablet in portrait, 520 px elsewhere).
+  - Tall phones (`min-height: 800px`, under 600 px wide): `.w-lower`'s `min-height` in `studio.css` takes the height the ring cannot use (the ring is limited by the width there), so the tip fits. It must never cost ring size: `dev/swipe-tests/sizes.js` against `sizes-baseline.txt`.
+  - Short landscape (`max-height: 500px`): the right column (title, countdown, "Next:") sets the stage's height, so the ring follows `--dg`, which is capped by the height. Rest keeps the hidden title's row so the ring is the same size as in work.
 
 **Swipe and the ⏮ / ⏭ controls.** `initSwipe()` is a pager, the same in every phase and anywhere on the workout screen.
 - The whole row of dials follows the finger 1:1. Pages are one `ring.pitch` apart (`travel()`), each clipped to the inside of its own ring; the countdown in the opening goes with its dial.
@@ -80,16 +83,21 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 - **Don't replace elements on the workout screen every tick.** Touch moves and ends go to the element the touch began on, and are lost if it leaves the DOM. The listeners are also bound to that element and a lone new touch clears a stale gesture, but use `setRich()` (in-place text, as `#wNext` does) rather than rewriting `innerHTML`.
 - `overscroll-behavior: none` applies only with `html.top-level` (not framed). In the Claude app's preview iframe, vertical drags must scroll the host page.
 - What moves:
-  - `place()` sets `--sx` (the leaving page) and `--px` (the incoming one) on `.w-body`, so the stage's pages and the readout share them. `Ring.draw()` reads `#riCur`'s computed transform each frame while `.carousel` is on, so the bands on the canvas keep exactly to the finger and to the settle's curve.
-  - The incoming page is `#riPeek` (a figure or a rest dial). An exercise also brings its countdown, `#pkMouth`, one pitch (`--pd`) from the one leaving. From a rest the card below covers that spot, so it is left out there.
-  - The name tag `#riEdgeN` names a figure's page (a rest dial names itself): it waits in the corner the dial comes from, then rides on top of it, and turns solid on `armed`. On release the title takes the name at once (`showDest()`; never while dragging) and the tag fades.
+  - A swipe moves whole pages: each dial with its title above and its countdown and lower area below. `place()` sets `--sx` (the leaving page), `--px` (the incoming one) and `--sp` (0..1 of the way, which fades the leaving page's text) on `.w-body`. `Ring.draw()` reads `#riCur`'s computed transform each frame while `.carousel` is on, so the bands on the canvas keep exactly to the finger and to the settle's curve.
+  - The swipe's state classes (`carousel`, `swiping`, `settle`, `snap`, `away`, `armed`) are set on `.w-body` as well as on the stage (`mark()`), and `--st` / `--se` (the settle's timing) on `.w-body`. The CSS for the swipe uses no `:has()`; keep it that way.
+  - The leaving page: `.w-head` keeps naming the current interval and leaves with its dial, fading. It is never rewritten during a swipe. The countdown (`.w-readout`), the next line, the trainer card and rest's Up next card leave with it too (the last three fade).
+  - The incoming page is `#riPeek` (a figure or a rest dial) plus its title, `#headIn`: a second `.w-head`, built once in `index.html`, filled in place by `headInLook()` and laid over the head's grid cell (absolute, so it never changes the layout). There is one name per page; the old floating name tag (`#riEdgeN`) is gone. The incoming chip fills in while `armed` and the finger is down.
+  - What comes in under the dial, one pitch (`--pd`) from the leaving countdown: an exercise's or a jog's seconds (`#pkMouth`), or a warm-up move's "Get ready · Starts in N" (`#pkLead`). This also happens from a rest, where the readout they sit in is hidden. While the row moves the readout is raised above the dimmed pause and How to discs. The incoming lower area is not pre-rendered.
+  - Landing (`land()`) swaps in the real interval unseen. The lower area's text is held at opacity 0 (`away`) until the snap is over, then fades in over 0.2 s (`unsnap()`). `land()` also switches the readout's and the trainer card's rise-in animation off (inline `animation: none`); `enterSegment()` gives it back at the next rest.
+  - Side by side (landscape) the title has its own column, so it changes in place: the old one fades out over the first half of the way and the new one in over the second, each with a short step sideways. The countdown there stays until landing.
   - The ring's colours switch outright at commit (`Ring.snapColors`), never through a muddy blend.
 - Back and next are the neighbouring dials' slices at the screen edges: a see-through piece of the band in the colour of where it leads, fading out above and below a chevron. `#prev` / `#skip` are transparent 64×168 px hit areas over them.
   - `syncNeighbours()` (from `syncSkipLabel()` / `syncPrevLabel()`) sets `ring.nb`. Back wears this interval's own colour once it is a few seconds in (a restart), and is absent at the very start. After the last interval a neutral slice with a tick stands for Finish (tap only: a swipe rubber-bands).
   - The slice being pulled in firms up into a full dial as it arrives. Pause and How to dim while the row moves.
-  - The hooks the gesture sets on `#transport` are `--ck` (0..1), `charge-next` / `charge-prev` and `armed`. Taps and keys go through the same commit path.
+  - The hooks the gesture sets on `#transport` are `--ck` (0..1), `charge-next` / `charge-prev` and `armed` (`armed` is mirrored on `.w-body`). Taps and keys go through the same commit path.
 - A tap inside the ring, or on the countdown in its opening, pauses (`dialTap()` in `bind()`); the pause disc stays the visible button. The swipe code eats the click that ends a swipe.
 - The idle hints are the slices themselves, plus two one-time tips in the progress row (`state.tapTip`, `state.swipeTip`, the second with a nudge of the row).
+- To look at a swipe, run `dev/swipe-tests/pages.js`: it holds a finger mid-drag and screenshots each step at four sizes.
 - Testing: use CDP `Input.dispatchTouchEvent` with a realistic `radiusX/Y` (about 22) and explicit `timestamp`s. Headless delivery is far slower than real time, so judge timing by event timestamps. The harness, the history (root causes, rejected designs) and the open nice-to-haves are in `dev/swipe-tests/README.md`.
 
 **Looks.**
@@ -137,5 +145,5 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
 
 - `.github/workflows/pages.yml` runs `npm test` on every push to `main`, then publishes only `index.html`, `manifest.webmanifest`, `css/`, `js/` and `icons/`. Any new file the site needs must be added to that `cp` line.
 - `tests/site.test.js` checks the icons and manifest against the workflow. The root-level PNGs and `q2/` are screenshots and are not published.
-- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated by hand if the SVGs change; there is no script for it in the repo.
+- `icons/*.svg` are the sources for the icons. The PNGs (favicon-32, a 180 px iPhone icon, 192, 512 and maskable 512) are pre-rendered from them and must be regenerated if the SVGs change: `node scripts/render-icons.mjs` (needs a globally installed Playwright; not part of the site or the tests). The "30" in the ring's opening is drawn as stroked paths, not text; the favicon's is coral, larger and snapped to the 32 px grid.
 - `scripts/build.mjs` inlines the CSS, the JS and the SVG favicon, and drops the other icon and manifest links.

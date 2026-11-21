@@ -13,6 +13,20 @@ The user found that the ⏮ / ⏭ discs did not say "swipe", and wanted the cont
 - **Rejected: pause shown on the dial only** (a small mark under the countdown, the countdown on a raised plate, or a "Tap to pause" caption). The mark was too faint, the plate and caption cost ring size. The user kept the corner disc and the tap as an extra.
 - Sizes measured against the old layout: figure 194 → 245 px and countdown 72 → 101 px at 360×640; figure 236 → 270 px and countdown 117 → 128 px at 390×844.
 
+### Whole pages (2026-11-21, later the same day)
+
+Until then only the dial and the countdown moved; the title and the lower area stood still and cut over on release.
+
+- **The title travels.** The head keeps naming the current interval and leaves with its dial. The incoming page has its own title (`#headIn`), which comes in with its dial. This replaced the floating name tag `#riEdgeN`: with both there would have been two names for one page. The cost is that at a short drag only the start of the incoming name shows at the screen's edge, where the tag was readable from 20 px.
+- **`armed` is now shown by the incoming chip filling in** (the tag used to turn solid). It is subtler than the tag was.
+- **The chip no longer says "↺ Restart" / "↺ Redo"** during the slide. It shows what the head will show on landing, so nothing changes there. A restart reads from the full countdown coming in.
+- **From a rest, the exercise's countdown comes in with its dial,** and the Up next card leaves with the rest's page. A warm-up move brings its "Get ready · Starts in N", and a jog's change of pace its seconds.
+- **The countdowns pass over the dimmed pause and How to discs,** not under them (the readout is raised while the row moves, and the discs dim to 25%).
+- **Fixed on the way.** The readout's settle never got the swipe's own timing: `--st` / `--se` were set on the stage, which the readout is not inside, so it used the 0.22 s fallback. They are on `.w-body` now. The incoming countdown also wore the last-10-seconds colour and weight of the interval being left.
+- **No `:has()`.** The state classes are mirrored onto `.w-body`.
+- **Open.** In short landscape (844×390) the title sits about 9 px lower while it comes in from a rest than after landing, because the head's row grows when the name line appears. The incoming lower area is not pre-rendered: it fades in after landing.
+- `pages.js` takes the screenshots for all of this. `r2/regress.js` no longer looks for the ⏭ icon or the resting sliver, which went with the row of dials.
+
 The sections below describe the pager as first shipped in PR #8. The gesture rules still hold; the curtain, the rim sliver and the button tabs are gone.
 
 ## What the user asked for
@@ -36,7 +50,7 @@ The sections below describe the pager as first shipped in PR #8. The gesture rul
 - **Pager, not "charge" buttons.** Earlier versions made you drag until ⏭ filled up, and only allowed flicks from the buttons. The user called that deliberate swiping and rejected it.
 - **Same rule in every phase.** There is no stricter rule during work; Undo (8 s) is the safety net.
 - **On the last interval** a swipe only rubber-bands. Finishing the workout needs a tap on ⏭.
-- **The ring is the one place that names the destination,** via the `#riEdgeN` tag. Rejected:
+- **The ring is the one place that names the destination,** via the `#riEdgeN` tag (since replaced by the incoming page's own title, see above). Rejected:
   - the tab showing the exercise name: it truncated and changed with screen size;
   - the header flipping to the destination while dragging: the timer still showed the current interval.
 - **The tab shows a fixed action word** ("Next ›", "‹ Restart", "‹ Redo", "‹ Back", "Finish ›"), never "Back" for a restart.
@@ -58,7 +72,6 @@ We iterated until both said "UTTERLY IMPRESSED: yes": four gesture rounds and fi
 ## Open nice-to-haves (not done)
 
 - In light mode at rest, the resting sliver is almost invisible once its slide-in ends. A little more opacity would help.
-- On tablets (1180×820) the name tag (up to 26 px) still looks small inside the 600 px ring.
 - On a heavily throttled device (×4–×8 CPU), a sparse two-move flick can un-arm the ⏭ tab a few frames before the commit goes through. The outcome is right; only the highlight drops early.
 - A thumb arc whose first ~13 px is mostly vertical is treated as a vertical move. Android's own pager does the same.
 - Not yet confirmed on the user's real phone after the fix.
@@ -87,6 +100,7 @@ node r3/agree.js                                         # what armed showed vs 
 node r3/clip.js                                          # incoming-page clip during drag and settle (frame sheets)
 node misc.js; node audio.js; node iframe-scroll.js
 node tapdial.js                                          # a tap in the ring pauses; controls, arcs and swipes don't
+node pages.js                                            # whole pages: mid-drag, release and cancel screenshots at four sizes (shots/pages/)
 ```
 
 - Set `URL=` to point at another build.
