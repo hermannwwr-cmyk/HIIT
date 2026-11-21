@@ -30,9 +30,13 @@ jobs:
         run: |
           mkdir -p _site
           cp -r index.html manifest.webmanifest sw.js css js icons fonts _site/
-          # a new cache name per deploy: the service worker's version is this commit
-          sed -i "s|^var VERSION = 'dev';.*|var VERSION = '${GITHUB_SHA}';|" _site/sw.js
-          grep -q "^var VERSION = '${GITHUB_SHA}';$" _site/sw.js
+          # The service worker's version is a fingerprint of what is published, not the commit: a merge
+          # that changes none of these files (notes, tests, dev scripts) publishes the same sw.js, so
+          # phones see no update and do not download or reload for nothing.
+          VERSION=$(cd _site && find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+          test "${#VERSION}" -eq 16
+          sed -i "s|^var VERSION = 'dev';.*|var VERSION = '${VERSION}';|" _site/sw.js
+          grep -q "^var VERSION = '${VERSION}';$" _site/sw.js
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
