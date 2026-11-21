@@ -907,7 +907,7 @@ body[data-screen="brief"] { overflow: hidden; }
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: "stage head" "stage readout" "stage .";
-    column-gap: 3vw;
+    column-gap: max(3vw, 28px); /* the next dial's slice sits at the stage's edge: air before the text */
     justify-items: stretch;
     align-content: center;
   }
@@ -1237,25 +1237,40 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 .digits .d.of { width: auto; font-size: .42em; align-self: flex-end; margin-bottom: .14em; opacity: .55; letter-spacing: 0; }
 .digits .d.of:first-of-type, .digits .d.of + .d.of { margin-left: 0; }
 
-/* transport: pause in the ring's opening, back / skip out at the sides, all on the ring's base line */
-.transport {
-  position: absolute; left: 50%; top: var(--ty, calc(100% - 40px)); z-index: 2;
-  width: calc(2 * var(--bx, 140px) + var(--pside, 48px));
-  transform: translate(-50%, -50%);
-  display: flex; align-items: center; justify-content: space-between;
+/* transport: the controls laid over the stage; Ring.layout places them.
+   Back / next are the slices of the neighbouring dials at the edges (drawn on the ring's canvas):
+   .ctl-side are their hit areas. Pause and How to are discs in the corners under the ring's sides,
+   beside the countdown (side by side: the pause sits in the ring's opening). */
+.transport { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.transport .ctl { position: absolute; pointer-events: auto; }
+.ctl-main, .ctl-info {
+  left: calc(50% + var(--pax, 0px)); top: calc(var(--cy, 50%) + var(--pay, 120px));
+  margin: calc(var(--pm, 54px) / -2) 0 0 calc(var(--pm, 54px) / -2);
 }
+.ctl-main, .ctl-info { z-index: 1; }
+.ctl-info { left: calc(50% - var(--dx, 150px)); top: calc(var(--cy, 50%) + var(--dy, 120px)); }
+.transport .ctl-info svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.ctl-main::after, .ctl-info::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; } /* a bigger target */
+.transport .ctl-side { top: calc(var(--cy, 50%) - var(--sh, 84px)); width: 64px; height: calc(2 * var(--sh, 84px)); border-radius: 12px; background: none; border: 0; box-shadow: none; }
+.transport .ctl-side:active { transform: none; }
+#prev { left: 0; }
+#skip { right: 0; }
+/* portrait: the ring's canvas spans the screen, so the neighbours reach its edges */
+.workout.tuck .ring { left: calc(-1 * var(--gutter-l)); right: auto; width: calc(100% + var(--gutter-l) + var(--gutter-r)); }
+.workout.tuck #prev { left: calc(-1 * var(--gutter-l)); }
+.workout.tuck #skip { right: calc(-1 * var(--gutter-r)); }
 .ctl {
   display: inline-grid; place-items: center; flex: none;
-  width: var(--pside, 48px); height: var(--pside, 48px); padding: 0; border-radius: 50%;
+  width: var(--pm, 54px); height: var(--pm, 54px); padding: 0; border-radius: 50%;
   border: 0; background: transparent; color: var(--text);
-  font-size: calc(var(--pside, 48px) * .42); cursor: pointer;
+  font-size: calc(var(--pm, 54px) * .42); cursor: pointer;
   transition: transform .15s, background .2s, box-shadow .2s;
 }
 .ctl svg { fill: currentColor; }
 .ctl:hover { background: rgba(255,255,255,.08); }
 .ctl:active { transform: scale(.92); }
 .ctl-main {
-  width: var(--pmain, 58px); height: var(--pmain, 58px); font-size: calc(var(--pmain, 58px) * .42);
+  font-size: calc(var(--pm, 54px) * .4);
   color: var(--ink);
   background: radial-gradient(circle at 35% 30%, #fff, var(--c1) 45%, var(--c2));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 25%, transparent), 0 0 30px -4px var(--c1);
@@ -1429,136 +1444,68 @@ body[data-phase="prep"] .workout .w-name { color: var(--text); }
 html.top-level body[data-screen="workout"], html.top-level:has(> body[data-screen="workout"]) { overscroll-behavior: none; }
 .workout { touch-action: pan-y pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ring-in { position: absolute; inset: 0; pointer-events: none; }
-.w-stage.carousel .ring-in { clip-path: circle(var(--ri, 140px) at 50% var(--cy, 50%)); }
-/* what's on now: leaves with the finger, fading and shrinking a touch */
-.ri-cur {
-  position: absolute; inset: 0; transform-origin: 50% var(--fy, 50%);
-  transform: translateX(var(--sx, 0px)) scale(var(--sk, 1)); opacity: var(--so, 1);
-}
-/* where you're going: an exact copy of its own layout, easing in from the side */
-.ri-peek { position: absolute; inset: 0; display: none; opacity: var(--po, 0); transform: translateX(var(--px, 0px)); }
-/* clipped at its own leading edge (--pcl from its centre: the curtain's edge), so its figure never
-   spills over what is leaving; the clip opens as it lands */
-.ri-peek.to-next { clip-path: inset(0 0 0 max(0px, calc(50% - var(--pcl, 9999px)))); }
-.ri-peek.to-prev { clip-path: inset(0 max(0px, calc(50% - var(--pcl, 9999px))) 0 0); }
+/* The row of dials. What's on now follows the finger (--sx, set on .w-body so the countdown in the
+   ring's opening goes with it); where you're going comes in one pitch behind (--px). Each page is
+   clipped to the inside of its own ring; the bands themselves are drawn on the canvas, in step. */
+.ri-cur { position: absolute; inset: 0; transform: translateX(var(--sx, 0px)); }
+.ri-peek { position: absolute; inset: 0; display: none; transform: translateX(var(--px, 0px)); clip-path: circle(var(--ric, 120px) at 50% var(--cy, 50%)); }
+.w-stage.carousel .ri-cur { clip-path: circle(var(--ric, 120px) at 50% var(--cy, 50%)); }
 .w-stage.carousel .ri-peek { display: block; }
-/* letting go: the pages settle at the finger's speed (the swipe code sets --st / --se) */
+/* side by side: the row stays inside the stage's own column */
+.workout:not(.tuck) .ring-in { clip-path: inset(0); }
+.workout.tuck .w-readout { transform: translateX(var(--sx, 0px)); }
+/* an exercise's countdown comes in with its dial (--pd: one pitch from the one leaving) */
+.pk-mouth { position: absolute; left: 0; right: 0; top: 0; transform: translateX(var(--pd, 0px)); pointer-events: none; }
+.pk-mouth[hidden] { display: none; }
+/* letting go: the row settles at the finger's speed (the swipe code sets --st / --se) */
 /* (begun a frame early: a transition starts a frame after it is set, and the finger didn't stop) */
-.w-stage.settle .ri-cur, .w-stage.settle .ri-peek, .w-stage.settle .ri-edge-c, .w-stage.settle .ri-edge-n {
-  transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity var(--st, .22s) ease -16ms, clip-path var(--st, .22s) ease -16ms;
+.w-stage.settle .ri-cur, .w-stage.settle .ri-peek, .w-body:has(.w-stage.settle) .w-readout {
+  transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms;
 }
-/* letting go hands the name over: the tag fades in the first half, the page's own label in the second */
 .w-stage.settle .ri-edge-n { transition: transform var(--st, .22s) var(--se, cubic-bezier(.3,.9,.3,1)) -16ms, opacity calc(var(--st, .22s) * .45) ease; }
-.w-stage.settle .ri-peek .pk-dial .dial-k { transition: opacity calc(var(--st, .22s) * .45) ease calc(var(--st, .22s) * .5); }
-.w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial { transition: none !important; }
-/* the incoming page's edge: a curtain in its colour that leads it in from the rim (its edge at
-   --ex from the centre, moving with the finger), with its name riding on it inside the visible
-   chord. Resting, a sliver of it (10 px) waits at the rim; it slides in once as the phase begins. */
-.ri-edge { position: absolute; inset: 0; display: none; clip-path: circle(var(--ri, 140px) at 50% var(--cy, 50%)); }
-.w-stage.carousel .ri-edge, .w-stage.peeking .ri-edge { display: block; }
-.ri-edge-c {
-  position: absolute; top: 0; bottom: 0; width: calc(var(--ri, 140px) * 3); opacity: var(--co, 1);
-  background: linear-gradient(to right, color-mix(in srgb, var(--ec, var(--c1)) 55%, transparent) 0 3px, color-mix(in srgb, var(--ec, var(--c1)) 20%, transparent) 3px, color-mix(in srgb, var(--ec, var(--c1)) 9%, transparent) 60px);
-}
-.ri-edge.to-next .ri-edge-c { left: 50%; transform: translateX(var(--ex, 0px)); }
-.ri-edge.to-prev .ri-edge-c { right: 50%; transform: translateX(calc(-1 * var(--ex, 0px))) scaleX(-1); }
+.w-stage.snap .ri-cur, .w-stage.snap .ri-peek, .w-stage.snap .fig, .w-stage.snap .dial, .w-body:has(.w-stage.snap) .w-readout { transition: none !important; }
+/* pause and How to step back while the row moves */
+.ctl-main, .ctl-info { transition: transform .15s, background .2s, box-shadow .2s, opacity .15s; }
+.w-stage.carousel .ctl-main, .w-stage.carousel .ctl-info { opacity: .35; }
+.transport.held .ctl-main, .transport.held .ctl-info { opacity: 0; } /* paused: nothing ghosts through the veil */
+/* the incoming dial's name (a figure's page: a rest dial names itself): in the corner it comes
+   from, then riding on top of its dial. Solid once letting go will go there. */
 .ri-edge-n {
   position: absolute; z-index: 1; display: none; pointer-events: none;
-  top: calc(var(--cy, 50%) - var(--ny, calc(var(--ri, 140px) * .74))); margin: 0; translate: 0 -50%;
-  max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  left: 50%; top: calc(var(--cy, 50%) - var(--rr, 120px) - 2px); margin: 0; translate: 0 -50%;
+  max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: .35em .75em; border-radius: 999px; background: var(--eb, var(--surface)); color: var(--en, var(--text));
-  font: 650 clamp(14px, calc(var(--ri, 140px) * .12), 26px)/1.1 var(--ui); letter-spacing: -.01em;
+  font: 650 clamp(14px, 4.4vw, 20px)/1.1 var(--ui); letter-spacing: -.01em;
   opacity: var(--pn, 0); box-shadow: 0 4px 14px -8px rgba(0, 0, 0, .35);
 }
-/* (--nx: from the centre to the tag's end at the curtain's side) */
 .w-stage.carousel .ri-edge-n { display: block; }
-.ri-edge-n.to-next { right: 50%; transform: translateX(var(--nx, 0px)); }
-.ri-edge-n.to-prev { left: 50%; transform: translateX(calc(-1 * var(--nx, 0px))); }
-.w-stage.carousel .ri-cur .dial-k { opacity: var(--cl, 1); }
-.ri-edge.peek-in .ri-edge-c { animation: edgeIn 1.1s cubic-bezier(.3, .9, .3, 1) .35s backwards; }
-@keyframes edgeIn {
-  0% { transform: translateX(var(--ri, 140px)); }
-  45% { transform: translateX(calc(var(--ri, 140px) - 38px)); }
-  100% { transform: translateX(var(--ex, 0px)); }
-}
-/* resting, the sliver is a soft fade into the next page's colour, not a hard line */
-.w-stage.peeking:not(.carousel) .ri-edge-c { background: linear-gradient(to right, transparent, color-mix(in srgb, var(--ec, var(--c1)) 30%, transparent) 14px, color-mix(in srgb, var(--ec, var(--c1)) 10%, transparent) 60px); }
-@media (prefers-reduced-motion: reduce) { .ri-edge.peek-in .ri-edge-c { animation: none; } }
+.w-stage .ri-edge-n[hidden] { display: none; }
+.ri-edge-n.to-next { transform: translateX(min(calc(var(--px, 0px) - 50%), calc(var(--hw, 50vw) - 12px - 100%))); }
+.ri-edge-n.to-prev { transform: translateX(max(calc(var(--px, 0px) - 50%), calc(12px - var(--hw, 50vw)))); }
+.w-stage:has(.transport.armed) .ri-edge-n { background: var(--ec, var(--c1)); color: var(--eo, #fff); }
 .pk-fig { position: absolute; left: 50%; top: var(--fy, 50%); transform: translate(-50%, -50%); width: var(--fig-size, 60%); height: var(--fig-size, 60%); display: none; }
 .ri-peek.is-fig .pk-fig { display: block; }
 .ri-peek .pk-dial { display: none; }
 .ri-peek.is-dial .pk-dial { display: grid; opacity: 1; }
-/* (its own label waits while the edge's name tag names the place: one name at a time) */
-.ri-peek .pk-dial .dial-k { opacity: var(--pl, 1); }
 .w-head.swap .w-tag, .w-head.swap .w-name { animation: headSwap .18s ease; }
 .workout .w-head.pv-active .w-name { color: var(--text); }
 .workout .w-head.pv-rest .w-name { color: color-mix(in srgb, var(--c1) 80%, #fff); }
 @keyframes headSwap { from { opacity: .25; } }
-/* ⏭ / ⏮ and the swipe. Idle, the discs are plain (resting, the next page's edge peeks in at the
-   ring's rim: that is the hint to swipe). Swiping turns the disc into a tab
-   with a fixed word for what letting go will do ("Next ›", "‹ Restart", "‹ Redo", "Finish ›"),
-   tinted in the destination's colour within the first ~20 px; once letting go would do it
-   (armed) it turns solid. The ring's preview names the place; the tab says the action. The
-   tab's size and place are set by setTab (--tw, --tx: clear of the ring's band) and its colours
-   keep AA contrast (--t-tint / --t-ink, --t-solid / --t-on). The other way's disc steps back.
-   Hover, keyboard focus and the first-use hint show the tab too. */
-@property --k { syntax: '<number>'; inherits: true; initial-value: 0; }
-.ctl-side {
-  position: relative; --k: 0; --m: min(1, calc(var(--k) * 5));
-  transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s, --k .2s cubic-bezier(.3, .9, .3, 1);
-}
-.ctl-side svg.ctl-ico { position: relative; z-index: 2; opacity: calc(1 - var(--m) * 1.6); }
-.ctl-tab {
-  position: absolute; top: -1px; bottom: -1px; left: 50%; z-index: 1; box-sizing: border-box;
-  width: calc(var(--pside, 48px) + 2px + (var(--tw, 48px) - var(--pside, 48px)) * var(--m));
-  transform: translateX(calc(-50% + var(--tx, 0px) * var(--m)));
-  display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 10px;
-  border-radius: 999px; overflow: hidden; pointer-events: none;
-  background: var(--t-tint, var(--surface)); color: var(--t-ink, var(--text));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-ink, var(--text)) 16%, transparent);
-  opacity: min(1, calc(var(--m) * 4));
-  transition: background-color .12s, color .12s, box-shadow .12s;
-}
-.ctl-tab > * { flex: none; opacity: calc(var(--m) * 1.5 - .5); }
-.ctl-dest { font: 600 max(13px, calc(var(--pside, 48px) * .24))/1 var(--ui); letter-spacing: -.01em; white-space: nowrap; }
-.ctl-side svg.ctl-chev { width: .5em; height: .875em; font-size: max(13px, calc(var(--pside, 48px) * .24)); fill: none; stroke-width: 2.2; }
-#skip .ctl-chev { margin-right: -2px; transform: translateX(calc(var(--k) * 3px)); }
-#prev .ctl-chev { margin-left: -2px; transform: translateX(calc(var(--k) * -3px)); }
-/* a finger is on it: the tab follows the finger exactly */
-.w-stage.swiping .ctl-side { transition: transform .15s, background-color .2s, border-color .2s, color .2s, box-shadow .2s, opacity .2s; }
-.transport.charge-next #skip, .transport.charge-prev #prev {
-  --k: var(--ck, 0); transform: none; background: transparent; border-color: transparent; box-shadow: none;
-}
-/* the other way steps back while you swipe */
-.transport.charge-next #prev, .transport.charge-prev #skip { opacity: .35; }
-/* armed: solid (a light shadow: pause stays the heaviest thing in the row) */
-.transport.armed.charge-next #skip .ctl-tab, .transport.armed.charge-prev #prev .ctl-tab {
-  background: var(--t-solid, var(--c1)); color: var(--t-on, #fff); box-shadow: 0 6px 14px -10px var(--t-solid, var(--c1));
-}
-/* pointer hover (after a beat, so passing over doesn't flash) and keyboard focus: the tab, tinted */
-@media (hover: hover) and (pointer: fine) {
-  .transport:not(.charge-next):not(.charge-prev) .ctl-side:hover { --k: .25; transition-delay: .2s; }
-}
-.transport:not(.charge-next):not(.charge-prev) .ctl-side:focus-visible { --k: .25; }
-[data-look] .ctl-side:focus-visible { outline: none; }
-.ctl-side:focus-visible .ctl-tab { outline: 2px solid var(--accent, var(--c2)); outline-offset: 3px; }
-/* a hint ("this is where next lives"): the tab shows itself once, then tucks back */
-.ctl-side.pulse { animation: tabPeek 2.2s cubic-bezier(.3, .9, .3, 1); }
-@keyframes tabPeek { 0%, 100% { --k: 0; } 14%, 76% { --k: .25; } }
-/* reduced motion: the same tab, shown still for a moment */
-.ctl-side.halo { --k: .25; }
-/* paused: everything tucked away (Resume sits over the row) */
-.transport.held .ctl-side { --k: 0 !important; animation: none; }
-@media (prefers-reduced-motion: reduce) {
-  .ctl-side, .ctl-tab { transition: none !important; }
-}
-/* a bigger target on the inner side only: easy to hit with a thumb, nothing added toward the
-   screen edge where the hand holding the phone rests */
-#prev::after, #skip::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
-#prev::after { right: -14px; left: 0; }
-#skip::after { left: -14px; right: 0; }
+/* back / next: keyboard focus shows on the hit area */
+[data-look] .ctl-side:focus-visible { outline: 2px solid var(--accent, var(--c2)); outline-offset: -4px; }
+/* ---- portrait: the countdown rises into the ring's opening; a rest dial sits in the middle of the ring */
+.workout.tuck .w-readout { margin-top: calc(-1 * var(--tuck, 0px)); position: relative; z-index: 1; }
+.workout.tuck .d-label { display: none; }
+.workout.tuck .w-head { translate: 0 var(--head-dy, 0px); }
+.workout.tuck .digits { cursor: pointer; }
+.workout.tuck .wl-box:not(.runway) .wl-title { font-size: min(27px, 7.4vw); }
+.workout.tuck .dial { top: calc(var(--cy, 50%) + var(--rr, 120px) * .04); }
+.workout.tuck .upnext { top: calc(50% + var(--hang, 0px) / 2); } /* under the pause and How to discs */
+/* How to has its own disc beside the countdown */
+.coach .link-btn, #unHow { display: none; }
 .wp-tip { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--c1); }
-.wp-tip svg { fill: currentColor; vertical-align: -.12em; margin: 0 .08em; } /* the same ⏭ / ⏮ as the buttons, not an emoji */
+.wp-tip svg { fill: currentColor; vertical-align: -.12em; margin: 0 .08em; }
+.wp-tip svg.tip-chev { width: .5em; height: .875em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; margin: 0 .2em; } /* the arrow on the next dial's edge */
 .wp-tip[hidden] { display: none; }
 .w-prog.tipping .wp-left { display: none; }
 

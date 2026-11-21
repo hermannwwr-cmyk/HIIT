@@ -889,6 +889,20 @@
   [data-look="studio"] .coach-v { font-size: 14px; line-height: 1.3; min-height: 2.6em; } /* two lines, long tip or short: the ring never moves */
 }
 
+/* back / next are hit areas over the neighbouring dials' slices: no disc */
+[data-look="studio"] .ctl-side, [data-look="studio"] .ctl-side:hover { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* portrait: the countdown sits in the ring's opening and takes the room the control row had */
+@media (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .workout.tuck .digits:not(.dial-digits), [data-look="studio"] .workout.tuck .wl-box { --dg: clamp(84px, 33vw, 190px); }
+}
+@media (max-height: 760px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .workout.tuck .digits:not(.dial-digits), [data-look="studio"] .workout.tuck .wl-box { --dg: clamp(72px, 28vw, 112px); }
+}
+/* tall phones: the trainer card sits at the bottom, and rest's up-next card keeps its room */
+@media (min-height: 800px) and (max-aspect-ratio: 5/4) {
+  [data-look="studio"] .workout.tuck .w-lower { min-height: 232px; align-content: space-between; }
+  [data-look="studio"] .workout.tuck .coach { margin-top: 0; }
+}
 /* swipe carousel + first-run tip (Studio) */
 [data-look="studio"] .wp-tip { font-weight: 500; color: color-mix(in srgb, var(--c1) 70%, var(--text)); }
 [data-look="studio"] .workout .w-head.pv-active .w-name { color: var(--text); }

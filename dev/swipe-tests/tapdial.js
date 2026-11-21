@@ -1,0 +1,42 @@
+// Tap the dial: a tap inside the ring or on the countdown in its opening pauses; a tap on How to, on the side arcs
+// or on the "Next:" line does not; a swipe never does. node tapdial.js [W H]
+const { open } = require('./lib');
+(async () => {
+  const h = await open({ url: (process.env.URL || 'http://127.0.0.1:8731/index.html'), width: +process.argv[2] || 390, height: +process.argv[3] || 844 });
+  await h.toWorkout();
+  const { f, page, touch, stroke, st, go, box } = h; let fails = 0;
+  const ok = (name, cond, got) => { console.log((cond ? 'PASS ' : 'FAIL ') + name + '  [' + JSON.stringify(got) + ']'); if (!cond) fails++; };
+  const centre = () => f.evaluate(() => { const b = document.getElementById('ring').getBoundingClientRect(), g = window.__hiit.ring.geo; return [b.left + g.cx, b.top + g.cy, g.R]; });
+  const resume = async () => { if (!(await st()).playing) { await f.evaluate(() => document.getElementById('resume').click()); await page.waitForTimeout(700); } };
+  await go('work', 6); let [x, y, R] = await centre();
+  await touch([[x + 20, y - 10, 0], [x + 21, y - 9, 40]], { after: 500 });
+  ok('tap inside the ring pauses', !(await st()).playing, (await st()).playing); await resume();
+  await go('work', 6);
+  await touch(stroke(x + 60, y, -150, 0, 120, 8), { after: 800 });
+  let s = await st(); ok('a flick over the ring skips and does not pause', s.playing && s.type === 'rest', [s.playing, s.type]);
+  await go('rest', 6); [x, y, R] = await centre();
+  await touch([[x, y, 0], [x + 1, y, 40]], { after: 500 });
+  ok('tap on the rest dial pauses', !(await st()).playing, (await st()).playing); await resume();
+  await go('work', 6);
+  const [ix, iy] = await box('#info');
+  await touch([[ix, iy, 0], [ix + 1, iy, 40]], { after: 600 });
+  const sheet = await f.evaluate(() => !document.getElementById('coachSheet').hidden);
+  ok('tap on How to opens the guide', sheet, sheet);
+  await f.evaluate(() => { const b = document.querySelector('#coachSheet [data-close], #coachSheet .sheet-close, #sheetClose'); if (b) b.click(); else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+  await page.waitForTimeout(600); await resume(); await go('work', 6);
+  const [dx, dy] = await box('#digits');
+  await touch([[dx, dy, 0], [dx + 1, dy, 40]], { after: 500 });
+  ok('tap on the countdown in the opening pauses', !(await st()).playing, (await st()).playing); await resume(); await go('work', 6);
+  const [nx, ny] = await box('#wNext');
+  await touch([[nx, ny, 0], [nx + 1, ny, 40]], { after: 500 });
+  ok('tap on the "Next:" line does not pause', (await st()).playing, (await st()).playing);
+  const [px, py, pw, ph] = await box('#pause');
+  await touch([[px, py - ph / 2 + 4, 0], [px + 1, py - ph / 2 + 4, 40]], { after: 600 });
+  ok('tap on the top edge of the pause disc pauses (does not skip)', !(await st()).playing && (await st()).type === 'work', [(await st()).playing, (await st()).type]); await resume(); await go('work', 6);
+  const [sx, sy] = await box('#skip');
+  await touch([[sx, sy, 0], [sx + 1, sy, 40]], { after: 900 });
+  s = await st(); ok('tap on the next arc goes on, not paused', s.playing && s.type === 'rest', [s.playing, s.type]);
+  ok('no page errors', h.errs.length === 0, h.errs);
+  console.log('fails:', fails);
+  await h.browser.close();
+})();

@@ -304,16 +304,15 @@
             <p class="dial-sub" id="pkSub"></p>
           </div>
         </div>
-        <!-- the incoming page's edge (its colour), leading it in; while resting a sliver shows at the rim -->
-        <div class="ri-edge" id="riEdge" aria-hidden="true"><div class="ri-edge-c"></div></div>
       </div>
-      <!-- the incoming page's name while swiping (not clipped to the ring: on a small ring it may cross the band) -->
+      <!-- the incoming dial's name while swiping: in the corner it comes from, then riding on top of it -->
       <p class="ri-edge-n" id="riEdgeN" aria-hidden="true"></p>
       <div class="transport" id="transport" role="group" aria-label="Workout controls">
-        <!-- ⏮ / ⏭: swiping turns each into a tab saying what letting go does ("Next ›") -->
-        <button id="prev" class="ctl ctl-side" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"><span class="ctl-tab" aria-hidden="true"><svg class="ctl-chev"><use href="#i-chev-l"/></svg><span class="ctl-dest" id="prevDest">Restart</span></span><svg class="ctl-ico" aria-hidden="true"><use href="#i-prev"/></svg></button>
+        <!-- back / next are the slices of the neighbouring dials at the edges (drawn on the ring's canvas): these are their hit areas -->
+        <button id="prev" class="ctl ctl-side" type="button" aria-label="Previous interval" aria-keyshortcuts="ArrowLeft"></button>
+        <button id="info" class="ctl ctl-info" type="button" aria-label="How to"><svg aria-hidden="true"><use href="#i-info"/></svg></button>
         <button id="pause" class="ctl ctl-main" type="button" aria-label="Pause" aria-keyshortcuts="Space"><svg aria-hidden="true"><use href="#i-pause"/></svg></button>
-        <button id="skip" class="ctl ctl-side ctl-skip" type="button" aria-label="Next interval" aria-keyshortcuts="ArrowRight"><span class="ctl-tab" aria-hidden="true"><span class="ctl-dest" id="skipDest">Next</span><svg class="ctl-chev"><use href="#i-chev-r"/></svg></span><svg class="ctl-ico" aria-hidden="true"><use href="#i-next"/></svg></button>
+        <button id="skip" class="ctl ctl-side" type="button" aria-label="Next interval" aria-keyshortcuts="ArrowRight"></button>
       </div>
     </div>
     <div class="w-lower">
@@ -321,6 +320,8 @@
         <div class="rd-main">
           <p class="d-label" id="dLabel">Starting in</p>
           <div class="digits" id="digits" role="timer" aria-label="10 seconds left"></div>
+          <!-- while swiping to an exercise: its countdown, in its dial's opening -->
+          <div class="digits pk-mouth" id="pkMouth" aria-hidden="true" hidden></div>
           <div class="beats" id="beats" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
           <!-- warm-up lead-in: "Get ready · Starts in N", then the 5-4-3-2-1 countdown -->
           <div class="wl-box" id="wlBox" aria-hidden="true"><p class="wl-title" id="wlTitle">Get ready</p><p class="wl-sub" id="wlSub"></p></div>

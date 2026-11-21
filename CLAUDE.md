@@ -54,12 +54,16 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   4. calls `onBeat()` for counted warm-up moves.
 - `warmLead()` runs a warm-up step's lead-in: "Get ready", a spoken 5-4-3-2-1, then "Begin!". It can hold the clock by rewriting `run.base` while the coach is still speaking.
 - Jumps go through `seek(t)`. Cues only fire on "natural" progress (see the `natural` and `prev` checks), so seeking never replays a whole round of sounds.
-- The timer ring is the `Ring` canvas class. `Ring.layout()` writes the stage geometry as CSS custom properties (`--cy`, `--rr`, `--ph`, …) that the CSS uses to place the dial and the swipe carousel inside the ring. The opening at the bottom holds only the pause button. The controls grow with the ring (pause `S*0.135+10`, 52–92 px; back and skip 0.8 of it, never under 44 px). Back and skip sit out at the sides on the same base line, `--bx` from the centre, keeping the pause's clearance (17 px, more on big rings) from the arc, with 16 px to the stage edge for a gripping hand (the clearance gives way to 12 px first, then the ring shrinks). The beat-dot row stays reserved through the whole workout, so the ring keeps one size from the warm-up to the end.
+- The timer ring is the `Ring` canvas class. `Ring.layout()` writes the stage geometry as CSS custom properties (`--cy`, `--rr`, `--fy`, `--fh`, `--pm`, …) and sets `tuck` on `#workout` in portrait.
+  - The dial is one of a row: the previous and next intervals' dials sit one `ring.pitch` to the left and right, 24 px of each (44 px on tablets) showing at the canvas's edges. `Ring.drawStudio()` draws those slices, then `drawDial()` for the current one.
+  - Portrait (`tuck`): the opening at the bottom holds the countdown, which rises into it from the readout below (`--tuck`, a negative margin that never depends on the stage's height). Pause and How to (`#info`) are discs in the corners under the ring's sides (`--dx`, `--dy`), 14 px clear of the band; rest's up-next card starts under them (`ring.hang`). The canvas spans the screen. When the stage is taller than the ring, the title comes down with it (`--head-dy`, a `translate`, so the stage's height never depends on it).
+  - Side by side (landscape, `(min-aspect-ratio: 5/4) and (min-width: 560px)`): the readout has its own column, so the opening holds the pause (`--pax`, `--pay`) and How to sits beside the ring's base. The row is clipped to the stage.
+  - The pause grows with the ring (`S*0.148`, 50–72 px). The beat-dot row stays reserved through the whole workout, so the ring keeps one size from the warm-up to the end.
 - `ring.progress` is set in `update()`. Warm-up steps get two sweeps: one for the lead-in, one for the move.
 - Rest, prep and the set break switch the screen to `#workout[data-mode="rest"]`: a dial inside the ring plus an "Up next" card.
 
 **Swipe and the ⏮ / ⏭ controls.** `initSwipe()` is a pager, the same in every phase and anywhere on the workout screen.
-- Content follows the finger 1:1. Pages sit 1.3 ring radii apart (`travel()`) and are clipped to the ring.
+- The whole row of dials follows the finger 1:1. Pages are one `ring.pitch` apart (`travel()`), each clipped to the inside of its own ring; the countdown in the opening goes with its dial.
 - Commit rule, `wouldCommit()`; otherwise the page springs back:
   - a flick of at least 0.25 px/ms, with hysteresis (it stays armed down to 0.18);
   - a short, fast move that never stopped (`quick`);
@@ -75,15 +79,17 @@ There is no linter or formatter. Opening `index.html` directly (file://) must ke
   - there is no palm or contact-size filter (real fingertips report 40–60 px).
 - **Don't replace elements on the workout screen every tick.** Touch moves and ends go to the element the touch began on, and are lost if it leaves the DOM. The listeners are also bound to that element and a lone new touch clears a stale gesture, but use `setRich()` (in-place text, as `#wNext` does) rather than rewriting `innerHTML`.
 - `overscroll-behavior: none` applies only with `html.top-level` (not framed). In the Claude app's preview iframe, vertical drags must scroll the host page.
-- Destination display:
-  - The incoming page is led by `.ri-edge`, a curtain in its colour, and stays clipped at it until release (`--pcl`). The same edge shows as a soft resting sliver during rest, prep and the set break (`sliverShow()`), which is the idle swipe hint.
-  - The name tag `#riEdgeN` sits high in the ring, ahead of the curtain. It stays at full strength while the finger is down; the incoming dial's own label waits, and the leaving page's label steps aside (`--cl`).
-  - On release the title takes the name at once (`showDest()`; never while dragging). The tag fades in the first half of the landing and the page's label in the second (`--pn`, `--pl`).
+- What moves:
+  - `place()` sets `--sx` (the leaving page) and `--px` (the incoming one) on `.w-body`, so the stage's pages and the readout share them. `Ring.draw()` reads `#riCur`'s computed transform each frame while `.carousel` is on, so the bands on the canvas keep exactly to the finger and to the settle's curve.
+  - The incoming page is `#riPeek` (a figure or a rest dial). An exercise also brings its countdown, `#pkMouth`, one pitch (`--pd`) from the one leaving. From a rest the card below covers that spot, so it is left out there.
+  - The name tag `#riEdgeN` names a figure's page (a rest dial names itself): it waits in the corner the dial comes from, then rides on top of it, and turns solid on `armed`. On release the title takes the name at once (`showDest()`; never while dragging) and the tag fades.
   - The ring's colours switch outright at commit (`Ring.snapColors`), never through a muddy blend.
-- ⏮ / ⏭ are plain discs when idle and hold a `.ctl-tab`: a fixed word ("Next" / "Finish", "Restart" / "Redo" / "Back") plus a chevron, identical at every size.
-  - `setTab()` (from `syncSkipLabel()` / `syncPrevLabel()`) sets its AA colours (`--t-tint`/`--t-ink`, `--t-solid`/`--t-on`) and its size and offset (`--tw`, `--tx`) within `ring.tabRoom`. The tab grows toward the pause only while it stays clear of the ring's band.
-  - It morphs in over the first ~20% of `--ck` (`--k`, a registered `@property`), tinted, and goes solid on `armed`. Hover, focus and the `pulse` / `halo` hints show it; `#transport.held` (paused) tucks everything away.
-  - The hooks the gesture sets on `#transport` are `--ck` (0..1), `--dc`, `--dfg`, `charge-next` / `charge-prev` and `armed`. Taps and keys go through the same commit path.
+- Back and next are the neighbouring dials' slices at the screen edges: a see-through piece of the band in the colour of where it leads, fading out above and below a chevron. `#prev` / `#skip` are transparent 64×168 px hit areas over them.
+  - `syncNeighbours()` (from `syncSkipLabel()` / `syncPrevLabel()`) sets `ring.nb`. Back wears this interval's own colour once it is a few seconds in (a restart), and is absent at the very start. After the last interval a neutral slice with a tick stands for Finish (tap only: a swipe rubber-bands).
+  - The slice being pulled in firms up into a full dial as it arrives. Pause and How to dim while the row moves.
+  - The hooks the gesture sets on `#transport` are `--ck` (0..1), `charge-next` / `charge-prev` and `armed`. Taps and keys go through the same commit path.
+- A tap inside the ring, or on the countdown in its opening, pauses (`dialTap()` in `bind()`); the pause disc stays the visible button. The swipe code eats the click that ends a swipe.
+- The idle hints are the slices themselves, plus two one-time tips in the progress row (`state.tapTip`, `state.swipeTip`, the second with a nudge of the row).
 - Testing: use CDP `Input.dispatchTouchEvent` with a realistic `radiusX/Y` (about 22) and explicit `timestamp`s. Headless delivery is far slower than real time, so judge timing by event timestamps. The harness, the history (root causes, rejected designs) and the open nice-to-haves are in `dev/swipe-tests/README.md`.
 
 **Looks.**
