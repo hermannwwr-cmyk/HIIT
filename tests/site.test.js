@@ -65,6 +65,7 @@ test('Geist is self-hosted: one woff2, declared and preloaded in index.html, wit
 // ---- offline: the service worker
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const swCode = sw.replace(/\/\/.*$/gm, ''); // without its comments
+const appJs = fs.readFileSync(path.join(root, 'js/app.js'), 'utf8');
 const shell = [...sw.match(/var SHELL = \[([^\]]*)\]/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
 
 test('the service worker precaches exactly what index.html loads, and all of it is published', () => {
@@ -95,8 +96,25 @@ test('each deploy gets its own cache: the workflow stamps the worker\'s version'
   assert.match(swCode, /CACHE = PREFIX \+ VERSION/);
   // the version is a fingerprint of the published files (so a notes-only merge is no update), taken before the stamp
   assert.match(workflow, /VERSION=\$\(cd _site && find \. -type f \| LC_ALL=C sort \| xargs sha256sum \| sha256sum \| cut -c1-16\)/);
-  assert.ok(workflow.indexOf('VERSION=$(') > workflow.indexOf('cp -r') && workflow.indexOf('VERSION=$(') < workflow.indexOf('sed -i'), 'between the copy and the stamp');
+  const fp = workflow.indexOf('  VERSION=$('), swSed = workflow.indexOf('sed -i "s|^var VERSION');
+  assert.ok(fp > workflow.indexOf('cp -r') && fp < swSed, 'between the copy and the stamp');
   assert.doesNotMatch(workflow, /GITHUB_SHA/);
+});
+
+test('the app\'s version is stamped into the page from the history of the published files, before the fingerprint', () => {
+  assert.match(html, /<meta name="app-version" content="dev">/);
+  assert.match(html, /<meta name="app-date" content="">/);
+  assert.match(html, /<p class="look-ver" id="appVer" role="none"><\/p>/);
+  assert.match(workflow, /fetch-depth: 0/); // the count needs the whole history
+  const files = workflow.match(/APP_FILES="([^"]+)"/);
+  assert.ok(files, 'the workflow names the app\'s files');
+  const cp = workflow.match(/cp -r (.+) _site\//)[1];
+  assert.equal(files[1], cp, 'the same files as are published');
+  assert.match(workflow, /git rev-list --count HEAD -- \$APP_FILES/);
+  assert.match(workflow, /git log -1 --format=%cs -- \$APP_FILES/);
+  const stamp = workflow.indexOf('_site/index.html');
+  assert.ok(stamp > workflow.indexOf('cp -r') && stamp < workflow.indexOf('  VERSION=$('), 'stamped before the fingerprint, so the fingerprint covers it');
+  assert.match(appJs, /'Version ' \+ ver \+ when : 'Development build'/);
 });
 
 test('a new worker never takes over a running session', () => {
