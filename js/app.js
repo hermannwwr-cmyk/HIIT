@@ -3258,8 +3258,19 @@
       cur.focus();
     }
   }
+  /** The app's version, as the last line of the appearance menu: "Version 1.134 · 21 Nov 2026".
+   *  Stamped into two <meta>s at deploy; unstamped (the repo, the one-file build) it says so. */
+  function showVersion() {
+    var v = document.querySelector('meta[name="app-version"]'), d = document.querySelector('meta[name="app-date"]');
+    var ver = v ? v.getAttribute('content') : '', date = d ? d.getAttribute('content') : '';
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var when = m ? ' \u00b7 ' + (+m[3]) + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : '';
+    $('appVer').textContent = /^\d/.test(ver || '') ? 'Version ' + ver + when : 'Development build';
+  }
   function bindLookMenu() {
     var list = $('lookList'), btn = $('lookBtn');
+    showVersion();
     btn.addEventListener('click', function () { openLookMenu(list.hidden); });
     btn.addEventListener('keydown', function (e) {
       if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && list.hidden) { e.preventDefault(); openLookMenu(true); }

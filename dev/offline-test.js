@@ -16,17 +16,21 @@ let fails = 0; const ok = (n, c, g) => { console.log((c ? 'PASS ' : 'FAIL ') + n
   await new Promise(r => setTimeout(r, 900));
   const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage();
   const errs = []; page.on('pageerror', e => errs.push(e.message));
-  const info = () => page.evaluate(async () => ({ title: document.title, keys: await caches.keys(), ctl: !!navigator.serviceWorker.controller, screen: document.body.getAttribute('data-screen') }));
+  // every page load notes its title, so the order of versions shown does not depend on catching a moment
+  await ctx.addInitScript(() => { addEventListener('DOMContentLoaded', () => { try { const a = JSON.parse(sessionStorage.getItem('__titles') || '[]'); a.push(document.title); sessionStorage.setItem('__titles', JSON.stringify(a)); } catch (e) {} }); });
+  const titles = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('__titles') || '[]'));
+  const forget = () => page.evaluate(() => sessionStorage.removeItem('__titles'));
+  // (the update reloads the page by itself: if that happens mid-read, read again)
+  const info = async () => { for (let k = 0; ; k++) { try { return await page.evaluate(async () => ({ title: document.title, keys: await caches.keys(), ctl: !!navigator.serviceWorker.controller, screen: document.body.getAttribute('data-screen') })); } catch (e) { if (k > 5) throw e; await page.waitForTimeout(400); } } };
   await page.goto(URL); await page.evaluate(() => { window.__first = 1; }); await page.waitForTimeout(2500);
   ok('first ever visit: the copy is saved without a reload', await page.evaluate(() => window.__first === 1), (await info()).keys);
   await page.reload(); await page.waitForTimeout(1500);
   let i = await info(); ok('v1 installed and controlling', i.title === 'build v1' && i.ctl && i.keys.join() === 'overdrive-hiit-v1', i);
   // one open: the old version shows, the new one downloads, the page switches to it by itself
   deploy('v2');
-  await page.reload(); await page.waitForTimeout(250);
-  const shown = (await info()).title;
-  await page.waitForTimeout(4000);
-  i = await info(); ok('one open after a deploy: opens as v1, then switches to v2, old copy gone', shown === 'build v1' && i.title === 'build v2' && i.keys.join() === 'overdrive-hiit-v2', [shown, i]);
+  await forget(); await page.reload(); await page.waitForTimeout(4500);
+  i = await info(); const seen = await titles();
+  ok('one open after a deploy: opens as v1, then switches to v2, old copy gone', seen.join() === 'build v1,build v2' && i.title === 'build v2' && i.keys.join() === 'overdrive-hiit-v2', [seen, i]);
   await page.evaluate(() => { window.__mark = 1; }); await page.waitForTimeout(3000);
   ok('no reload loop', await page.evaluate(() => window.__mark === 1) && (await info()).title === 'build v2', (await info()).title);
   // the app was only in the background: coming back is enough

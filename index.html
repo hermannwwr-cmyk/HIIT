@@ -6,6 +6,9 @@
 <title>Overdrive HIIT</title>
 <meta name="description" content="Full-body HIIT interval timer with animated exercise demos.">
 <meta name="theme-color" content="#f4f3ef">
+<!-- the app's version: stamped by .github/workflows/pages.yml (e.g. 1.134 and 2026-11-21); "dev" in the repo -->
+<meta name="app-version" content="dev">
+<meta name="app-date" content="">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -108,6 +111,7 @@
           <button type="button" role="menuitemradio" aria-checked="false" data-look="auto"><span class="sw sw-auto" aria-hidden="true"></span><span class="look-txt">Automatic<small>Studio, matches your phone</small></span></button>
           <button type="button" role="menuitemradio" aria-checked="false" data-look="studio-dark"><span class="sw sw-dark" aria-hidden="true"></span>Studio dark</button>
           <button type="button" role="menuitemradio" aria-checked="false" data-look="studio-light"><span class="sw sw-light" aria-hidden="true"></span>Studio light</button>
+          <p class="look-ver" id="appVer" role="none"></p>
         </div>
       </div>
       <button id="sfxToggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">
@@ -487,6 +491,7 @@
     // (Both come from the version that is running when the update starts: it shows the first and leaves the
     // marker for the second. So the update that first brought these notes was itself silent.)
     var KEY = 'overdrive-hiit:updated', mine = false, noteT = 0;
+    var vm = document.querySelector('meta[name="app-version"]'), ver = vm && /^\d/.test(vm.content) ? vm.content : ''; // ('dev' unstamped)
     function note(text, ms) {
       var box = document.getElementById('notice'), t = document.getElementById('noticeText');
       if (!box || !t) return;
@@ -501,7 +506,7 @@
     window.addEventListener('load', function () {
       try {
         var asked = false;
-        try { if (sessionStorage.getItem(KEY)) { sessionStorage.removeItem(KEY); note('Updated to the latest version.', 4000); } } catch (e) { /* ignore */ }
+        try { if (sessionStorage.getItem(KEY)) { sessionStorage.removeItem(KEY); note(ver ? 'Updated to version ' + ver + '.' : 'Updated to the latest version.', 4000); } } catch (e) { /* ignore */ }
         navigator.serviceWorker.addEventListener('controllerchange', function () {
           if (!asked || !idle()) { unnote(); return; } // (a workout began meanwhile: the new files are used from the next open)
           try { sessionStorage.setItem(KEY, '1'); } catch (e) { /* ignore */ }

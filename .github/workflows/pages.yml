@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the app's version counts the commits that changed it
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -30,6 +32,17 @@ jobs:
         run: |
           mkdir -p _site
           cp -r index.html manifest.webmanifest sw.js css js icons fonts _site/
+          # The app's version, shown in the appearance menu: <major>.<number of commits that changed a
+          # published file>, with the date of the last one. Both come from the history of these files
+          # only, so a merge that touches none of them leaves the version, and the page, as they were.
+          APP_FILES="index.html manifest.webmanifest sw.js css js icons fonts"
+          APP_VER="$(node -p "require('./package.json').version.split('.')[0]").$(git rev-list --count HEAD -- $APP_FILES)"
+          APP_DATE="$(git log -1 --format=%cs -- $APP_FILES)"
+          echo "$APP_VER" | grep -Eq '^[0-9]+\.[0-9]+$'
+          echo "$APP_DATE" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          sed -i "s|<meta name=\"app-version\" content=\"dev\">|<meta name=\"app-version\" content=\"${APP_VER}\">|; s|<meta name=\"app-date\" content=\"\">|<meta name=\"app-date\" content=\"${APP_DATE}\">|" _site/index.html
+          grep -q "<meta name=\"app-version\" content=\"${APP_VER}\">" _site/index.html
+          grep -q "<meta name=\"app-date\" content=\"${APP_DATE}\">" _site/index.html
           # The service worker's version is a fingerprint of what is published, not the commit: a merge
           # that changes none of these files (notes, tests, dev scripts) publishes the same sw.js, so
           # phones see no update and do not download or reload for nothing.
